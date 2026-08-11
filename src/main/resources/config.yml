@@ -1,0 +1,7 @@
+join-message:
+  enabled: true
+
+  messages:
+    - "<gradient:#ff9de2:#a78bfa>❤ 猫と夢 - Neko n' Yume</gradient>"
+    - "<gradient:#c084fc:#60a5fa>✦ 开发者：Mizuki Chou</gradient>"
+    - "<gradient:#60a5fa:#34d399>Github: https://github.com/Mizuki-Chou</gradient>"

@@ -1,0 +1,15 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Gradle
+.gradle/
+build/
+
+# Minecraft server
+run/
+logs/
+world/
+
+# Build output
+*.jar

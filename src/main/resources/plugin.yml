@@ -1,0 +1,19 @@
+name: NekoNYume
+version: '${version}'
+
+main: mizukichou.nekonyume.NekoNYume
+api-version: '26.2'
+load: POSTWORLD
+
+commands:
+  nekoyume:
+    description: Neko n' Yume main command
+    usage: /nekoyume <help|claim|cat|summon|reload>
+    aliases:
+      - ny
+
+
+permissions:
+  nekoyume.admin:
+    description: Neko n' Yume administrator permission
+    default: op
