@@ -12,6 +12,13 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.+")
 }
 
+group = "mizukichou"
+version = "0.1.0-alpha"
+
+base {
+    archivesName.set("NekoNYume")
+}
+
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
 }

@@ -19,6 +19,15 @@ public class PlayerDataManager {
         );
     }
 
+    public void setCatName(UUID uuid, String name) {
+
+        data.set(
+                "players." + uuid + ".cat.name",
+                name
+        );
+
+        save();
+    }
 
     public int getCatLevel(UUID uuid) {
 
@@ -26,7 +35,6 @@ public class PlayerDataManager {
                 "players." + uuid + ".cat.level"
         );
     }
-
 
     public int getCatAffection(UUID uuid) {
 
@@ -43,17 +51,19 @@ public class PlayerDataManager {
         );
 
         if (!file.exists()) {
+
             try {
+
                 file.createNewFile();
+
             } catch (IOException e) {
+
                 e.printStackTrace();
             }
         }
 
-
         data = YamlConfiguration.loadConfiguration(file);
     }
-
 
     public boolean hasCat(UUID uuid) {
 
@@ -62,27 +72,28 @@ public class PlayerDataManager {
         );
     }
 
-
     public void createCat(UUID uuid) {
 
         String path =
                 "players." + uuid + ".cat";
 
+        data.set(
+                path + ".name",
+                "Mikan"
+        );
 
-        data.set(path + ".name",
-                "Mikan");
+        data.set(
+                path + ".level",
+                1
+        );
 
-        data.set(path + ".level",
-                1);
-
-        data.set(path + ".affection",
-                50);
-
+        data.set(
+                path + ".affection",
+                50
+        );
 
         save();
     }
-
-
 
     private void save() {
 
@@ -93,7 +104,6 @@ public class PlayerDataManager {
         } catch (IOException e) {
 
             e.printStackTrace();
-
         }
     }
 }
