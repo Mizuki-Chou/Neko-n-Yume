@@ -95,6 +95,154 @@ public class PlayerDataManager {
         save();
     }
 
+    /*
+     * 获取猫咪实体 UUID
+     */
+    public UUID getCatEntityUUID(UUID playerUUID) {
+
+        String value = data.getString(
+                "players." + playerUUID + ".cat.entity-uuid"
+        );
+
+        if (value == null) {
+            return null;
+        }
+
+        try {
+
+            return UUID.fromString(value);
+
+        } catch (IllegalArgumentException e) {
+
+            return null;
+        }
+    }
+
+    /*
+     * 保存猫咪实体 UUID
+     */
+    public void setCatEntityUUID(
+            UUID playerUUID,
+            UUID entityUUID
+    ) {
+
+        data.set(
+                "players." + playerUUID + ".cat.entity-uuid",
+                entityUUID.toString()
+        );
+
+        save();
+    }
+
+    /*
+     * 获取猫咪所在世界 UUID
+     */
+    public UUID getCatWorldUUID(UUID playerUUID) {
+
+        String value = data.getString(
+                "players." + playerUUID + ".cat.world-uuid"
+        );
+
+        if (value == null) {
+            return null;
+        }
+
+        try {
+
+            return UUID.fromString(value);
+
+        } catch (IllegalArgumentException e) {
+
+            return null;
+        }
+    }
+
+    /*
+     * 保存猫咪所在世界 UUID
+     */
+    public void setCatWorldUUID(
+            UUID playerUUID,
+            UUID worldUUID
+    ) {
+
+        data.set(
+                "players." + playerUUID + ".cat.world-uuid",
+                worldUUID.toString()
+        );
+
+        save();
+    }
+
+    /*
+     * 获取猫咪 X 坐标
+     */
+    public double getCatX(UUID playerUUID) {
+
+        return data.getDouble(
+                "players." + playerUUID + ".cat.x"
+        );
+    }
+
+    /*
+     * 获取猫咪 Y 坐标
+     */
+    public double getCatY(UUID playerUUID) {
+
+        return data.getDouble(
+                "players." + playerUUID + ".cat.y"
+        );
+    }
+
+    /*
+     * 获取猫咪 Z 坐标
+     */
+    public double getCatZ(UUID playerUUID) {
+
+        return data.getDouble(
+                "players." + playerUUID + ".cat.z"
+        );
+    }
+
+    /*
+     * 保存猫咪位置
+     */
+    public void setCatLocation(
+            UUID playerUUID,
+            UUID worldUUID,
+            double x,
+            double y,
+            double z
+    ) {
+
+        String path =
+                "players." + playerUUID + ".cat";
+
+        data.set(
+                path + ".world-uuid",
+                worldUUID.toString()
+        );
+
+        data.set(
+                path + ".x",
+                x
+        );
+
+        data.set(
+                path + ".y",
+                y
+        );
+
+        data.set(
+                path + ".z",
+                z
+        );
+
+        save();
+    }
+
+    /*
+     * 保存数据
+     */
     private void save() {
 
         try {
