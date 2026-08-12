@@ -165,6 +165,12 @@ public class NekoYumeCommand implements CommandExecutor {
                                     player.getUniqueId()
                             );
 
+            int hunger =
+                    plugin.getDataManager()
+                            .getCatHunger(
+                                    player.getUniqueId()
+                            );
+
             player.sendMessage(
                     mm.deserialize(
                             "<gradient:#ff9de2:#a78bfa>🐱 你的猫</gradient>"
@@ -172,7 +178,9 @@ public class NekoYumeCommand implements CommandExecutor {
             );
 
             player.sendMessage(
-                    Component.text("名字: " + name)
+                    Component.text(
+                            "名字: " + name
+                    )
             );
 
             player.sendMessage(
@@ -184,6 +192,14 @@ public class NekoYumeCommand implements CommandExecutor {
             player.sendMessage(
                     mm.deserialize(
                             "<white>好感度: <red>" + affection
+                    )
+            );
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<white>饱食度: <yellow>"
+                                    + hunger
+                                    + "<gray>/100"
                     )
             );
 
@@ -255,15 +271,30 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
+            /*
+             * 保存新名字
+             */
             plugin.getDataManager()
                     .setCatName(
                             player.getUniqueId(),
                             newName
                     );
 
+            /*
+             * 如果猫咪当前存在，
+             * 立即同步头顶名称
+             */
+            plugin.getCatManager()
+                    .updateCatName(
+                            player,
+                            newName
+                    );
+
             player.sendMessage(
-                    Component.text(
-                            "🐱 你的猫现在叫 " + newName + " 了!"
+                    mm.deserialize(
+                            "<gradient:#ff9de2:#a78bfa>🐱 你的猫现在叫 <white>"
+                                    + newName
+                                    + "</white> 了!</gradient>"
                     )
             );
 
@@ -313,8 +344,20 @@ public class NekoYumeCommand implements CommandExecutor {
             if (summoned) {
 
                 player.sendMessage(
-                        Component.text(
-                                "🐱 " + name + " 出现在你身边!"
+                        mm.deserialize(
+                                "<gradient:#ff9de2:#a78bfa>🐱 "
+                                        + name
+                                        + " 出现在你身边!</gradient>"
+                        )
+                );
+
+            } else {
+
+                player.sendMessage(
+                        mm.deserialize(
+                                "<gradient:#ff9de2:#a78bfa>🐱 "
+                                        + name
+                                        + " 来到你身边啦!</gradient>"
                         )
                 );
             }

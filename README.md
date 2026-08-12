@@ -30,7 +30,7 @@
 支持：
 
 - Minecraft Java Edition 26.2+
-- Paper / Spigot
+- Paper
 
 ---
 
