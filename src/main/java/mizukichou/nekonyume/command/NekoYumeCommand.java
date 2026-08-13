@@ -96,8 +96,13 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
+            /*
+             * 玩家已经有猫
+             */
             if (plugin.getDataManager()
-                    .hasCat(player.getUniqueId())) {
+                    .hasCat(
+                            player.getUniqueId()
+                    )) {
 
                 player.sendMessage(
                         mm.deserialize(
@@ -108,16 +113,74 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
+            /*
+             * 创建猫咪数据
+             */
             plugin.getDataManager()
                     .createCat(
                             player.getUniqueId()
                     );
 
-            player.sendMessage(
-                    mm.deserialize(
-                            "<gradient:#ff9de2:#a78bfa>🐱 恭喜！你获得了第一只猫 Mikan!</gradient>"
-                    )
-            );
+            /*
+             * 获取猫咪名字
+             *
+             * 新猫默认是 Mikan
+             */
+            String name =
+                    plugin.getDataManager()
+                            .getCatName(
+                                    player.getUniqueId()
+                            );
+
+            /*
+             * 第一次领取时直接生成猫咪
+             *
+             * spawnCat 是异步的，
+             * 等猫咪成功生成/恢复后再发送提示。
+             */
+            plugin.getCatManager()
+                    .spawnCat(
+                            player,
+                            name,
+                            summoned -> {
+
+                                /*
+                                 * 玩家在生成完成前退出
+                                 */
+                                if (!player.isOnline()) {
+                                    return;
+                                }
+
+                                /*
+                                 * summoned == true：
+                                 * 这次创建了新的实体。
+                                 */
+                                if (summoned) {
+
+                                    player.sendMessage(
+                                            mm.deserialize(
+                                                    "<gradient:#ff9de2:#a78bfa>🐱 恭喜！你获得了第一只猫 "
+                                                            + name
+                                                            + "!</gradient>"
+                                            )
+                                    );
+
+                                } else {
+
+                                    /*
+                                     * 理论上 claim 第一次不会走这里，
+                                     * 但保留作为安全处理。
+                                     */
+                                    player.sendMessage(
+                                            mm.deserialize(
+                                                    "<gradient:#ff9de2:#a78bfa>🐱 "
+                                                            + name
+                                                            + " 已经来到了你身边!</gradient>"
+                                            )
+                                    );
+                                }
+                            }
+                    );
 
             return true;
         }
@@ -350,13 +413,7 @@ public class NekoYumeCommand implements CommandExecutor {
                             );
 
             /*
-             * 新版 spawnCat 是异步的：
-             *
-             * spawnCat(
-             *     player,
-             *     name,
-             *     result -> { ... }
-             * )
+             * 异步召唤猫咪
              */
             plugin.getCatManager()
                     .spawnCat(
@@ -365,7 +422,7 @@ public class NekoYumeCommand implements CommandExecutor {
                             summoned -> {
 
                                 /*
-                                 * 玩家在等待期间退出了
+                                 * 玩家在召唤过程中退出
                                  */
                                 if (!player.isOnline()) {
                                     return;

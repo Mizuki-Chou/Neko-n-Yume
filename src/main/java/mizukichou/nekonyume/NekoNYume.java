@@ -2,27 +2,20 @@ package mizukichou.nekonyume;
 
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.CatManager;
-
 import mizukichou.nekonyume.command.NekoYumeCommand;
-
 import mizukichou.nekonyume.data.PlayerDataManager;
-
+import mizukichou.nekonyume.listener.CatEntityListener;
 import mizukichou.nekonyume.listener.CatFoodListener;
 import mizukichou.nekonyume.listener.CatInteractionListener;
 import mizukichou.nekonyume.listener.PlayerJoinListener;
-import mizukichou.nekonyume.listener.CatEntityListener;
-
 import mizukichou.nekonyume.task.CatHungerTask;
 import mizukichou.nekonyume.task.CatPositionTask;
-
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class NekoNYume extends JavaPlugin {
 
     private PlayerDataManager dataManager;
-
     private CatManager catManager;
-
     private CatFoodManager catFoodManager;
 
     public PlayerDataManager getDataManager() {
@@ -69,7 +62,7 @@ public final class NekoNYume extends JavaPlugin {
                 );
 
         /*
-         * 注册玩家加入监听器
+         * 玩家加入监听器
          */
         getServer()
                 .getPluginManager()
@@ -79,7 +72,7 @@ public final class NekoNYume extends JavaPlugin {
                 );
 
         /*
-         * 注册猫咪喂食监听器
+         * 猫咪喂食监听器
          */
         getServer()
                 .getPluginManager()
@@ -88,6 +81,9 @@ public final class NekoNYume extends JavaPlugin {
                         this
                 );
 
+        /*
+         * 猫咪实体生命周期监听器
+         */
         getServer()
                 .getPluginManager()
                 .registerEvents(
@@ -96,7 +92,9 @@ public final class NekoNYume extends JavaPlugin {
                 );
 
         /*
-         * 注册猫咪互动监听器
+         * 猫咪互动监听器
+         *
+         * 现在使用 Shift / 潜行进行抚摸
          */
         getServer()
                 .getPluginManager()
@@ -106,7 +104,7 @@ public final class NekoNYume extends JavaPlugin {
                 );
 
         /*
-         * 启动猫咪饥饿任务
+         * 猫咪饥饿任务
          *
          * 每分钟检查一次
          */
@@ -120,7 +118,7 @@ public final class NekoNYume extends JavaPlugin {
                 );
 
         /*
-         * 启动猫咪位置同步任务
+         * 猫咪位置同步任务
          *
          * 每 30 秒同步一次
          */
