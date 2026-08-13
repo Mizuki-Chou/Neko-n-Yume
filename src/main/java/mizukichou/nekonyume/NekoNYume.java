@@ -2,12 +2,19 @@ package mizukichou.nekonyume;
 
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.CatManager;
+
 import mizukichou.nekonyume.command.NekoYumeCommand;
+
 import mizukichou.nekonyume.data.PlayerDataManager;
+
 import mizukichou.nekonyume.listener.CatFoodListener;
 import mizukichou.nekonyume.listener.CatInteractionListener;
 import mizukichou.nekonyume.listener.PlayerJoinListener;
+import mizukichou.nekonyume.listener.CatEntityListener;
+
 import mizukichou.nekonyume.task.CatHungerTask;
+import mizukichou.nekonyume.task.CatPositionTask;
+
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class NekoNYume extends JavaPlugin {
@@ -81,6 +88,13 @@ public final class NekoNYume extends JavaPlugin {
                         this
                 );
 
+        getServer()
+                .getPluginManager()
+                .registerEvents(
+                        new CatEntityListener(this),
+                        this
+                );
+
         /*
          * 注册猫咪互动监听器
          */
@@ -103,6 +117,20 @@ public final class NekoNYume extends JavaPlugin {
                         new CatHungerTask(this),
                         20L * 60L,
                         20L * 60L
+                );
+
+        /*
+         * 启动猫咪位置同步任务
+         *
+         * 每 30 秒同步一次
+         */
+        getServer()
+                .getScheduler()
+                .runTaskTimer(
+                        this,
+                        new CatPositionTask(this),
+                        20L * 30L,
+                        20L * 30L
                 );
 
         getLogger().info(
