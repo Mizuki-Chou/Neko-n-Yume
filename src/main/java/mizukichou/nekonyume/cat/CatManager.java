@@ -15,7 +15,11 @@ import org.bukkit.persistence.PersistentDataType;
 
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 public class CatManager {
 
@@ -25,6 +29,18 @@ public class CatManager {
     private final NamespacedKey ownerKey;
 
     private final Random random = new Random();
+
+    /*
+     * 防止同一个玩家同时执行多个 summon
+     *
+     * /ny summon
+     * /ny summon
+     * /ny summon
+     *
+     * 不会同时产生多个生成请求
+     */
+    private final Set<UUID> summoning =
+            ConcurrentHashMap.newKeySet();
 
     public CatManager(NekoNYume plugin) {
 
@@ -49,18 +65,81 @@ public class CatManager {
      * true  = 新生成
      * false = 找到原来的猫
      */
-
-    public boolean spawnCat(
+    public void spawnCat(
             Player player,
-            String name
+            String name,
+            Consumer<Boolean> callback
     ) {
 
         UUID playerUUID =
                 player.getUniqueId();
 
         /*
-         * ① 从 players.yml 获取实体 UUID
+         * 防止重复请求
          */
+        if (!summoning.add(playerUUID)) {
+
+            player.sendMessage(
+                    "§e🐱 正在寻找你的猫咪，请稍等一下！"
+            );
+
+            return;
+        }
+
+        /*
+         * 最终结束时解除锁
+         */
+        try {
+
+            findAndSummonCat(
+                    player,
+                    name,
+                    result -> {
+
+                        summoning.remove(
+                                playerUUID
+                        );
+
+                        callback.accept(
+                                result
+                        );
+                    }
+            );
+
+        } catch (Exception exception) {
+
+            summoning.remove(
+                    playerUUID
+            );
+
+            plugin.getLogger().severe(
+                    "Failed to summon cat for "
+                            + player.getName()
+            );
+
+            exception.printStackTrace();
+
+            player.sendMessage(
+                    "§c🐱 召唤猫咪时发生错误，请查看服务器日志。"
+            );
+        }
+    }
+
+    private void findAndSummonCat(
+            Player player,
+            String name,
+            Consumer<Boolean> callback
+    ) {
+
+        UUID playerUUID =
+                player.getUniqueId();
+
+        /*
+         * =========================
+         * ① 读取已经保存的猫 UUID
+         * =========================
+         */
+
         UUID savedEntityUUID =
                 plugin.getDataManager()
                         .getCatEntityUUID(
@@ -68,184 +147,360 @@ public class CatManager {
                         );
 
         /*
-         * ② 尝试直接找到原实体
+         * =========================
+         * 有 UUID：
+         * 绝对不能直接生成新猫
+         * =========================
          */
+
         if (savedEntityUUID != null) {
 
-            Entity entity =
-                    Bukkit.getEntity(
-                            savedEntityUUID
-                    );
+            UUID savedWorldUUID =
+                    plugin.getDataManager()
+                            .getCatWorldUUID(
+                                    playerUUID
+                            );
 
-            if (entity instanceof Cat cat &&
-                    !cat.isDead()) {
+            /*
+             * 没有世界信息
+             *
+             * 暂时不要生成新猫
+             */
+            if (savedWorldUUID == null) {
 
-                restoreCatVariant(
-                        playerUUID,
-                        cat
+                player.sendMessage(
+                        "§c🐱 无法确定猫咪所在的世界。"
+                                + "§7请联系管理员。"
                 );
 
-                cat.teleport(
-                        player.getLocation()
-                );
-
-                updateCat(
-                        cat,
-                        player,
-                        name
-                );
-
-                saveCatLocation(
-                        player,
-                        cat
-                );
-
-                return false;
+                callback.accept(false);
+                return;
             }
-        }
-
-        /*
-         * ③ 如果实体 UUID 找不到，
-         * 根据保存的位置寻找
-         */
-        UUID savedWorldUUID =
-                plugin.getDataManager()
-                        .getCatWorldUUID(
-                                playerUUID
-                        );
-
-        if (savedWorldUUID != null) {
 
             World world =
                     Bukkit.getWorld(
                             savedWorldUUID
                     );
 
-            if (world != null) {
+            /*
+             * 世界没有加载
+             */
+            if (world == null) {
 
-                double x =
-                        plugin.getDataManager()
-                                .getCatX(
-                                        playerUUID
-                                );
+                player.sendMessage(
+                        "§c🐱 猫咪所在的世界当前未加载。"
+                );
 
-                double y =
-                        plugin.getDataManager()
-                                .getCatY(
-                                        playerUUID
-                                );
+                callback.accept(false);
+                return;
+            }
 
-                double z =
-                        plugin.getDataManager()
-                                .getCatZ(
-                                        playerUUID
-                                );
-
-                int chunkX =
-                        ((int) Math.floor(x))
-                                >> 4;
-
-                int chunkZ =
-                        ((int) Math.floor(z))
-                                >> 4;
-
-                /*
-                 * 加载猫咪所在区块
-                 */
-                world.getChunkAt(
-                        chunkX,
-                        chunkZ
-                ).load();
-
-                Location savedLocation =
-                        new Location(
-                                world,
-                                x,
-                                y,
-                                z
-                        );
-
-                /*
-                 * 在旧位置寻找自己的猫
-                 */
-                for (Entity entity :
-                        savedLocation.getNearbyEntities(
-                                4,
-                                4,
-                                4
-                        )) {
-
-                    if (!(entity instanceof Cat cat)) {
-                        continue;
-                    }
-
-                    /*
-                     * 必须是 Neko n' Yume 的猫
-                     */
-                    if (!cat.getPersistentDataContainer()
-                            .has(
-                                    catKey,
-                                    PersistentDataType.BYTE
-                            )) {
-
-                        continue;
-                    }
-
-                    /*
-                     * 检查主人
-                     */
-                    String ownerUUID =
-                            cat.getPersistentDataContainer()
-                                    .get(
-                                            ownerKey,
-                                            PersistentDataType.STRING
-                                    );
-
-                    if (!playerUUID.toString()
-                            .equals(ownerUUID)) {
-
-                        continue;
-                    }
-
-                    /*
-                     * 找到原来的猫
-                     */
-
+            /*
+             * 读取猫咪最后保存的位置
+             */
+            double x =
                     plugin.getDataManager()
-                            .setCatEntityUUID(
-                                    playerUUID,
-                                    cat.getUniqueId()
+                            .getCatX(
+                                    playerUUID
                             );
 
-                    restoreCatVariant(
-                            playerUUID,
-                            cat
-                    );
+            double y =
+                    plugin.getDataManager()
+                            .getCatY(
+                                    playerUUID
+                            );
 
-                    cat.teleport(
-                            player.getLocation()
-                    );
+            double z =
+                    plugin.getDataManager()
+                            .getCatZ(
+                                    playerUUID
+                            );
 
-                    updateCat(
-                            cat,
-                            player,
-                            name
-                    );
+            int chunkX =
+                    ((int) Math.floor(x))
+                            >> 4;
 
-                    saveCatLocation(
-                            player,
-                            cat
-                    );
+            int chunkZ =
+                    ((int) Math.floor(z))
+                            >> 4;
 
-                    return false;
-                }
-            }
+            /*
+             * 异步加载猫所在的区块
+             */
+            world.getChunkAtAsync(
+                    chunkX,
+                    chunkZ
+            ).thenAccept(chunk -> {
+
+                Bukkit.getScheduler()
+                        .runTask(
+                                plugin,
+                                () -> {
+
+                                    /*
+                                     * 区块加载完成后
+                                     * 再通过 UUID 查找猫
+                                     */
+                                    Entity entity =
+                                            world.getEntity(
+                                                    savedEntityUUID
+                                            );
+
+                                    /*
+                                     * 找到了！
+                                     */
+                                    if (entity instanceof Cat cat &&
+                                            !cat.isDead()) {
+
+                                        restoreCatVariant(
+                                                playerUUID,
+                                                cat
+                                        );
+
+                                        cat.teleport(
+                                                player.getLocation()
+                                        );
+
+                                        updateCat(
+                                                cat,
+                                                player,
+                                                name
+                                        );
+
+                                        saveCatLocation(
+                                                player,
+                                                cat
+                                        );
+
+                                        callback.accept(
+                                                false
+                                        );
+
+                                        return;
+                                    }
+
+                                    /*
+                                     * =========================
+                                     * UUID 存在，
+                                     * 但实体仍未找到
+                                     *
+                                     * 重要：
+                                     * 这里绝对不能 spawnEntity
+                                     * =========================
+                                     */
+
+                                    player.sendMessage(
+                                            "§e🐱 暂时没有找到你的猫咪实体。"
+                                                    + "§7为了防止重复生成，"
+                                                    + "§7本次不会生成新的猫。"
+                                    );
+
+                                    callback.accept(
+                                            false
+                                    );
+                                }
+                        );
+            });
+
+            return;
         }
 
         /*
-         * ④ 确定不存在原猫
-         * 才创建新猫
+         * =========================
+         * ② 没有实体 UUID
+         *
+         * 兼容早期版本数据
+         * =========================
          */
+
+        UUID savedWorldUUID =
+                plugin.getDataManager()
+                        .getCatWorldUUID(
+                                playerUUID
+                        );
+
+        /*
+         * 如果没有任何旧实体信息
+         * 才允许生成新的猫
+         */
+        if (savedWorldUUID == null) {
+
+            spawnNewCat(
+                    player,
+                    name,
+                    callback
+            );
+
+            return;
+        }
+
+        World world =
+                Bukkit.getWorld(
+                        savedWorldUUID
+                );
+
+        if (world == null) {
+
+            player.sendMessage(
+                    "§c🐱 无法加载猫咪所在的世界。"
+            );
+
+            callback.accept(false);
+
+            return;
+        }
+
+        double x =
+                plugin.getDataManager()
+                        .getCatX(
+                                playerUUID
+                        );
+
+        double y =
+                plugin.getDataManager()
+                        .getCatY(
+                                playerUUID
+                        );
+
+        double z =
+                plugin.getDataManager()
+                        .getCatZ(
+                                playerUUID
+                        );
+
+        int chunkX =
+                ((int) Math.floor(x))
+                        >> 4;
+
+        int chunkZ =
+                ((int) Math.floor(z))
+                        >> 4;
+
+        world.getChunkAtAsync(
+                chunkX,
+                chunkZ
+        ).thenAccept(chunk -> {
+
+            Bukkit.getScheduler()
+                    .runTask(
+                            plugin,
+                            () -> {
+
+                                Location savedLocation =
+                                        new Location(
+                                                world,
+                                                x,
+                                                y,
+                                                z
+                                        );
+
+                                /*
+                                 * 旧版本没有 entity UUID，
+                                 * 尝试在旧位置附近寻找
+                                 */
+                                for (Entity entity :
+                                        savedLocation
+                                                .getNearbyEntities(
+                                                        4,
+                                                        4,
+                                                        4
+                                                )) {
+
+                                    if (!(entity instanceof Cat cat)) {
+                                        continue;
+                                    }
+
+                                    if (!cat.getPersistentDataContainer()
+                                            .has(
+                                                    catKey,
+                                                    PersistentDataType.BYTE
+                                            )) {
+
+                                        continue;
+                                    }
+
+                                    String ownerUUID =
+                                            cat.getPersistentDataContainer()
+                                                    .get(
+                                                            ownerKey,
+                                                            PersistentDataType.STRING
+                                                    );
+
+                                    if (!playerUUID.toString()
+                                            .equals(
+                                                    ownerUUID
+                                            )) {
+
+                                        continue;
+                                    }
+
+                                    /*
+                                     * 找到了旧猫
+                                     */
+
+                                    plugin.getDataManager()
+                                            .setCatEntityUUID(
+                                                    playerUUID,
+                                                    cat.getUniqueId()
+                                            );
+
+                                    restoreCatVariant(
+                                            playerUUID,
+                                            cat
+                                    );
+
+                                    cat.teleport(
+                                            player.getLocation()
+                                    );
+
+                                    updateCat(
+                                            cat,
+                                            player,
+                                            name
+                                    );
+
+                                    saveCatLocation(
+                                            player,
+                                            cat
+                                    );
+
+                                    callback.accept(
+                                            false
+                                    );
+
+                                    return;
+                                }
+
+                                /*
+                                 * 旧版本完全没有找到猫
+                                 *
+                                 * 由于没有 UUID 可以确认，
+                                 * 这里才允许生成新猫。
+                                 */
+                                spawnNewCat(
+                                        player,
+                                        name,
+                                        callback
+                                );
+                            }
+                    );
+        });
+    }
+
+    /*
+     * =========================
+     * 创建新猫
+     * =========================
+     */
+
+    private void spawnNewCat(
+            Player player,
+            String name,
+            Consumer<Boolean> callback
+    ) {
+
+        UUID playerUUID =
+                player.getUniqueId();
 
         Cat cat =
                 (Cat) player.getWorld()
@@ -255,8 +510,7 @@ public class CatManager {
                         );
 
         /*
-         * 第一次生成：
-         * 随机选择花色
+         * 第一次生成随机花色
          */
         Cat.Type variant =
                 getRandomCatType();
@@ -283,7 +537,7 @@ public class CatManager {
         );
 
         /*
-         * 保存 Entity UUID
+         * 保存 UUID
          */
         plugin.getDataManager()
                 .setCatEntityUUID(
@@ -299,7 +553,7 @@ public class CatManager {
                 cat
         );
 
-        return true;
+        callback.accept(true);
     }
 
     /*
@@ -331,7 +585,7 @@ public class CatManager {
         );
 
         /*
-         * 标记为 Neko n' Yume 猫
+         * 标记 Neko n' Yume 猫
          */
         cat.getPersistentDataContainer()
                 .set(
@@ -429,11 +683,12 @@ public class CatManager {
 
     /*
      * =========================
-     * 获取 Cat Variant Registry
+     * Cat Variant Registry
      * =========================
      */
 
-    private Registry<Cat.Type> getCatVariantRegistry() {
+    private Registry<Cat.Type>
+    getCatVariantRegistry() {
 
         return io.papermc.paper.registry.RegistryAccess
                 .registryAccess()
@@ -446,9 +701,6 @@ public class CatManager {
      * =========================
      * 随机花色
      * =========================
-     *
-     * 使用 Registry.stream()
-     * 而不是 Cat.Type.values()
      */
 
     private Cat.Type getRandomCatType() {
@@ -476,13 +728,6 @@ public class CatManager {
      * =========================
      * 保存花色
      * =========================
-     *
-     * 不使用 name()
-     *
-     * 保存：
-     * minecraft:tabby
-     * minecraft:calico
-     * minecraft:black
      */
 
     private void saveCatVariant(
@@ -532,9 +777,6 @@ public class CatManager {
         if (variantString == null ||
                 variantString.isBlank()) {
 
-            /*
-             * 读取猫当前真实花色
-             */
             saveCatVariant(
                     playerUUID,
                     cat.getCatType()
@@ -543,12 +785,6 @@ public class CatManager {
             return;
         }
 
-        /*
-         * 把：
-         * minecraft:calico
-         *
-         * 转换为 NamespacedKey
-         */
         NamespacedKey key =
                 NamespacedKey.fromString(
                         variantString
@@ -564,19 +800,12 @@ public class CatManager {
             return;
         }
 
-        /*
-         * 从 Registry 找回 Cat.Type
-         */
         Cat.Type variant =
                 getCatVariantRegistry()
                         .get(key);
 
         if (variant == null) {
 
-            /*
-             * 数据无效：
-             * 保留当前实际花色
-             */
             saveCatVariant(
                     playerUUID,
                     cat.getCatType()
@@ -585,13 +814,16 @@ public class CatManager {
             return;
         }
 
-        /*
-         * 恢复花色
-         */
         cat.setCatType(
                 variant
         );
     }
+
+    /*
+     * =========================
+     * Getter
+     * =========================
+     */
 
     public NamespacedKey getCatKey() {
         return catKey;

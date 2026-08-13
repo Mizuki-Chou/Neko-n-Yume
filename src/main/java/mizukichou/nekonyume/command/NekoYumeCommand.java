@@ -109,7 +109,9 @@ public class NekoYumeCommand implements CommandExecutor {
             }
 
             plugin.getDataManager()
-                    .createCat(player.getUniqueId());
+                    .createCat(
+                            player.getUniqueId()
+                    );
 
             player.sendMessage(
                     mm.deserialize(
@@ -136,7 +138,9 @@ public class NekoYumeCommand implements CommandExecutor {
             }
 
             if (!plugin.getDataManager()
-                    .hasCat(player.getUniqueId())) {
+                    .hasCat(
+                            player.getUniqueId()
+                    )) {
 
                 player.sendMessage(
                         mm.deserialize(
@@ -185,13 +189,15 @@ public class NekoYumeCommand implements CommandExecutor {
 
             player.sendMessage(
                     mm.deserialize(
-                            "<white>等级: <yellow>" + level
+                            "<white>等级: <yellow>"
+                                    + level
                     )
             );
 
             player.sendMessage(
                     mm.deserialize(
-                            "<white>好感度: <red>" + affection
+                            "<white>好感度: <red>"
+                                    + affection
                     )
             );
 
@@ -222,7 +228,9 @@ public class NekoYumeCommand implements CommandExecutor {
             }
 
             if (!plugin.getDataManager()
-                    .hasCat(player.getUniqueId())) {
+                    .hasCat(
+                            player.getUniqueId()
+                    )) {
 
                 player.sendMessage(
                         mm.deserialize(
@@ -244,10 +252,15 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
-            String newName = String.join(
-                    " ",
-                    Arrays.copyOfRange(args, 1, args.length)
-            ).trim();
+            String newName =
+                    String.join(
+                            " ",
+                            Arrays.copyOfRange(
+                                    args,
+                                    1,
+                                    args.length
+                            )
+                    ).trim();
 
             if (newName.isEmpty()) {
 
@@ -317,7 +330,9 @@ public class NekoYumeCommand implements CommandExecutor {
             }
 
             if (!plugin.getDataManager()
-                    .hasCat(player.getUniqueId())) {
+                    .hasCat(
+                            player.getUniqueId()
+                    )) {
 
                 player.sendMessage(
                         mm.deserialize(
@@ -334,33 +349,50 @@ public class NekoYumeCommand implements CommandExecutor {
                                     player.getUniqueId()
                             );
 
-            boolean summoned =
-                    plugin.getCatManager()
-                            .spawnCat(
-                                    player,
-                                    name
-                            );
+            /*
+             * 新版 spawnCat 是异步的：
+             *
+             * spawnCat(
+             *     player,
+             *     name,
+             *     result -> { ... }
+             * )
+             */
+            plugin.getCatManager()
+                    .spawnCat(
+                            player,
+                            name,
+                            summoned -> {
 
-            if (summoned) {
+                                /*
+                                 * 玩家在等待期间退出了
+                                 */
+                                if (!player.isOnline()) {
+                                    return;
+                                }
 
-                player.sendMessage(
-                        mm.deserialize(
-                                "<gradient:#ff9de2:#a78bfa>🐱 "
-                                        + name
-                                        + " 出现在你身边!</gradient>"
-                        )
-                );
+                                if (summoned) {
 
-            } else {
+                                    player.sendMessage(
+                                            mm.deserialize(
+                                                    "<gradient:#ff9de2:#a78bfa>🐱 "
+                                                            + name
+                                                            + " 出现在你身边!</gradient>"
+                                            )
+                                    );
 
-                player.sendMessage(
-                        mm.deserialize(
-                                "<gradient:#ff9de2:#a78bfa>🐱 "
-                                        + name
-                                        + " 来到你身边啦!</gradient>"
-                        )
-                );
-            }
+                                } else {
+
+                                    player.sendMessage(
+                                            mm.deserialize(
+                                                    "<gradient:#ff9de2:#a78bfa>🐱 "
+                                                            + name
+                                                            + " 来到你身边啦!</gradient>"
+                                            )
+                                    );
+                                }
+                            }
+                    );
 
             return true;
         }
