@@ -1,6 +1,8 @@
 package mizukichou.nekonyume.listener;
 
 import mizukichou.nekonyume.NekoNYume;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Sound;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Entity;
@@ -8,6 +10,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.persistence.PersistentDataType;
 
@@ -17,51 +20,77 @@ import java.util.UUID;
 
 public class CatInteractionListener implements Listener {
 
-    private final NekoNYume plugin;
-
     /*
-     * 防止连续快速按 Shift 刷好感度
+     * 防止连续快速按 Shift 刷好感度。
      *
-     * 1 秒最多触发一次
+     * 1 秒最多触发一次。
      */
-    private final Map<UUID, Long> cooldowns =
-            new HashMap<>();
-
     private static final long COOLDOWN =
             1000L;
 
     /*
-     * 每天最多抚摸 20 次
+     * 每天最多抚摸 20 次。
      */
     private static final int MAX_DAILY_PETS =
             20;
 
     /*
-     * 抚摸距离
+     * 抚摸距离。
      */
     private static final double PET_DISTANCE =
             3.0;
 
+    /*
+     * 每次成功抚摸增加 1 点好感度。
+     */
+    private static final int PET_AFFECTION_GAIN =
+            1;
+
+    private final NekoNYume plugin;
+
+    /*
+     * MiniMessage 实例。
+     *
+     * 全局消息格式统一为 MiniMessage；
+     * 玩家可控文本一律用 Component.text 拼接，
+     * 避免标签注入。
+     */
+    private final MiniMessage mm =
+            MiniMessage.miniMessage();
+
+    /*
+     * 玩家 UUID → 上一次抚摸时间。
+     *
+     * Bukkit 事件运行在主线程，
+     * 因此这里使用普通 HashMap 即可。
+     */
+    private final Map<UUID, Long> cooldowns =
+            new HashMap<>();
+
     public CatInteractionListener(
             NekoNYume plugin
     ) {
+
         this.plugin = plugin;
     }
 
     /*
-     * =========================
+     * ============================================================
      * 玩家开始潜行
-     * =========================
+     * ============================================================
      */
-    @EventHandler(priority = EventPriority.NORMAL)
+
+    @EventHandler(
+            priority = EventPriority.NORMAL
+    )
     public void onPlayerSneak(
             PlayerToggleSneakEvent event
     ) {
 
         /*
-         * 只有按下 Shift 时触发
+         * 只有按下 Shift 时触发。
          *
-         * 松开 Shift 不触发
+         * 松开 Shift 不触发。
          */
         if (!event.isSneaking()) {
             return;
@@ -74,24 +103,72 @@ public class CatInteractionListener implements Listener {
                 player.getUniqueId();
 
         /*
+         * ========================================================
          * 找附近自己的猫
+         * ========================================================
          */
-        Cat cat =
+
+        Cat entityCat =
                 findNearbyCat(
                         player
                 );
 
-        /*
-         * 附近没有猫
-         */
-        if (cat == null) {
+        if (entityCat == null) {
             return;
         }
 
         /*
-         * =========================
+         * ========================================================
+         * 获取运行时逻辑 Cat
+         * ========================================================
+         *
+         * Bukkit Cat
+         *      ↓
+         * entity UUID
+         *      ↓
+         * Neko n' Yume Cat
+         */
+
+        mizukichou.nekonyume.cat.Cat logicalCat =
+                plugin.getCatManager()
+                        .getCatByEntity(
+                                entityCat.getUniqueId()
+                        );
+
+        /*
+         * 如果内存中还没有对应 Cat，
+         * 从存档恢复。
+         */
+        if (logicalCat == null) {
+
+            logicalCat =
+                    plugin.getCatManager()
+                            .loadCat(
+                                    player
+                            );
+        }
+
+        if (logicalCat == null) {
+            return;
+        }
+
+        /*
+         * ========================================================
+         * 确保这确实是玩家自己的逻辑猫
+         * ========================================================
+         */
+
+        if (!playerUUID.equals(
+                logicalCat.getOwnerUuid()
+        )) {
+
+            return;
+        }
+
+        /*
+         * ========================================================
          * 每日抚摸次数
-         * =========================
+         * ========================================================
          */
 
         int petCount =
@@ -103,16 +180,18 @@ public class CatInteractionListener implements Listener {
         if (petCount >= MAX_DAILY_PETS) {
 
             player.sendMessage(
-                    "§e🐱 今天已经摸过猫咪 20 次啦！"
+                    mm.deserialize(
+                            "<yellow>🐱 今天已经摸过猫咪 20 次啦！</yellow>"
+                    )
             );
 
             return;
         }
 
         /*
-         * =========================
-         * 冷却
-         * =========================
+         * ========================================================
+         * 1 秒冷却
+         * ========================================================
          */
 
         long now =
@@ -129,15 +208,59 @@ public class CatInteractionListener implements Listener {
             return;
         }
 
+        /*
+         * ========================================================
+         * 记录冷却
+         * ========================================================
+         */
+
         cooldowns.put(
                 playerUUID,
                 now
         );
 
         /*
-         * =========================
-         * 抚摸次数 +1
-         * =========================
+         * ========================================================
+         * 计算实际好感度变化
+         * ========================================================
+         *
+         * 好感度上限为 100。
+         *
+         * 例如：
+         * 99 → 实际 +1
+         * 100 → 实际 +0
+         */
+
+        int oldAffection =
+                logicalCat.getAffection();
+
+        int newAffection =
+                Math.min(
+                        100,
+                        oldAffection
+                                + PET_AFFECTION_GAIN
+                );
+
+        int actualAffectionGain =
+                newAffection
+                        - oldAffection;
+
+        /*
+         * ========================================================
+         * 更新运行时 Cat
+         * ========================================================
+         */
+
+        logicalCat.setAffection(
+                newAffection
+        );
+
+        logicalCat.markInteracted();
+
+        /*
+         * ========================================================
+         * 每日抚摸次数 +1
+         * ========================================================
          */
 
         plugin.getDataManager()
@@ -146,26 +269,28 @@ public class CatInteractionListener implements Listener {
                 );
 
         /*
-         * =========================
-         * 好感度 +1
-         * =========================
+         * ========================================================
+         * 持久化运行时状态
+         * ========================================================
          */
 
         plugin.getDataManager()
-                .addCatAffection(
+                .setCatAffection(
                         playerUUID,
-                        1
+                        logicalCat.getAffection()
+                );
+
+        plugin.getDataManager()
+                .setCatLastInteractionAt(
+                        playerUUID,
+                        logicalCat.getLastInteractionAt()
                 );
 
         /*
-         * 获取最新数据
+         * 获取更新后的抚摸次数。
+         *
+         * addCatPetCount() 已经处理了每日重置。
          */
-        int affection =
-                plugin.getDataManager()
-                        .getCatAffection(
-                                playerUUID
-                        );
-
         int currentPetCount =
                 plugin.getDataManager()
                         .getCatPetCount(
@@ -173,61 +298,114 @@ public class CatInteractionListener implements Listener {
                         );
 
         int remaining =
-                MAX_DAILY_PETS
-                        - currentPetCount;
-
-        String name =
-                plugin.getDataManager()
-                        .getCatName(
-                                playerUUID
-                        );
+                Math.max(
+                        0,
+                        MAX_DAILY_PETS
+                                - currentPetCount
+                );
 
         /*
-         * =========================
+         * ========================================================
          * 播放呼噜声
-         * =========================
+         * ========================================================
          */
 
-        player.getWorld().playSound(
-                cat.getLocation(),
-                Sound.ENTITY_CAT_PURR,
-                1.0f,
-                1.0f
+        player.getWorld()
+                .playSound(
+                        entityCat.getLocation(),
+                        Sound.ENTITY_CAT_PURR,
+                        1.0f,
+                        1.0f
+                );
+
+        /*
+         * ========================================================
+         * 玩家提示
+         * ========================================================
+         *
+         * 名字是玩家可控文本，
+         * 用 Component.text 拼接，
+         * 避免 MiniMessage 标签注入。
+         */
+
+        player.sendMessage(
+                mm.deserialize(
+                        "<light_purple>🐱 </light_purple>"
+                ).append(
+                        Component.text(
+                                logicalCat.getName()
+                        )
+                ).append(
+                        mm.deserialize(
+                                " <white>蹭了蹭你！</white>"
+                        )
+                )
         );
 
         /*
-         * =========================
-         * 玩家提示
-         * =========================
+         * 如果好感度已经满了，
+         * 不显示虚假的 +1。
          */
+        if (actualAffectionGain > 0) {
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<red>❤ 好感度 <green>+"
+                                    + actualAffectionGain
+                                    + " <gray>("
+                                    + logicalCat.getAffection()
+                                    + "/100)</gray>"
+                    )
+            );
+
+        } else {
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<red>❤ 好感度 <gray>已经达到最大值 ("
+                                    + logicalCat.getAffection()
+                                    + "/100)</gray>"
+                    )
+            );
+        }
 
         player.sendMessage(
-                "§d🐱 " + name
-                        + " §f蹭了蹭你！"
-        );
-
-        player.sendMessage(
-                "§c❤ 好感度 §a+1"
-                        + " §7("
-                        + affection
-                        + "/100)"
-        );
-
-        player.sendMessage(
-                "§e🐾 今日抚摸："
-                        + currentPetCount
-                        + "/"
-                        + MAX_DAILY_PETS
-                        + " §7| 剩余 "
-                        + remaining
-                        + " 次"
+                mm.deserialize(
+                        "<yellow>🐾 今日抚摸："
+                                + currentPetCount
+                                + "/"
+                                + MAX_DAILY_PETS
+                                + " <gray>| 剩余 "
+                                + remaining
+                                + " 次</gray>"
+                )
         );
     }
 
     /*
-     * =========================
+     * ============================================================
+     * 玩家退出时清理抚摸冷却记录
+     * ============================================================
+     *
+     * 防止 cooldowns Map 长期累积
+     * 已离线玩家的记录。
+     */
+
+    @EventHandler
+    public void onPlayerQuit(
+            PlayerQuitEvent event
+    ) {
+
+        cooldowns.remove(
+                event.getPlayer()
+                        .getUniqueId()
+        );
+    }
+
+    /*
+     * ============================================================
      * 寻找附近自己的猫
-     * =========================
+     * ============================================================
      */
 
     private Cat findNearbyCat(
@@ -238,8 +416,8 @@ public class CatInteractionListener implements Listener {
                 null;
 
         double closestDistance =
-                PET_DISTANCE *
-                        PET_DISTANCE;
+                PET_DISTANCE
+                        * PET_DISTANCE;
 
         for (Entity entity :
                 player.getNearbyEntities(
@@ -254,11 +432,12 @@ public class CatInteractionListener implements Listener {
 
             if (cat.isDead() ||
                     !cat.isValid()) {
+
                 continue;
             }
 
             /*
-             * 必须是 Neko n' Yume 的猫
+             * 必须是 Neko n' Yume 的猫。
              */
             if (!cat.getPersistentDataContainer()
                     .has(
@@ -266,11 +445,12 @@ public class CatInteractionListener implements Listener {
                                     .getCatKey(),
                             PersistentDataType.BYTE
                     )) {
+
                 continue;
             }
 
             /*
-             * 获取主人
+             * 获取主人 UUID。
              */
             String ownerUUID =
                     cat.getPersistentDataContainer()
@@ -285,17 +465,18 @@ public class CatInteractionListener implements Listener {
             }
 
             /*
-             * 必须是自己的猫
+             * 必须是自己的猫。
              */
             if (!ownerUUID.equals(
                     player.getUniqueId()
                             .toString()
             )) {
+
                 continue;
             }
 
             /*
-             * 计算距离
+             * 计算距离。
              */
             double distance =
                     player.getLocation()
@@ -304,7 +485,7 @@ public class CatInteractionListener implements Listener {
                             );
 
             /*
-             * 选择最近的一只
+             * 选择最近的一只。
              */
             if (distance <
                     closestDistance) {

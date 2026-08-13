@@ -1,11 +1,15 @@
 package mizukichou.nekonyume.cat;
 
 import mizukichou.nekonyume.NekoNYume;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -14,19 +18,34 @@ public class CatFoodManager {
     private static final int MAX_HUNGER = 100;
 
     /*
-     * 每次成功喂食增加的好感度
+     * 每次成功喂食增加的好感度。
      */
     private static final int FEED_AFFECTION_GAIN = 15;
 
     /*
-     * 食物 → 饱食度
+     * MiniMessage 实例。
+     *
+     * 全局消息格式统一为 MiniMessage；
+     * 玩家可控文本一律用 Component.text 拼接，
+     * 避免标签注入。
+     */
+    private final MiniMessage mm =
+            MiniMessage.miniMessage();
+
+    /*
+     * 食物 → 饱食度。
+     *
+     * 这里是 Neko n' Yume 自己的食物规则，
+     * 不再依赖 Minecraft 原版 Food Component。
      */
     private final Map<Material, Integer> foodValues =
-            new HashMap<>();
+            new EnumMap<>(Material.class);
 
     private final NekoNYume plugin;
 
-    public CatFoodManager(NekoNYume plugin) {
+    public CatFoodManager(
+            NekoNYume plugin
+    ) {
 
         this.plugin = plugin;
 
@@ -34,9 +53,9 @@ public class CatFoodManager {
     }
 
     /*
-     * =========================
+     * ============================================================
      * 注册食物
-     * =========================
+     * ============================================================
      */
 
     private void registerFoods() {
@@ -44,7 +63,6 @@ public class CatFoodManager {
         /*
          * 鱼类
          */
-
         foodValues.put(
                 Material.COD,
                 8
@@ -58,7 +76,6 @@ public class CatFoodManager {
         /*
          * 熟鱼
          */
-
         foodValues.put(
                 Material.COOKED_COD,
                 15
@@ -72,7 +89,6 @@ public class CatFoodManager {
         /*
          * 鸡肉
          */
-
         foodValues.put(
                 Material.CHICKEN,
                 10
@@ -86,7 +102,6 @@ public class CatFoodManager {
         /*
          * 牛肉
          */
-
         foodValues.put(
                 Material.BEEF,
                 12
@@ -100,7 +115,6 @@ public class CatFoodManager {
         /*
          * 猪肉
          */
-
         foodValues.put(
                 Material.PORKCHOP,
                 12
@@ -114,7 +128,6 @@ public class CatFoodManager {
         /*
          * 羊肉
          */
-
         foodValues.put(
                 Material.MUTTON,
                 12
@@ -128,7 +141,6 @@ public class CatFoodManager {
         /*
          * 兔肉
          */
-
         foodValues.put(
                 Material.RABBIT,
                 10
@@ -142,7 +154,6 @@ public class CatFoodManager {
         /*
          * 金胡萝卜
          */
-
         foodValues.put(
                 Material.GOLDEN_CARROT,
                 30
@@ -151,7 +162,6 @@ public class CatFoodManager {
         /*
          * 苹果
          */
-
         foodValues.put(
                 Material.APPLE,
                 12
@@ -160,7 +170,6 @@ public class CatFoodManager {
         /*
          * 面包
          */
-
         foodValues.put(
                 Material.BREAD,
                 12
@@ -168,8 +177,13 @@ public class CatFoodManager {
 
         /*
          * 蛋糕
+         *
+         * 保留你原来的设定。
+         *
+         * 注意：
+         * Cake 在原版中属于方块，不一定能通过
+         * 普通手持 ItemStack 的右键事件作为食物处理。
          */
-
         foodValues.put(
                 Material.CAKE,
                 25
@@ -177,18 +191,20 @@ public class CatFoodManager {
     }
 
     /*
-     * =========================
-     * 判断是否为猫咪食物
-     * =========================
+     * ============================================================
+     * 判断是否为 Neko n' Yume 猫咪食物
+     * ============================================================
      */
 
-    public boolean isFood(ItemStack item) {
+    public boolean isFood(
+            ItemStack item
+    ) {
 
         if (item == null) {
             return false;
         }
 
-        if (item.getType() == Material.AIR) {
+        if (item.getType().isAir()) {
             return false;
         }
 
@@ -198,29 +214,49 @@ public class CatFoodManager {
     }
 
     /*
-     * =========================
+     * ============================================================
      * 获取食物饱食度
-     * =========================
+     * ============================================================
      */
 
-    public int getFoodValue(ItemStack item) {
+    public int getFoodValue(
+            ItemStack item
+    ) {
 
         if (!isFood(item)) {
             return 0;
         }
 
-        return foodValues.get(
-                item.getType()
+        return foodValues.getOrDefault(
+                item.getType(),
+                0
         );
     }
 
     /*
-     * =========================
+     * ============================================================
+     * 获取当前注册的食物
+     * ============================================================
+     *
+     * 返回只读 Map，方便以后 GUI / 命令查看食物数据。
+     */
+
+    public Map<Material, Integer> getFoodValues() {
+
+        return Collections.unmodifiableMap(
+                foodValues
+        );
+    }
+
+    /*
+     * ============================================================
      * 喂猫
-     * =========================
+     * ============================================================
      *
      * true  = 成功喂食
      * false = 不能喂
+     *
+     * 现在 Cat 是运行时唯一真相。
      */
 
     public boolean feedCat(
@@ -228,6 +264,15 @@ public class CatFoodManager {
             ItemStack item
     ) {
 
+        if (player == null ||
+                item == null) {
+
+            return false;
+        }
+
+        /*
+         * 必须是 Neko n' Yume 注册食物。
+         */
         if (!isFood(item)) {
             return false;
         }
@@ -236,88 +281,124 @@ public class CatFoodManager {
                 player.getUniqueId();
 
         /*
-         * 玩家必须拥有猫
+         * 玩家必须拥有猫。
          */
-
         if (!plugin.getDataManager()
-                .hasCat(playerUUID)) {
+                .hasCat(
+                        playerUUID
+                )) {
 
             return false;
         }
 
         /*
+         * ========================================================
+         * 获取运行时 Cat
+         * ========================================================
+         */
+
+        Cat cat =
+                plugin.getCatManager()
+                        .loadCat(
+                                player
+                        );
+
+        if (cat == null) {
+            return false;
+        }
+
+        /*
+         * ========================================================
          * 当前饱食度
+         * ========================================================
          */
 
         int currentHunger =
-                plugin.getDataManager()
-                        .getCatHunger(
-                                playerUUID
-                        );
+                cat.getHunger();
 
         /*
-         * 如果已经满了
+         * 已经吃饱。
          */
-
         if (currentHunger >= MAX_HUNGER) {
 
             player.sendMessage(
-                    "§e🐱 你的猫咪已经吃饱了!"
+                    mm.deserialize(
+                            "<yellow>🐱 你的猫咪已经吃饱了!</yellow>"
+                    )
             );
 
             return false;
         }
 
         /*
-         * 获取食物价值
+         * ========================================================
+         * 食物价值
+         * ========================================================
          */
 
         int foodValue =
-                getFoodValue(item);
-
-        /*
-         * 增加饱食度
-         */
-
-        plugin.getDataManager()
-                .addCatHunger(
-                        playerUUID,
-                        foodValue
+                getFoodValue(
+                        item
                 );
 
+        if (foodValue <= 0) {
+            return false;
+        }
+
         /*
-         * 实际增加后的饱食度
+         * ========================================================
+         * 计算实际增加值
+         * ========================================================
+         *
+         * 例如：
+         *
+         * 当前 95
+         * 食物 +20
+         *
+         * 实际只能 +5。
          */
 
         int newHunger =
-                plugin.getDataManager()
-                        .getCatHunger(
-                                playerUUID
-                        );
-
-        /*
-         * 喂食成功：
-         * 好感度 +15
-         */
-
-        plugin.getDataManager()
-                .addCatAffection(
-                        playerUUID,
-                        FEED_AFFECTION_GAIN
+                Math.min(
+                        MAX_HUNGER,
+                        currentHunger
+                                + foodValue
                 );
 
+        int actualHungerGain =
+                newHunger
+                        - currentHunger;
+
+        if (actualHungerGain <= 0) {
+            return false;
+        }
+
         /*
-         * 获取增加后的好感度
+         * ========================================================
+         * 修改运行时 Cat
+         * ========================================================
          */
 
-        int newAffection =
-                plugin.getDataManager()
-                        .getCatAffection(
-                                playerUUID
-                        );
+        cat.setHunger(
+                newHunger
+        );
 
         /*
+         * 喂食增加好感度。
+         */
+        cat.addAffection(
+                FEED_AFFECTION_GAIN
+        );
+
+        /*
+         * 记录最后喂食时间。
+         */
+        cat.markFed();
+
+        /*
+         * ========================================================
          * 喂食后重新开始饥饿计时
+         * ========================================================
          */
 
         plugin.getDataManager()
@@ -327,61 +408,122 @@ public class CatFoodManager {
                 );
 
         /*
-         * 消耗一个食物
+         * ========================================================
+         * 持久化运行时状态
+         * ========================================================
          */
 
-        item.setAmount(
-                item.getAmount() - 1
-        );
+        plugin.getDataManager()
+                .setCatHunger(
+                        playerUUID,
+                        cat.getHunger()
+                );
+
+        plugin.getDataManager()
+                .setCatAffection(
+                        playerUUID,
+                        cat.getAffection()
+                );
+
+        plugin.getDataManager()
+                .setCatLastFedAt(
+                        playerUUID,
+                        cat.getLastFedAt()
+                );
 
         /*
-         * 获取猫咪名字
+         * ========================================================
+         * 消耗食物
+         * ========================================================
+         *
+         * 创造模式不消耗。
+         */
+
+        if (player.getGameMode() != GameMode.CREATIVE) {
+
+            if (item.getAmount() <= 1) {
+
+                item.setAmount(0);
+
+            } else {
+
+                item.setAmount(
+                        item.getAmount() - 1
+                );
+            }
+        }
+
+        /*
+         * ========================================================
+         * 获取显示信息
+         * ========================================================
          */
 
         String catName =
-                plugin.getDataManager()
-                        .getCatName(
-                                playerUUID
-                        );
+                cat.getName();
+
+        String foodName =
+                getFoodName(
+                        item.getType()
+                );
 
         /*
-         * 提示玩家
+         * ========================================================
+         * 玩家提示
+         * ========================================================
+         *
+         * catName 是玩家可控文本，
+         * 用 Component.text 拼接，
+         * 避免 MiniMessage 标签注入。
+         *
+         * foodName 来自内部常量表，可以安全走 MiniMessage。
          */
 
         player.sendMessage(
-                "§d🐱 " + catName
-                        + " §f吃掉了 §e"
-                        + getFoodName(
-                        item.getType()
+                mm.deserialize(
+                        "<light_purple>🐱 </light_purple>"
+                ).append(
+                        Component.text(
+                                catName
+                        )
+                ).append(
+                        mm.deserialize(
+                                "<white> 吃掉了 <yellow>"
+                                        + foodName
+                                        + "</yellow>!</white>"
+                        )
                 )
-                        + "§f!"
         );
 
         player.sendMessage(
-                "§6🍖 饱食度 §a+"
-                        + foodValue
-                        + " §7("
-                        + newHunger
-                        + "/"
-                        + MAX_HUNGER
-                        + ")"
+                mm.deserialize(
+                        "<gold>🍖 饱食度 <green>+"
+                                + actualHungerGain
+                                + " <gray>("
+                                + cat.getHunger()
+                                + "/"
+                                + MAX_HUNGER
+                                + ")</gray>"
+                )
         );
 
         player.sendMessage(
-                "§c❤ 好感度 §a+"
-                        + FEED_AFFECTION_GAIN
-                        + " §7("
-                        + newAffection
-                        + "/100)"
+                mm.deserialize(
+                        "<red>❤ 好感度 <green>+"
+                                + FEED_AFFECTION_GAIN
+                                + " <gray>("
+                                + cat.getAffection()
+                                + "/100)</gray>"
+                )
         );
 
         return true;
     }
 
     /*
-     * =========================
+     * ============================================================
      * 获取食物显示名称
-     * =========================
+     * ============================================================
      */
 
     private String getFoodName(

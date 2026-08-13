@@ -1,21 +1,76 @@
 package mizukichou.nekonyume.data;
 
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.LocalDate;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
 public class PlayerDataManager {
 
+    private static final String PLAYERS_PATH = "players";
+
+    /*
+     * 数据格式版本。
+     *
+     * v1 = 当前格式。
+     *
+     * 未来格式变更时递增此版本，
+     * 并在 migrate() 中添加单向迁移步骤。
+     */
+    private static final int DATA_VERSION = 1;
+
+    /*
+     * 猫咪默认值
+     */
+    private static final String DEFAULT_CAT_NAME = "Mikan";
+
+    private static final int DEFAULT_CAT_LEVEL = 1;
+    private static final int DEFAULT_CAT_AFFECTION = 50;
+    private static final int DEFAULT_CAT_HUNGER = 100;
+    private static final int DEFAULT_CAT_HEALTH = 100;
+
+    /*
+     * 抚摸每日上限
+     */
+    private static final int MAX_DAILY_PETS = 20;
+
+    /*
+     * 数据文件
+     */
+    private final JavaPlugin plugin;
     private final File file;
     private final YamlConfiguration data;
 
-    public PlayerDataManager(JavaPlugin plugin) {
+    /*
+     * 是否存在尚未写入磁盘的数据。
+     */
+    private boolean dirty;
+
+    /*
+     * 连续保存失败次数。
+     *
+     * 成功保存后清零。
+     * 用于在日志中观察持久化健康度。
+     */
+    private int consecutiveSaveFailures;
+
+    public PlayerDataManager(
+            JavaPlugin plugin
+    ) {
+
+        this.plugin = plugin;
 
         file = new File(
                 plugin.getDataFolder(),
@@ -26,120 +81,600 @@ public class PlayerDataManager {
 
             try {
 
-                file.getParentFile().mkdirs();
-                file.createNewFile();
+                File parent =
+                        file.getParentFile();
+
+                if (parent != null &&
+                        !parent.exists()) {
+
+                    if (!parent.mkdirs() &&
+                            !parent.exists()) {
+
+                        throw new IOException(
+                                "Failed to create plugin data directory."
+                        );
+                    }
+                }
+
+                if (!file.createNewFile()) {
+
+                    throw new IOException(
+                            "Failed to create players.yml."
+                    );
+                }
 
             } catch (IOException e) {
 
-                e.printStackTrace();
+                throw new RuntimeException(
+                        "Failed to create players.yml",
+                        e
+                );
             }
         }
 
-        data = YamlConfiguration.loadConfiguration(file);
+        data =
+                YamlConfiguration.loadConfiguration(
+                        file
+                );
+
+        dirty = false;
+
+        consecutiveSaveFailures = 0;
+
+        /*
+         * 启动备份。
+         *
+         * 备份发生在迁移之前，
+         * 因此备份保留的是
+         * "上次运行结束后"的原始状态。
+         */
+        createBackupIfEnabled();
+
+        /*
+         * 数据迁移。
+         */
+        migrate();
     }
 
     /*
-     * =========================
-     * 猫咪基础数据
-     * =========================
+     * ============================================================
+     * 启动备份
+     * ============================================================
+     *
+     * 每次插件启动时，
+     * 把当前 players.yml 复制到 backup/ 目录。
+     *
+     * 只保留最近 keep 份，
+     * 更早的备份自动删除。
      */
 
-    public boolean hasCat(UUID uuid) {
+    private void createBackupIfEnabled() {
+
+        if (!plugin.getConfig()
+                .getBoolean(
+                        "storage.backup.enabled",
+                        true
+                )) {
+
+            return;
+        }
+
+        try {
+
+            File backupDir =
+                    new File(
+                            plugin.getDataFolder(),
+                            "backup"
+                    );
+
+            if (!backupDir.exists() &&
+                    !backupDir.mkdirs()) {
+
+                plugin.getLogger().warning(
+                        "Failed to create backup directory."
+                );
+
+                return;
+            }
+
+            String timestamp =
+                    new SimpleDateFormat(
+                            "yyyy-MM-dd-HH-mm-ss"
+                    ).format(
+                            new Date()
+                    );
+
+            File backupFile =
+                    new File(
+                            backupDir,
+                            "players-"
+                                    + timestamp
+                                    + ".yml"
+                    );
+
+            Files.copy(
+                    file.toPath(),
+                    backupFile.toPath()
+            );
+
+            /*
+             * 清理旧备份，
+             * 只保留最近 keep 份。
+             */
+            int keep =
+                    plugin.getConfig()
+                            .getInt(
+                                    "storage.backup.keep",
+                                    5
+                            );
+
+            File[] backups =
+                    backupDir.listFiles(
+                            (dir, name) ->
+                                    name.startsWith("players-")
+                                            && name.endsWith(".yml")
+                    );
+
+            if (backups == null ||
+                    backups.length <= keep) {
+
+                return;
+            }
+
+            Arrays.sort(
+                    backups,
+                    Comparator.comparingLong(
+                            File::lastModified
+                    )
+            );
+
+            int deleteCount =
+                    backups.length
+                            - keep;
+
+            for (int i = 0;
+                 i < deleteCount;
+                 i++) {
+
+                File old =
+                        backups[i];
+
+                if (old.delete()) {
+
+                    plugin.getLogger().info(
+                            "Removed old backup: "
+                                    + old.getName()
+                    );
+
+                } else {
+
+                    plugin.getLogger().warning(
+                            "Failed to remove old backup: "
+                                    + old.getName()
+                    );
+                }
+            }
+
+        } catch (Exception e) {
+
+            plugin.getLogger().warning(
+                    "Failed to create players.yml backup: "
+                            + e.getMessage()
+            );
+        }
+    }
+
+    /*
+     * ============================================================
+     * 数据迁移
+     * ============================================================
+     *
+     * 单向迁移：
+     * 旧版本数据在加载时被转换为新版本，
+     * 迁移逻辑永远不会"回退"。
+     */
+
+    private void migrate() {
+
+        int version =
+                data.getInt(
+                        "data-version",
+                        0
+                );
+
+        if (version == 0) {
+
+            /*
+             * 早期没有版本号的数据。
+             *
+             * 当前格式就是 v1，
+             * 因此无需字段迁移，
+             * 只需补写版本标记。
+             */
+            plugin.getLogger().info(
+                    "players.yml has no data-version. Marking as v"
+                            + DATA_VERSION
+                            + "."
+            );
+
+            data.set(
+                    "data-version",
+                    DATA_VERSION
+            );
+
+            saveNow();
+
+            return;
+        }
+
+        if (version < DATA_VERSION) {
+
+            /*
+             * 未来 v1 → v2 等迁移步骤写在这里。
+             *
+             * 规则：
+             * 1. 只能单向升级；
+             * 2. 每一步都先验证再写入；
+             * 3. 迁移完成后立即落盘。
+             */
+            plugin.getLogger().info(
+                    "Migrating players.yml from data-version "
+                            + version
+                            + " to "
+                            + DATA_VERSION
+                            + "."
+            );
+
+            /*
+             * 预留：
+             *
+             * if (version < 2) {
+             *     // v1 → v2 迁移
+             * }
+             */
+
+            data.set(
+                    "data-version",
+                    DATA_VERSION
+            );
+
+            saveNow();
+
+            return;
+        }
+
+        if (version > DATA_VERSION) {
+
+            /*
+             * 数据比插件还新。
+             *
+             * 说明这个 players.yml 来自更新版本的插件。
+             *
+             * 内存中的 YamlConfiguration 仍保留全部未知字段，
+             * 因此继续写盘不会丢失数据。
+             *
+             * 但某些新字段我们无法理解，
+             * 这里只警告，由管理员决定是否升级插件。
+             */
+            plugin.getLogger().warning(
+                    "players.yml data-version "
+                            + version
+                            + " is newer than supported version "
+                            + DATA_VERSION
+                            + ". The plugin may not understand all fields."
+            );
+        }
+    }
+
+    /*
+     * ============================================================
+     * 基础路径
+     * ============================================================
+     */
+
+    private String playerPath(
+            UUID playerUUID
+    ) {
+
+        return PLAYERS_PATH
+                + "."
+                + playerUUID;
+    }
+
+    private String catPath(
+            UUID playerUUID
+    ) {
+
+        return playerPath(playerUUID)
+                + ".cat";
+    }
+
+    /*
+     * ============================================================
+     * 猫咪基础数据
+     * ============================================================
+     */
+
+    public boolean hasCat(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID == null) {
+            return false;
+        }
 
         return data.contains(
-                "players." + uuid + ".cat"
+                catPath(playerUUID)
         );
     }
 
-    public void createCat(UUID uuid) {
+    /**
+     * 创建一只新猫咪。
+     *
+     * <p>
+     * 如果玩家已经有猫咪，不会覆盖原数据。
+     * </p>
+     */
+    public void createCat(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID == null) {
+            return;
+        }
 
         String path =
-                "players." + uuid + ".cat";
+                catPath(playerUUID);
+
+        if (data.contains(path)) {
+            return;
+        }
+
+        long now =
+                System.currentTimeMillis();
+
+        data.set(
+                path + ".id",
+                UUID.randomUUID().toString()
+        );
 
         data.set(
                 path + ".name",
-                "Mikan"
+                DEFAULT_CAT_NAME
         );
 
         data.set(
                 path + ".level",
-                1
+                DEFAULT_CAT_LEVEL
         );
 
         data.set(
                 path + ".affection",
-                50
+                DEFAULT_CAT_AFFECTION
         );
 
-        /*
-         * 猫咪初始饱食度
-         */
         data.set(
                 path + ".hunger",
-                100
+                DEFAULT_CAT_HUNGER
         );
 
-        /*
-         * 饥饿度上次更新时间
-         */
+        data.set(
+                path + ".health",
+                DEFAULT_CAT_HEALTH
+        );
+
         data.set(
                 path + ".hunger-last-update",
-                System.currentTimeMillis()
+                now
         );
 
-        /*
-         * 每日抚摸次数
-         */
+        data.set(
+                path + ".created-at",
+                now
+        );
+
+        data.set(
+                path + ".last-fed-at",
+                now
+        );
+
+        data.set(
+                path + ".last-interaction-at",
+                now
+        );
+
         data.set(
                 path + ".pet-count",
                 0
         );
 
-        /*
-         * 每日抚摸日期
-         */
         data.set(
                 path + ".pet-date",
-                LocalDate.now().toString()
+                java.time.LocalDate.now().toString()
+        );
+
+        /*
+         * 第一次创建猫咪属于关键操作，
+         * 立即保存。
+         */
+        saveNow();
+    }
+
+    public void ensureCat(
+            UUID playerUUID
+    ) {
+
+        if (!hasCat(playerUUID)) {
+
+            createCat(playerUUID);
+        }
+    }
+
+    /*
+     * ============================================================
+     * 猫咪逻辑 UUID
+     * ============================================================
+     */
+
+    public UUID getCatUUID(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID == null) {
+            return null;
+        }
+
+        String value =
+                data.getString(
+                        catPath(playerUUID)
+                                + ".id"
+                );
+
+        return parseUUID(value);
+    }
+
+    public void setCatUUID(
+            UUID playerUUID,
+            UUID catUUID
+    ) {
+
+        if (playerUUID == null ||
+                catUUID == null) {
+
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        data.set(
+                catPath(playerUUID)
+                        + ".id",
+                catUUID.toString()
         );
 
         save();
     }
 
-    public String getCatName(UUID uuid) {
+    /*
+     * ============================================================
+     * 猫咪名称
+     * ============================================================
+     */
+
+    public String getCatName(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
 
         return data.getString(
-                "players." + uuid + ".cat.name",
-                "Mikan"
+                catPath(playerUUID)
+                        + ".name",
+                DEFAULT_CAT_NAME
         );
     }
 
     public void setCatName(
-            UUID uuid,
+            UUID playerUUID,
             String name
     ) {
 
+        if (playerUUID == null ||
+                name == null ||
+                name.isBlank()) {
+
+            return;
+        }
+
+        ensureCat(playerUUID);
+
         data.set(
-                "players." + uuid + ".cat.name",
+                catPath(playerUUID)
+                        + ".name",
                 name
         );
 
         save();
     }
 
-    public int getCatLevel(UUID uuid) {
+    /*
+     * ============================================================
+     * 猫咪等级
+     * ============================================================
+     */
 
-        return data.getInt(
-                "players." + uuid + ".cat.level",
-                1
+    public int getCatLevel(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
+
+        return Math.max(
+                1,
+                data.getInt(
+                        catPath(playerUUID)
+                                + ".level",
+                        DEFAULT_CAT_LEVEL
+                )
         );
     }
 
-    public int getCatAffection(UUID uuid) {
+    public void setCatLevel(
+            UUID playerUUID,
+            int level
+    ) {
 
-        return data.getInt(
-                "players." + uuid + ".cat.affection",
-                50
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        level =
+                Math.max(
+                        1,
+                        level
+                );
+
+        data.set(
+                catPath(playerUUID)
+                        + ".level",
+                level
+        );
+
+        save();
+    }
+
+    public void addCatLevel(
+            UUID playerUUID,
+            int amount
+    ) {
+
+        setCatLevel(
+                playerUUID,
+                getCatLevel(playerUUID)
+                        + amount
+        );
+    }
+
+    /*
+     * ============================================================
+     * 猫咪好感度
+     * ============================================================
+     */
+
+    public int getCatAffection(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
+
+        return clamp100(
+                data.getInt(
+                        catPath(playerUUID)
+                                + ".affection",
+                        DEFAULT_CAT_AFFECTION
+                )
         );
     }
 
@@ -148,17 +683,16 @@ public class PlayerDataManager {
             int affection
     ) {
 
-        affection = Math.max(
-                0,
-                Math.min(
-                        100,
-                        affection
-                )
-        );
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
 
         data.set(
-                "players." + playerUUID + ".cat.affection",
-                affection
+                catPath(playerUUID)
+                        + ".affection",
+                clamp100(affection)
         );
 
         save();
@@ -169,174 +703,93 @@ public class PlayerDataManager {
             int amount
     ) {
 
-        int currentAffection =
-                getCatAffection(playerUUID);
-
         setCatAffection(
                 playerUUID,
-                currentAffection + amount
+                getCatAffection(playerUUID)
+                        + amount
         );
     }
 
     /*
-     * =========================
-     * 猫咪每日抚摸次数
-     * =========================
-     *
-     * 每天最多 20 次
+     * ============================================================
+     * 猫咪健康度
+     * ============================================================
      */
 
-    public int getCatPetCount(
+    public int getCatHealth(
             UUID playerUUID
     ) {
 
-        resetPetCountIfNewDay(
-                playerUUID
-        );
+        ensureCat(playerUUID);
 
-        return data.getInt(
-                "players." + playerUUID
-                        + ".cat.pet-count",
-                0
+        return clamp100(
+                data.getInt(
+                        catPath(playerUUID)
+                                + ".health",
+                        DEFAULT_CAT_HEALTH
+                )
         );
     }
 
-    public void addCatPetCount(
-            UUID playerUUID
+    public void setCatHealth(
+            UUID playerUUID,
+            int health
     ) {
 
-        resetPetCountIfNewDay(
-                playerUUID
-        );
-
-        String path =
-                "players." + playerUUID
-                        + ".cat.pet-count";
-
-        int current =
-                data.getInt(
-                        path,
-                        0
-                );
-
-        /*
-         * 最大 20 次
-         */
-        if (current >= 20) {
+        if (playerUUID == null) {
             return;
         }
 
+        ensureCat(playerUUID);
+
         data.set(
-                path,
-                current + 1
+                catPath(playerUUID)
+                        + ".health",
+                clamp100(health)
         );
 
         save();
     }
 
-    public boolean canPetCat(
-            UUID playerUUID
+    public void addCatHealth(
+            UUID playerUUID,
+            int amount
     ) {
 
-        return getCatPetCount(
-                playerUUID
-        ) < 20;
-    }
-
-    public int getRemainingPetCount(
-            UUID playerUUID
-    ) {
-
-        return Math.max(
-                0,
-                20 - getCatPetCount(
-                        playerUUID
-                )
+        setCatHealth(
+                playerUUID,
+                getCatHealth(playerUUID)
+                        + amount
         );
     }
 
-    /*
-     * 如果日期发生变化，
-     * 自动重置每日抚摸次数
-     */
-    private void resetPetCountIfNewDay(
+    public boolean isCatUnhealthy(
             UUID playerUUID
     ) {
 
-        String datePath =
-                "players." + playerUUID
-                        + ".cat.pet-date";
-
-        String countPath =
-                "players." + playerUUID
-                        + ".cat.pet-count";
-
-        String today =
-                LocalDate.now().toString();
-
-        String savedDate =
-                data.getString(
-                        datePath
-                );
-
-        /*
-         * 旧玩家没有每日抚摸数据
-         */
-        if (savedDate == null) {
-
-            data.set(
-                    datePath,
-                    today
-            );
-
-            data.set(
-                    countPath,
-                    0
-            );
-
-            save();
-
-            return;
-        }
-
-        /*
-         * 新的一天
-         */
-        if (!savedDate.equals(today)) {
-
-            data.set(
-                    datePath,
-                    today
-            );
-
-            data.set(
-                    countPath,
-                    0
-            );
-
-            save();
-        }
+        return getCatHealth(
+                playerUUID
+        ) <= 0;
     }
 
     /*
-     * =========================
+     * ============================================================
      * 猫咪饱食度
-     * =========================
-     *
-     * 范围：
-     * 0 ~ 100
-     *
-     * 100 = 完全饱腹
-     * 0   = 极度饥饿
-     *
-     * 0 不会死亡。
+     * ============================================================
      */
 
-    public int getCatHunger(UUID playerUUID) {
+    public int getCatHunger(
+            UUID playerUUID
+    ) {
 
-        return data.getInt(
-                "players." + playerUUID + ".cat.hunger",
-                100
+        ensureCat(playerUUID);
+
+        return clamp100(
+                data.getInt(
+                        catPath(playerUUID)
+                                + ".hunger",
+                        DEFAULT_CAT_HUNGER
+                )
         );
     }
 
@@ -345,17 +798,16 @@ public class PlayerDataManager {
             int hunger
     ) {
 
-        hunger = Math.max(
-                0,
-                Math.min(
-                        100,
-                        hunger
-                )
-        );
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
 
         data.set(
-                "players." + playerUUID + ".cat.hunger",
-                hunger
+                catPath(playerUUID)
+                        + ".hunger",
+                clamp100(hunger)
         );
 
         save();
@@ -366,12 +818,21 @@ public class PlayerDataManager {
             int amount
     ) {
 
-        int currentHunger =
-                getCatHunger(playerUUID);
-
         setCatHunger(
                 playerUUID,
-                currentHunger + amount
+                getCatHunger(playerUUID)
+                        + amount
+        );
+    }
+
+    public void removeCatHunger(
+            UUID playerUUID,
+            int amount
+    ) {
+
+        addCatHunger(
+                playerUUID,
+                -amount
         );
     }
 
@@ -394,39 +855,21 @@ public class PlayerDataManager {
     }
 
     /*
-     * =========================
-     * 饥饿计时
-     * =========================
+     * ============================================================
+     * 饥饿更新时间
+     * ============================================================
      */
 
     public long getCatHungerLastUpdate(
             UUID playerUUID
     ) {
 
-        String path =
-                "players." + playerUUID
-                        + ".cat.hunger-last-update";
-
-        /*
-         * 旧玩家没有这个数据
-         */
-        if (!data.contains(path)) {
-
-            long now =
-                    System.currentTimeMillis();
-
-            data.set(
-                    path,
-                    now
-            );
-
-            save();
-
-            return now;
-        }
+        ensureCat(playerUUID);
 
         return data.getLong(
-                path
+                catPath(playerUUID)
+                        + ".hunger-last-update",
+                System.currentTimeMillis()
         );
     }
 
@@ -435,9 +878,20 @@ public class PlayerDataManager {
             long timestamp
     ) {
 
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        if (timestamp < 0) {
+            timestamp =
+                    System.currentTimeMillis();
+        }
+
         data.set(
-                "players." + playerUUID
-                        + ".cat.hunger-last-update",
+                catPath(playerUUID)
+                        + ".hunger-last-update",
                 timestamp
         );
 
@@ -445,66 +899,297 @@ public class PlayerDataManager {
     }
 
     /*
-     * =========================
-     * 获取所有拥有猫咪的玩家
-     * =========================
+     * ============================================================
+     * 创建时间
+     * ============================================================
      */
 
-    public Set<UUID> getCatPlayers() {
+    public long getCatCreatedAt(
+            UUID playerUUID
+    ) {
 
-        Set<UUID> players =
-                new HashSet<>();
+        ensureCat(playerUUID);
 
-        if (!data.contains("players")) {
-            return players;
+        return data.getLong(
+                catPath(playerUUID)
+                        + ".created-at",
+                System.currentTimeMillis()
+        );
+    }
+
+    public void setCatCreatedAt(
+            UUID playerUUID,
+            long timestamp
+    ) {
+
+        if (playerUUID == null) {
+            return;
         }
 
-        var section =
-                data.getConfigurationSection(
-                        "players"
-                );
+        ensureCat(playerUUID);
 
-        if (section == null) {
-            return players;
+        if (timestamp < 0) {
+            timestamp =
+                    System.currentTimeMillis();
         }
 
-        for (String key :
-                section.getKeys(false)) {
+        data.set(
+                catPath(playerUUID)
+                        + ".created-at",
+                timestamp
+        );
 
-            try {
-
-                UUID uuid =
-                        UUID.fromString(key);
-
-                if (hasCat(uuid)) {
-
-                    players.add(uuid);
-                }
-
-            } catch (IllegalArgumentException ignored) {
-
-                /*
-                 * 无效 UUID 直接跳过
-                 */
-            }
-        }
-
-        return players;
+        save();
     }
 
     /*
-     * =========================
+     * ============================================================
+     * 上次喂食
+     * ============================================================
+     */
+
+    public long getCatLastFedAt(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
+
+        return data.getLong(
+                catPath(playerUUID)
+                        + ".last-fed-at",
+                getCatCreatedAt(playerUUID)
+        );
+    }
+
+    public void setCatLastFedAt(
+            UUID playerUUID,
+            long timestamp
+    ) {
+
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        if (timestamp < 0) {
+            timestamp =
+                    System.currentTimeMillis();
+        }
+
+        data.set(
+                catPath(playerUUID)
+                        + ".last-fed-at",
+                timestamp
+        );
+
+        save();
+    }
+
+    /*
+     * ============================================================
+     * 上次互动
+     * ============================================================
+     */
+
+    public long getCatLastInteractionAt(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
+
+        return data.getLong(
+                catPath(playerUUID)
+                        + ".last-interaction-at",
+                getCatCreatedAt(playerUUID)
+        );
+    }
+
+    public void setCatLastInteractionAt(
+            UUID playerUUID,
+            long timestamp
+    ) {
+
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        if (timestamp < 0) {
+            timestamp =
+                    System.currentTimeMillis();
+        }
+
+        data.set(
+                catPath(playerUUID)
+                        + ".last-interaction-at",
+                timestamp
+        );
+
+        save();
+    }
+
+    /*
+     * ============================================================
+     * 每日抚摸
+     * ============================================================
+     */
+
+    public int getCatPetCount(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
+
+        resetPetCountIfNewDay(
+                playerUUID
+        );
+
+        return Math.max(
+                0,
+                data.getInt(
+                        catPath(playerUUID)
+                                + ".pet-count",
+                        0
+                )
+        );
+    }
+
+    public void addCatPetCount(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        resetPetCountIfNewDay(
+                playerUUID
+        );
+
+        String path =
+                catPath(playerUUID)
+                        + ".pet-count";
+
+        int current =
+                data.getInt(
+                        path,
+                        0
+                );
+
+        if (current >= MAX_DAILY_PETS) {
+            return;
+        }
+
+        data.set(
+                path,
+                current + 1
+        );
+
+        data.set(
+                catPath(playerUUID)
+                        + ".last-interaction-at",
+                System.currentTimeMillis()
+        );
+
+        save();
+    }
+
+    public boolean canPetCat(
+            UUID playerUUID
+    ) {
+
+        return getCatPetCount(
+                playerUUID
+        ) < MAX_DAILY_PETS;
+    }
+
+    public int getRemainingPetCount(
+            UUID playerUUID
+    ) {
+
+        return Math.max(
+                0,
+                MAX_DAILY_PETS
+                        - getCatPetCount(
+                        playerUUID
+                )
+        );
+    }
+
+    private void resetPetCountIfNewDay(
+            UUID playerUUID
+    ) {
+
+        String datePath =
+                catPath(playerUUID)
+                        + ".pet-date";
+
+        String countPath =
+                catPath(playerUUID)
+                        + ".pet-count";
+
+        String today =
+                java.time.LocalDate.now().toString();
+
+        String savedDate =
+                data.getString(
+                        datePath
+                );
+
+        if (savedDate == null) {
+
+            data.set(
+                    datePath,
+                    today
+            );
+
+            data.set(
+                    countPath,
+                    0
+            );
+
+            save();
+
+            return;
+        }
+
+        if (!savedDate.equals(today)) {
+
+            data.set(
+                    datePath,
+                    today
+            );
+
+            data.set(
+                    countPath,
+                    0
+            );
+
+            save();
+        }
+    }
+
+    /*
+     * ============================================================
      * 猫咪花色
-     * =========================
+     * ============================================================
      */
 
     public String getCatVariant(
             UUID playerUUID
     ) {
 
+        if (playerUUID == null) {
+            return null;
+        }
+
         return data.getString(
-                "players." + playerUUID
-                        + ".cat.variant"
+                catPath(playerUUID)
+                        + ".variant"
         );
     }
 
@@ -513,9 +1198,18 @@ public class PlayerDataManager {
             String variant
     ) {
 
+        if (playerUUID == null ||
+                variant == null ||
+                variant.isBlank()) {
+
+            return;
+        }
+
+        ensureCat(playerUUID);
+
         data.set(
-                "players." + playerUUID
-                        + ".cat.variant",
+                catPath(playerUUID)
+                        + ".variant",
                 variant
         );
 
@@ -523,33 +1217,25 @@ public class PlayerDataManager {
     }
 
     /*
-     * =========================
-     * 猫咪实体 UUID
-     * =========================
+     * ============================================================
+     * Bukkit 实体 UUID
+     * ============================================================
      */
 
     public UUID getCatEntityUUID(
             UUID playerUUID
     ) {
 
-        String value =
+        if (playerUUID == null) {
+            return null;
+        }
+
+        return parseUUID(
                 data.getString(
-                        "players." + playerUUID
-                                + ".cat.entity-uuid"
-                );
-
-        if (value == null) {
-            return null;
-        }
-
-        try {
-
-            return UUID.fromString(value);
-
-        } catch (IllegalArgumentException e) {
-
-            return null;
-        }
+                        catPath(playerUUID)
+                                + ".entity-uuid"
+                )
+        );
     }
 
     public void setCatEntityUUID(
@@ -557,43 +1243,82 @@ public class PlayerDataManager {
             UUID entityUUID
     ) {
 
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        if (entityUUID == null) {
+
+            /*
+             * 传入 null 表示清除绑定。
+             */
+            data.set(
+                    catPath(playerUUID)
+                            + ".entity-uuid",
+                    null
+            );
+
+        } else {
+
+            data.set(
+                    catPath(playerUUID)
+                            + ".entity-uuid",
+                    entityUUID.toString()
+            );
+        }
+
+        save();
+    }
+
+    /**
+     * 清除当前绑定的 Bukkit 实体 UUID。
+     *
+     * <p>
+     * 实体死亡 / 被移除时使用。
+     * 只影响实体绑定，不影响逻辑猫本身。
+     * </p>
+     */
+    public void removeCatEntityUUID(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
         data.set(
-                "players." + playerUUID
-                        + ".cat.entity-uuid",
-                entityUUID.toString()
+                catPath(playerUUID)
+                        + ".entity-uuid",
+                null
         );
 
         save();
     }
 
     /*
-     * =========================
-     * 猫咪所在世界
-     * =========================
+     * ============================================================
+     * 猫咪世界
+     * ============================================================
      */
 
     public UUID getCatWorldUUID(
             UUID playerUUID
     ) {
 
-        String value =
+        if (playerUUID == null) {
+            return null;
+        }
+
+        return parseUUID(
                 data.getString(
-                        "players." + playerUUID
-                                + ".cat.world-uuid"
-                );
-
-        if (value == null) {
-            return null;
-        }
-
-        try {
-
-            return UUID.fromString(value);
-
-        } catch (IllegalArgumentException e) {
-
-            return null;
-        }
+                        catPath(playerUUID)
+                                + ".world-uuid"
+                )
+        );
     }
 
     public void setCatWorldUUID(
@@ -601,9 +1326,17 @@ public class PlayerDataManager {
             UUID worldUUID
     ) {
 
+        if (playerUUID == null ||
+                worldUUID == null) {
+
+            return;
+        }
+
+        ensureCat(playerUUID);
+
         data.set(
-                "players." + playerUUID
-                        + ".cat.world-uuid",
+                catPath(playerUUID)
+                        + ".world-uuid",
                 worldUUID.toString()
         );
 
@@ -611,9 +1344,9 @@ public class PlayerDataManager {
     }
 
     /*
-     * =========================
-     * 猫咪坐标
-     * =========================
+     * ============================================================
+     * 坐标
+     * ============================================================
      */
 
     public double getCatX(
@@ -621,7 +1354,8 @@ public class PlayerDataManager {
     ) {
 
         return data.getDouble(
-                "players." + playerUUID + ".cat.x"
+                catPath(playerUUID)
+                        + ".x"
         );
     }
 
@@ -630,7 +1364,8 @@ public class PlayerDataManager {
     ) {
 
         return data.getDouble(
-                "players." + playerUUID + ".cat.y"
+                catPath(playerUUID)
+                        + ".y"
         );
     }
 
@@ -639,7 +1374,8 @@ public class PlayerDataManager {
     ) {
 
         return data.getDouble(
-                "players." + playerUUID + ".cat.z"
+                catPath(playerUUID)
+                        + ".z"
         );
     }
 
@@ -651,8 +1387,16 @@ public class PlayerDataManager {
             double z
     ) {
 
+        if (playerUUID == null ||
+                worldUUID == null) {
+
+            return;
+        }
+
+        ensureCat(playerUUID);
+
         String path =
-                "players." + playerUUID + ".cat";
+                catPath(playerUUID);
 
         data.set(
                 path + ".world-uuid",
@@ -678,20 +1422,213 @@ public class PlayerDataManager {
     }
 
     /*
-     * =========================
-     * 保存
-     * =========================
+     * ============================================================
+     * 所有猫主人
+     * ============================================================
      */
 
-    private void save() {
+    public Set<UUID> getCatPlayers() {
+
+        Set<UUID> players =
+                new HashSet<>();
+
+        if (!data.contains(
+                PLAYERS_PATH
+        )) {
+
+            return players;
+        }
+
+        ConfigurationSection section =
+                data.getConfigurationSection(
+                        PLAYERS_PATH
+                );
+
+        if (section == null) {
+            return players;
+        }
+
+        for (String key :
+                section.getKeys(false)) {
+
+            UUID uuid =
+                    parseUUID(key);
+
+            if (uuid == null) {
+                continue;
+            }
+
+            if (hasCat(uuid)) {
+                players.add(uuid);
+            }
+        }
+
+        return players;
+    }
+
+    /*
+     * ============================================================
+     * Dirty / Save
+     * ============================================================
+     */
+
+    /**
+     * 标记数据已经发生变化。
+     *
+     * <p>
+     * 为了避免高频 YAML 写盘，这里不立即写磁盘。
+     * </p>
+     */
+    public void save() {
+
+        dirty = true;
+    }
+
+    /**
+     * 当前是否有未保存的数据。
+     */
+    public boolean isDirty() {
+
+        return dirty;
+    }
+
+    /**
+     * 如果存在修改，则立即写入磁盘。
+     */
+    public void flush() {
+
+        if (!dirty) {
+            return;
+        }
+
+        saveNow();
+    }
+
+    /**
+     * 立即将当前内存中的 YAML 数据写入磁盘。
+     *
+     * <p>
+     * 原子写盘：
+     * 先写入临时文件，
+     * 再原子替换正式文件，
+     * 防止写入过程中断电 / 崩溃
+     * 损坏 players.yml。
+     * </p>
+     *
+     * <p>
+     * 只应该在同步服务器线程中调用。
+     * </p>
+     */
+    public synchronized void saveNow() {
+
+        File temp =
+                new File(
+                        file.getParentFile(),
+                        "players.yml.tmp"
+                );
 
         try {
 
-            data.save(file);
+            data.save(
+                    temp
+            );
 
-        } catch (IOException e) {
+            try {
+
+                Files.move(
+                        temp.toPath(),
+                        file.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE
+                );
+
+            } catch (AtomicMoveNotSupportedException e) {
+
+                /*
+                 * 文件系统不支持原子移动时
+                 * 回退为普通替换移动。
+                 */
+                Files.move(
+                        temp.toPath(),
+                        file.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING
+                );
+            }
+
+            dirty = false;
+
+            consecutiveSaveFailures = 0;
+
+        } catch (Exception e) {
+
+            /*
+             * 保存失败时保留 dirty=true，
+             * 下一次自动保存仍然会重试。
+             */
+            dirty = true;
+
+            consecutiveSaveFailures++;
+
+            plugin.getLogger().severe(
+                    "Failed to save players.yml (consecutive failures: "
+                            + consecutiveSaveFailures
+                            + "): "
+                            + e.getMessage()
+            );
 
             e.printStackTrace();
+
+            /*
+             * 清理残留的临时文件。
+             */
+            if (temp.exists() &&
+                    !temp.delete()) {
+
+                plugin.getLogger().warning(
+                        "Failed to clean up temp file players.yml.tmp"
+                );
+            }
+        }
+    }
+
+    /*
+     * ============================================================
+     * 工具
+     * ============================================================
+     */
+
+    private int clamp100(
+            int value
+    ) {
+
+        return Math.max(
+                0,
+                Math.min(
+                        100,
+                        value
+                )
+        );
+    }
+
+    private UUID parseUUID(
+            String value
+    ) {
+
+        if (value == null ||
+                value.isBlank()) {
+
+            return null;
+        }
+
+        try {
+
+            return UUID.fromString(
+                    value
+            );
+
+        } catch (IllegalArgumentException ignored) {
+
+            return null;
         }
     }
 }

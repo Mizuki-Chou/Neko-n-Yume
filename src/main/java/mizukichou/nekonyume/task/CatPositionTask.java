@@ -12,45 +12,68 @@ import java.util.UUID;
 public class CatPositionTask implements Runnable {
 
     /*
-     * 每 30 秒同步一次猫咪位置
+     * ============================================================
+     * 猫咪位置同步
+     * ============================================================
+     *
+     * NekoNYume.onEnable() 中每 30 秒执行一次。
+     *
+     * 这里不直接写 players.yml。
+     *
+     * 正确的数据流：
+     *
+     * Bukkit Cat
+     *     ↓
+     * 运行时 Cat
+     *     ↓
+     * 自动保存系统
+     *     ↓
+     * players.yml
      */
+
     private static final long POSITION_INTERVAL =
             30L * 1000L;
 
     private final NekoNYume plugin;
 
-    public CatPositionTask(NekoNYume plugin) {
+    public CatPositionTask(
+            NekoNYume plugin
+    ) {
+
         this.plugin = plugin;
     }
 
     @Override
     public void run() {
 
-        long now =
-                System.currentTimeMillis();
-
         /*
-         * 获取所有拥有猫咪的玩家
+         * ========================================================
+         * 只处理当前已经加载到内存中的 Cat
+         * ========================================================
+         *
+         * 不再遍历 players.yml。
+         *
+         * 这样可以保证：
+         *
+         * CatManager 中的 Cat
+         * 是当前运行时唯一状态。
          */
-        for (UUID playerUUID :
-                plugin.getDataManager()
-                        .getCatPlayers()) {
+
+        for (mizukichou.nekonyume.cat.Cat logicalCat :
+                plugin.getCatManager().getCats()) {
 
             /*
-             * 获取猫咪实体 UUID
+             * 获取当前 Bukkit Entity UUID。
              */
             UUID entityUUID =
-                    plugin.getDataManager()
-                            .getCatEntityUUID(
-                                    playerUUID
-                            );
+                    logicalCat.getEntityUuid();
 
             if (entityUUID == null) {
                 continue;
             }
 
             /*
-             * 根据 UUID 获取实体
+             * 根据 UUID 获取 Minecraft 实体。
              */
             Entity entity =
                     Bukkit.getEntity(
@@ -58,22 +81,59 @@ public class CatPositionTask implements Runnable {
                     );
 
             /*
-             * 找不到实体就跳过
+             * 找不到实体直接跳过。
              *
              * 注意：
-             * 这里绝对不会生成新猫。
+             * 这里绝对不会自动生成新猫。
+             *
+             * 实体恢复属于 CatManager 的职责。
              */
             if (!(entity instanceof Cat cat)) {
                 continue;
             }
 
-            if (cat.isDead()) {
+            /*
+             * 实体已经死亡。
+             */
+            if (cat.isDead() ||
+                    !cat.isValid()) {
+
                 continue;
             }
 
             /*
-             * 获取猫咪当前位置
+             * ====================================================
+             * 安全验证主人
+             * ====================================================
+             *
+             * 防止逻辑 Cat 和 Bukkit Entity 错绑。
              */
+
+            String ownerUUID =
+                    cat.getPersistentDataContainer()
+                            .get(
+                                    plugin.getCatManager()
+                                            .getOwnerKey(),
+                                    org.bukkit.persistence.PersistentDataType.STRING
+                            );
+
+            if (ownerUUID == null) {
+                continue;
+            }
+
+            if (!logicalCat.getOwnerUuid()
+                    .toString()
+                    .equals(ownerUUID)) {
+
+                continue;
+            }
+
+            /*
+             * ====================================================
+             * 获取实际位置
+             * ====================================================
+             */
+
             Location location =
                     cat.getLocation();
 
@@ -85,16 +145,41 @@ public class CatPositionTask implements Runnable {
             }
 
             /*
-             * 保存当前世界和坐标
+             * ====================================================
+             * 更新运行时 Cat
+             * ====================================================
              */
-            plugin.getDataManager()
-                    .setCatLocation(
-                            playerUUID,
-                            world.getUID(),
-                            location.getX(),
-                            location.getY(),
-                            location.getZ()
-                    );
+
+            logicalCat.setWorldName(
+                    world.getName()
+            );
+
+            logicalCat.setX(
+                    location.getX()
+            );
+
+            logicalCat.setY(
+                    location.getY()
+            );
+
+            logicalCat.setZ(
+                    location.getZ()
+            );
+
+            logicalCat.setYaw(
+                    location.getYaw()
+            );
+
+            logicalCat.setPitch(
+                    location.getPitch()
+            );
+
+            /*
+             * 确保 Entity UUID 仍然对应当前实体。
+             */
+            logicalCat.setEntityUuid(
+                    cat.getUniqueId()
+            );
         }
     }
 }
