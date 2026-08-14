@@ -20,6 +20,7 @@ import mizukichou.nekonyume.command.NekoYumeAdminCommand;
 import mizukichou.nekonyume.command.NekoYumeCommand;
 import mizukichou.nekonyume.config.PluginConfig;
 import mizukichou.nekonyume.data.PlayerDataManager;
+import mizukichou.nekonyume.gift.GiftManager;
 import mizukichou.nekonyume.gui.CatGuiManager;
 import mizukichou.nekonyume.listener.CatEntityListener;
 import mizukichou.nekonyume.listener.CatFoodListener;
@@ -30,7 +31,9 @@ import mizukichou.nekonyume.listener.PlayerQuitListener;
 import mizukichou.nekonyume.task.CatBehaviorTask;
 import mizukichou.nekonyume.task.CatHungerTask;
 import mizukichou.nekonyume.task.CatPositionTask;
+import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -41,6 +44,8 @@ public final class NekoNYume extends JavaPlugin {
     private CatManager catManager;
     private CatFoodManager catFoodManager;
     private CatGuiManager catGuiManager;
+    private GiftManager giftManager;
+    private PlayerJoinListener playerJoinListener;
 
     /*
      * 定时任务引用。
@@ -70,6 +75,10 @@ public final class NekoNYume extends JavaPlugin {
         return catGuiManager;
     }
 
+    public GiftManager getGiftManager() {
+        return giftManager;
+    }
+
     /*
      * ============================================================
      * 重载配置与相关系统
@@ -91,7 +100,13 @@ public final class NekoNYume extends JavaPlugin {
 
             catFoodManager.reloadFoods();
         }
+
+        if (playerJoinListener != null) {
+
+            playerJoinListener.reload();
+        }
     }
+
 
     @Override
     public void onEnable() {
@@ -157,145 +172,64 @@ public final class NekoNYume extends JavaPlugin {
 
         /*
          * ========================================================
-         * /nekoyume
+         * 礼物事件
          * ========================================================
          */
 
-        PluginCommand command =
-                getCommand(
-                        "nekoyume"
+        giftManager =
+                new GiftManager(
+                        this
                 );
 
-        if (command == null) {
+        /*
+         * ========================================================
+         * 命令
+         * ========================================================
+         *
+         * 任何命令缺失都属于致命错误：
+         * 直接禁用插件。
+         */
 
-            getLogger().severe(
-                    "Command 'nekoyume' is not defined in plugin.yml!"
-            );
-
-            getServer()
-                    .getPluginManager()
-                    .disablePlugin(
-                            this
-                    );
-
-            return;
-        }
-
-        command.setExecutor(
+        if (!registerCommand(
+                "nekoyume",
                 new NekoYumeCommand(
                         this
                 )
-        );
-
-        /*
-         * ========================================================
-         * /nekoyumeadmin（管理员命令）
-         * ========================================================
-         */
-
-        PluginCommand adminCommand =
-                getCommand(
-                        "nekoyumeadmin"
-                );
-
-        if (adminCommand == null) {
-
-            getLogger().severe(
-                    "Command 'nekoyumeadmin' is not defined in plugin.yml!"
-            );
-
-            getServer()
-                    .getPluginManager()
-                    .disablePlugin(
-                            this
-                    );
+        )) {
 
             return;
         }
 
-        adminCommand.setExecutor(
+        if (!registerCommand(
+                "nekoyumeadmin",
                 new NekoYumeAdminCommand(
                         this
                 )
+        )) {
+
+            return;
+        }
+
+        /*
+         * ========================================================
+         * 监听器
+         * ========================================================
+         */
+
+        playerJoinListener =
+                new PlayerJoinListener(
+                        this
+                );
+
+        registerListeners(
+                playerJoinListener,
+                new PlayerQuitListener(this),
+
+                new CatFoodListener(this),
+                new CatEntityListener(this),
+                new CatInteractionListener(this),
+                new CatGuiListener(this)
         );
-
-        /*
-         * ========================================================
-         * 玩家加入
-         * ========================================================
-         */
-
-        getServer()
-                .getPluginManager()
-                .registerEvents(
-                        new PlayerJoinListener(this),
-                        this
-                );
-
-        /*
-         * ========================================================
-         * 玩家退出
-         * ========================================================
-         */
-
-        getServer()
-                .getPluginManager()
-                .registerEvents(
-                        new PlayerQuitListener(this),
-                        this
-                );
-
-        /*
-         * ========================================================
-         * 猫咪喂食
-         * ========================================================
-         */
-
-        getServer()
-                .getPluginManager()
-                .registerEvents(
-                        new CatFoodListener(this),
-                        this
-                );
-
-        /*
-         * ========================================================
-         * 猫咪实体生命周期
-         * ========================================================
-         */
-
-        getServer()
-                .getPluginManager()
-                .registerEvents(
-                        new CatEntityListener(this),
-                        this
-                );
-
-        /*
-         * ========================================================
-         * 猫咪互动
-         * ========================================================
-         */
-
-        getServer()
-                .getPluginManager()
-                .registerEvents(
-                        new CatInteractionListener(this),
-                        this
-                );
-
-        /*
-         * ========================================================
-         * 猫咪面板交互
-         * ========================================================
-         */
-
-        getServer()
-                .getPluginManager()
-                .registerEvents(
-                        new CatGuiListener(this),
-                        this
-                );
 
         /*
          * ========================================================
@@ -466,5 +400,70 @@ public final class NekoNYume extends JavaPlugin {
         getLogger().info(
                 "Neko n' Yume disabled!"
         );
+    }
+
+    /*
+     * ============================================================
+     * 工具
+     * ============================================================
+     */
+
+    /*
+     * 注册命令。
+     *
+     * 命令缺失时记录严重日志并禁用插件，
+     * 返回 false。
+     */
+    private boolean registerCommand(
+            String name,
+            CommandExecutor executor
+    ) {
+
+        PluginCommand command =
+                getCommand(
+                        name
+                );
+
+        if (command == null) {
+
+            getLogger().severe(
+                    "Command '"
+                            + name
+                            + "' is not defined in plugin.yml!"
+            );
+
+            getServer()
+                    .getPluginManager()
+                    .disablePlugin(
+                            this
+                    );
+
+            return false;
+        }
+
+        command.setExecutor(
+                executor
+        );
+
+        return true;
+    }
+
+    /*
+     * 批量注册监听器。
+     */
+    private void registerListeners(
+            Listener... listeners
+    ) {
+
+        for (Listener listener :
+                listeners) {
+
+            getServer()
+                    .getPluginManager()
+                    .registerEvents(
+                            listener,
+                            this
+                    );
+        }
     }
 }

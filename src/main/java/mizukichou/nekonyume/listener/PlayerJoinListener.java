@@ -3,6 +3,7 @@ package mizukichou.nekonyume.listener;
 import mizukichou.nekonyume.NekoNYume;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -13,13 +14,25 @@ import java.util.List;
 
 public class PlayerJoinListener implements Listener {
 
+    /*
+     * 登录后延迟多久判定礼物（tick）。
+     * 让玩家先看到自己的猫，
+     * 再收到猫咪的礼物。
+     */
+    private static final long GIFT_CHECK_DELAY_TICKS =
+            60L;
+
     private final NekoNYume plugin;
     private final MiniMessage mm = MiniMessage.miniMessage();
 
     /*
      * 预编译后的入服欢迎消息。
      *
-     * 在构造函数中一次性解析。
+     * 构造时解析一次；
+     * /nekoyumeadmin reload 时由主类
+     * 再次调用 reload() 重读，
+     * 让配置改动即时生效。
+     *
      * 解析失败的条目只记录警告并跳过，
      * 绝不阻断玩家的猫咪数据加载。
      */
@@ -30,22 +43,27 @@ public class PlayerJoinListener implements Listener {
 
         this.plugin = plugin;
 
-        precompileJoinMessages();
+        reload();
     }
 
     /*
      * ============================================================
-     * 预编译 config 中的欢迎消息
+     * 重载欢迎消息
      * ============================================================
      *
      * 管理员写错一行 MiniMessage
      * 不应该影响玩家登录时的数据加载。
      */
 
-    private void precompileJoinMessages() {
+    public void reload() {
+
+        joinMessages.clear();
 
         if (!plugin.getConfig()
-                .getBoolean("join-message.enabled")) {
+                .getBoolean(
+                        "join-message.enabled",
+                        true
+                )) {
 
             return;
         }
@@ -90,7 +108,7 @@ public class PlayerJoinListener implements Listener {
          * ============================================================
          *
          * 使用预编译后的 Component。
-         * 解析错误已在构造阶段处理，
+         * 解析错误已在 reload() 阶段处理，
          * 这里不会抛出异常。
          */
 
@@ -137,7 +155,7 @@ public class PlayerJoinListener implements Listener {
          * 4. 恢复猫咪实体
          * ============================================================
          *
-         * 阶段 1：登录自动恢复实体。
+         * 登录自动恢复实体。
          *
          * 恢复顺序：
          *
@@ -159,6 +177,28 @@ public class PlayerJoinListener implements Listener {
         plugin.getCatManager()
                 .restoreCatEntity(
                         player
+                );
+
+        /*
+         * ============================================================
+         * 5. 每日礼物判定
+         * ============================================================
+         */
+
+        Bukkit.getScheduler()
+                .runTaskLater(
+                        plugin,
+                        () -> {
+
+                            if (player.isOnline()) {
+
+                                plugin.getGiftManager()
+                                        .checkAndGive(
+                                                player
+                                        );
+                            }
+                        },
+                        GIFT_CHECK_DELAY_TICKS
                 );
     }
 }

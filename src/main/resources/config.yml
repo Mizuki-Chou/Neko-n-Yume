@@ -69,3 +69,129 @@ food:
     APPLE: 12
     BREAD: 12
     CAKE: 25
+
+# 礼物事件
+#
+# 每天登录后判定一次（延迟 3 秒）。
+# 概率 = base-chance + chance-per-rank × 喵阶，封顶 max-chance。
+# 心情不低于 mood-min 才可能触发。
+#
+# 档位：每 5 阶一档
+#   tier-1 = 喵阶 0~5
+#   tier-2 = 喵阶 6~10
+#   tier-3 = 喵阶 11~15
+#   tier-4 = 喵阶 16~20
+#   tier-5 = 喵阶 21+
+#   （超出最高档位一律归入最高档）
+#
+# 条目格式：
+#   - material: 物品ID       （原版物品）
+#     amount: 数量            （固定数量）
+#     weight: 权重            （档内抽取权重，越大越常见）
+#   - material: 物品ID
+#     min: 1                  （或随机区间 min~max）
+#     max: 2
+#     weight: 30
+#   - meowdan: 品质           （喵丹：COMMON/UNCOMMON/RARE/EPIC/LEGENDARY）
+#     amount: 1
+#     weight: 5
+#
+# 注意：至极（LEGENDARY）喵丹不应出现在礼物池，
+# 它只通过管理员指令发放。
+
+gift:
+  enabled: true
+  mood-min: CALM
+  base-chance: 20
+  chance-per-rank: 5
+  max-chance: 80
+  tiers:
+    tier-1: # 喵阶 0~5
+      - material: COD
+        amount: 1
+        weight: 50
+      - material: STRING
+        amount: 1
+        weight: 30
+      - material: SALMON
+        amount: 1
+        weight: 20
+      - meowdan: COMMON
+        amount: 1
+        weight: 5
+
+    tier-2: # 喵阶 6~10
+      - material: COOKED_COD
+        amount: 1
+        weight: 40
+      - material: SALMON
+        min: 1
+        max: 2
+        weight: 30
+      - material: LEATHER
+        amount: 1
+        weight: 30
+      - meowdan: COMMON
+        amount: 1
+        weight: 4
+      - meowdan: UNCOMMON
+        amount: 1
+        weight: 2
+
+    tier-3: # 喵阶 11~15
+      - material: COOKED_SALMON
+        amount: 1
+        weight: 40
+      - material: GOLD_NUGGET
+        amount: 1
+        weight: 20
+      - material: STRING
+        min: 1
+        max: 2
+        weight: 20
+      - material: LAPIS_LAZULI
+        amount: 2
+        weight: 20
+      - meowdan: UNCOMMON
+        amount: 1
+        weight: 4
+      - meowdan: RARE
+        amount: 1
+        weight: 2
+
+    tier-4: # 喵阶 16~20
+      - material: GOLDEN_CARROT
+        amount: 1
+        weight: 40
+      - material: DIAMOND
+        amount: 1
+        weight: 25
+      - material: EMERALD
+        amount: 1
+        weight: 25
+      - material: GOLD_NUGGET
+        amount: 3
+        weight: 10
+      - meowdan: RARE
+        amount: 1
+        weight: 4
+      - meowdan: EPIC
+        amount: 1
+        weight: 2
+
+    tier-5: # 喵阶 21+
+      - material: DIAMOND
+        amount: 2
+        weight: 40
+      - material: EMERALD
+        amount: 2
+        weight: 30
+      - material: ENCHANTED_GOLDEN_APPLE
+        amount: 1
+        weight: 15
+      - material: GOLDEN_CARROT
+        amount: 2
+        weight: 15
+      - meowdan: EPIC
+        amount: 1
+        weight: 6

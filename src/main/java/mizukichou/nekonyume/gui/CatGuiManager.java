@@ -124,9 +124,15 @@ public class CatGuiManager {
                         "§7心情: "
                                 + cat.getMood().getIcon()
                                 + " "
-                                + cat.getMood().getDisplayName()
+                                + cat.getMood().getDisplayName(),
+                        "§7陪伴: 第 "
+                                + cat.getCompanionDays(
+                                System.currentTimeMillis()
+                        )
+                                + " 天"
                 )
         );
+
 
         /*
          * 等级。

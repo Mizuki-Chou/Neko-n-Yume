@@ -1644,6 +1644,56 @@ public class PlayerDataManager {
         }
     }
 
+
+    /*
+     * ============================================================
+     * 每日礼物判定
+     * ============================================================
+     *
+     * 记录"今天已经判定过礼物"。
+     * 无论是否真的收到礼物，
+     * 每天只判定一次。
+     */
+
+    public boolean isGiftCheckedToday(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID == null) {
+            return true;
+        }
+
+        String today =
+                java.time.LocalDate.now().toString();
+
+        String savedDate =
+                data.getString(
+                        catPath(playerUUID)
+                                + ".gift-date"
+                );
+
+        return today.equals(savedDate);
+    }
+
+    public void markGiftChecked(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        data.set(
+                catPath(playerUUID)
+                        + ".gift-date",
+                java.time.LocalDate.now().toString()
+        );
+
+        save();
+    }
+
     /*
      * ============================================================
      * 行为模式

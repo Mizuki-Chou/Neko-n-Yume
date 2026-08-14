@@ -264,6 +264,17 @@ public class NekoYumeCommand implements CommandExecutor {
 
             player.sendMessage(
                     mm.deserialize(
+                            "<white>陪伴: <aqua>第 "
+                                    + cat.getCompanionDays(
+                                    System.currentTimeMillis()
+                            )
+                                    + " 天</aqua>"
+                    )
+            );
+
+
+            player.sendMessage(
+                    mm.deserialize(
                             "<white>等级: <yellow>"
                                     + level
                                     + "</yellow> <gray>(经验 "

@@ -10,10 +10,16 @@ repositories {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.+")
+
+    testImplementation(platform("org.junit:junit-bom:5.11.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    testImplementation("io.papermc.paper:paper-api:26.2.build.+")
 }
 
 group = "mizukichou"
-version = "0.4.0-alpha"
+version = "0.4.1-alpha"
 
 base {
     archivesName.set("NekoNYume")
@@ -34,6 +40,14 @@ tasks {
 
         filesMatching("plugin.yml") {
             expand(props)
+        }
+    }
+
+    test {
+        useJUnitPlatform()
+
+        testLogging {
+            events("passed", "skipped", "failed")
         }
     }
 }

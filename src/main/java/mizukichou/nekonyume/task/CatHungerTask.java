@@ -1,6 +1,8 @@
 package mizukichou.nekonyume.task;
 
 import mizukichou.nekonyume.NekoNYume;
+import mizukichou.nekonyume.cat.Cat;
+import mizukichou.nekonyume.cat.CatPersonality;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -16,12 +18,7 @@ public class CatHungerTask implements Runnable {
      * 基础间隔来自 config: hunger.base-interval-seconds
      * （默认 300 秒 = 5 分钟 -1 点）。
      *
-     * 实际间隔由性格的饥饿速率倍率修正：
-     *
-     * 贪吃  ×1.5 → 更快
-     * 悠闲  ×0.7 → 更慢
-     * 独立  ×0.9 → 略慢
-     * 其他  ×1.0 → 基础值
+     * 实际间隔由性格的饥饿速率倍率修正。
      */
 
     /*
@@ -62,6 +59,10 @@ public class CatHungerTask implements Runnable {
         long now =
                 System.currentTimeMillis();
 
+        long baseInterval =
+                plugin.getPluginConfig()
+                        .getHungerIntervalMillis();
+
         /*
          * ========================================================
          * 遍历所有拥有猫咪的玩家
@@ -96,259 +97,276 @@ public class CatHungerTask implements Runnable {
                 continue;
             }
 
-            /*
-             * ====================================================
-             * 加载运行时 Cat
-             * ====================================================
-             *
-             * 注意：
-             * 即使玩家离线，
-             * 这里仍然可以加载 Cat。
-             *
-             * 需要先拿到性格，
-             * 才能计算实际的饥饿间隔。
-             */
-            mizukichou.nekonyume.cat.Cat cat =
-                    plugin.getCatManager()
-                            .loadCat(
-                                    playerUUID
-                            );
-
-            if (cat == null) {
-                continue;
-            }
-
-            /*
-             * ====================================================
-             * 性格饥饿速率修正
-             * ====================================================
-             */
-            long baseInterval =
-                    plugin.getPluginConfig()
-                            .getHungerIntervalMillis();
-
-            long effectiveInterval =
-                    (long) Math.round(
-                            baseInterval
-                                    / cat.getPersonality()
-                                    .getHungerRate()
+            Player owner =
+                    Bukkit.getPlayer(
+                            playerUUID
                     );
 
-            if (effectiveInterval <= 0) {
-                effectiveInterval = baseInterval;
-            }
+            if (owner != null &&
+                    owner.isOnline()) {
 
-            /*
-             * ====================================================
-             * 计算经过时间
-             * ====================================================
-             */
-            long elapsed =
-                    now - lastUpdate;
-
-            /*
-             * 尚未达到一次饥饿结算。
-             *
-             * 若主人离线，
-             * 立即卸载刚才加载的运行时缓存，
-             * 避免缓存滞留。
-             */
-            if (elapsed < effectiveInterval) {
-
-                evictIfOffline(
+                handleOnline(
                         playerUUID,
-                        cat
+                        now,
+                        baseInterval,
+                        lastUpdate
                 );
 
-                continue;
-            }
+            } else {
 
-            /*
-             * ====================================================
-             * 计算应该减少多少点
-             * ====================================================
-             */
-            long decrease =
-                    elapsed / effectiveInterval;
-
-            int decreaseAmount =
-                    (int) Math.min(
-                            decrease,
-                            MAX_HUNGER_DECREASE
-                    );
-
-            /*
-             * ====================================================
-             * 从运行时 Cat 获取饱食度
-             * ====================================================
-             */
-            int currentHunger =
-                    cat.getHunger();
-
-            /*
-             * ====================================================
-             * 计算新的饱食度
-             * ====================================================
-             */
-            int newHunger =
-                    Math.max(
-                            0,
-                            currentHunger
-                                    - decreaseAmount
-                    );
-
-            /*
-             * ====================================================
-             * 更新运行时 Cat
-             * ====================================================
-             */
-            cat.setHunger(
-                    newHunger
-            );
-
-            /*
-             * ====================================================
-             * 饱食度影响好感度
-             * ====================================================
-             *
-             * 结算后的饱食度：
-             *
-             * 21~100
-             * → 不影响
-             *
-             * 1~20
-             * → -1
-             *
-             * 0
-             * → -2
-             */
-            int affectionLoss = 0;
-
-            if (newHunger <= 0) {
-
-                affectionLoss =
-                        EMPTY_HUNGER_AFFECTION_LOSS;
-
-            } else if (newHunger <= LOW_HUNGER_THRESHOLD) {
-
-                affectionLoss =
-                        LOW_HUNGER_AFFECTION_LOSS;
-            }
-
-            /*
-             * ====================================================
-             * 更新运行时好感度
-             * ====================================================
-             */
-            if (affectionLoss > 0) {
-
-                cat.removeAffection(
-                        affectionLoss
+                handleOffline(
+                        playerUUID,
+                        now,
+                        baseInterval,
+                        lastUpdate
                 );
             }
-
-            /*
-             * ====================================================
-             * 持久化运行时状态
-             * ====================================================
-             *
-             * Cat 是运行时唯一真相。
-             *
-             * PlayerDataManager 负责保存。
-             */
-
-            plugin.getDataManager()
-                    .setCatHunger(
-                            playerUUID,
-                            cat.getHunger()
-                    );
-
-            plugin.getDataManager()
-                    .setCatAffection(
-                            playerUUID,
-                            cat.getAffection()
-                    );
-
-            /*
-             * ====================================================
-             * 更新时间
-             * ====================================================
-             *
-             * 例如：
-             *
-             * 经过 12 分钟
-             * ↓
-             * decrease = 2
-             * ↓
-             * -2 饱食度
-             * ↓
-             * lastUpdate + 10 分钟
-             * ↓
-             * 剩余 2 分钟继续累计
-             */
-            long newLastUpdate =
-                    lastUpdate
-                            + decrease
-                            * effectiveInterval;
-
-            plugin.getDataManager()
-                    .setCatHungerLastUpdate(
-                            playerUUID,
-                            newLastUpdate
-                    );
-
-            /*
-             * 离线玩家：
-             * 结算完成后立即卸载运行时缓存。
-             */
-            evictIfOffline(
-                    playerUUID,
-                    cat
-            );
         }
     }
 
     /*
      * ============================================================
-     * 离线卸载
+     * 在线玩家
      * ============================================================
      *
-     * 饥饿任务每分钟都会加载所有猫主人，
-     * 包括离线玩家。
-     *
-     * 如果不在这里卸载，
-     * 缓存会长期累积全部离线玩家，
-     * 违背"退出后移除运行时对象"的设计。
-     *
-     * 数据已经通过 setter 写入 YAML 内存，
-     * 后续由自动保存 / flush 落盘。
-     *
-     * saveCat 再做一次完整同步，
-     * 然后从缓存移除。
+     * 走运行时 Cat 结算，
+     * 缓存保持（不卸载）。
      */
 
-    private void evictIfOffline(
+    private void handleOnline(
             UUID playerUUID,
-            mizukichou.nekonyume.cat.Cat cat
+            long now,
+            long baseInterval,
+            long lastUpdate
     ) {
 
-        Player owner =
-                Bukkit.getPlayer(
-                        playerUUID
+        Cat cat =
+                plugin.getCatManager()
+                        .loadCat(
+                                playerUUID
+                        );
+
+        if (cat == null) {
+            return;
+        }
+
+        long effectiveInterval =
+                effectiveInterval(
+                        cat.getPersonality()
+                                .getHungerRate(),
+                        baseInterval
                 );
 
-        if (owner == null ||
-                !owner.isOnline()) {
+        long elapsed =
+                now - lastUpdate;
 
-            plugin.getCatManager()
-                    .saveCat(
-                            cat
-                    );
+        if (elapsed < effectiveInterval) {
+            return;
+        }
 
-            plugin.getCatManager()
-                    .removeLogicalCat(
-                            playerUUID
+        long decrease =
+                elapsed / effectiveInterval;
+
+        int decreaseAmount =
+                (int) Math.min(
+                        decrease,
+                        MAX_HUNGER_DECREASE
+                );
+
+        int newHunger =
+                Math.max(
+                        0,
+                        cat.getHunger()
+                                - decreaseAmount
+                );
+
+        cat.setHunger(
+                newHunger
+        );
+
+        int affectionLoss =
+                affectionLoss(
+                        newHunger
+                );
+
+        if (affectionLoss > 0) {
+
+            cat.removeAffection(
+                    affectionLoss
+            );
+        }
+
+        /*
+         * 持久化。
+         */
+        plugin.getDataManager()
+                .setCatHunger(
+                        playerUUID,
+                        cat.getHunger()
+                );
+
+        plugin.getDataManager()
+                .setCatAffection(
+                        playerUUID,
+                        cat.getAffection()
+                );
+
+        /*
+         * 更新时间（保留未结算的余数）。
+         */
+        plugin.getDataManager()
+                .setCatHungerLastUpdate(
+                        playerUUID,
+                        lastUpdate
+                                + decrease
+                                * effectiveInterval
+                );
+    }
+
+    /*
+     * ============================================================
+     * 离线玩家
+     * ============================================================
+     *
+     * 不加载运行时 Cat：
+     * - 不打印 "Loaded cat" 日志；
+     * - 不产生对象构造开销；
+     * - 缓存永远只含在线玩家。
+     *
+     * 性格速率通过逻辑猫 UUID 推导
+     * （UUID 直接存在于 players.yml）。
+     */
+
+    private void handleOffline(
+            UUID playerUUID,
+            long now,
+            long baseInterval,
+            long lastUpdate
+    ) {
+
+        UUID catId =
+                plugin.getDataManager()
+                        .getCatUUID(
+                                playerUUID
+                        );
+
+        if (catId == null) {
+            return;
+        }
+
+        double hungerRate =
+                CatPersonality.fromCatId(
+                                catId
+                        )
+                        .getHungerRate();
+
+        long effectiveInterval =
+                effectiveInterval(
+                        hungerRate,
+                        baseInterval
+                );
+
+        long elapsed =
+                now - lastUpdate;
+
+        if (elapsed < effectiveInterval) {
+            return;
+        }
+
+        long decrease =
+                elapsed / effectiveInterval;
+
+        int decreaseAmount =
+                (int) Math.min(
+                        decrease,
+                        MAX_HUNGER_DECREASE
+                );
+
+        int hunger =
+                plugin.getDataManager()
+                        .getCatHunger(
+                                playerUUID
+                        );
+
+        int newHunger =
+                Math.max(
+                        0,
+                        hunger - decreaseAmount
+                );
+
+        plugin.getDataManager()
+                .setCatHunger(
+                        playerUUID,
+                        newHunger
+                );
+
+        int affectionLoss =
+                affectionLoss(
+                        newHunger
+                );
+
+        if (affectionLoss > 0) {
+
+            plugin.getDataManager()
+                    .setCatAffection(
+                            playerUUID,
+                            plugin.getDataManager()
+                                    .getCatAffection(
+                                            playerUUID
+                                    )
+                                    - affectionLoss
                     );
         }
+
+        /*
+         * 更新时间（保留未结算的余数）。
+         */
+        plugin.getDataManager()
+                .setCatHungerLastUpdate(
+                        playerUUID,
+                        lastUpdate
+                                + decrease
+                                * effectiveInterval
+                );
+    }
+
+    /*
+     * ============================================================
+     * 工具
+     * ============================================================
+     */
+
+    private long effectiveInterval(
+            double hungerRate,
+            long baseInterval
+    ) {
+
+        if (hungerRate <= 0) {
+            hungerRate = 1.0;
+        }
+
+        long interval =
+                (long) Math.round(
+                        baseInterval / hungerRate
+                );
+
+        return interval <= 0
+                ? baseInterval
+                : interval;
+    }
+
+    private int affectionLoss(
+            int newHunger
+    ) {
+
+        if (newHunger <= 0) {
+            return EMPTY_HUNGER_AFFECTION_LOSS;
+        }
+
+        if (newHunger <= LOW_HUNGER_THRESHOLD) {
+            return LOW_HUNGER_AFFECTION_LOSS;
+        }
+
+        return 0;
     }
 }
