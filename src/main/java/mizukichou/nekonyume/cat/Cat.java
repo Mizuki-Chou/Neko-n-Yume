@@ -42,6 +42,17 @@ public class Cat {
      */
     private String name;
 
+    /*
+     * ============================================================
+     * 性格
+     * ============================================================
+     *
+     * 由逻辑猫 UUID 确定性生成，
+     * 永久固定，不存储。
+     */
+
+    private final CatPersonality personality;
+
 
     /*
      * ============================================================
@@ -53,6 +64,39 @@ public class Cat {
      * 猫咪等级。
      */
     private int level;
+
+    /**
+     * 累计经验。
+     *
+     * <p>
+     * 等级由累计经验推导。
+     * </p>
+     */
+    private int experience;
+
+
+    /*
+     * ============================================================
+     * 喵力 / 喵阶
+     * ============================================================
+     *
+     * 喵力是稀有机缘资源。
+     * 抚摸与喂食有低概率获得。
+     *
+     * 喵阶从 0 开始：
+     *
+     * 0 → 1 : 10 点
+     * 1 → 2 : 11 点
+     * 2 → 3 : 12 点
+     * ...
+     *
+     * 升到第 N 阶的累计喵力：
+     * N × (N + 19) / 2
+     */
+
+    private int meowPower;
+
+    private int meowRank;
 
 
     /*
@@ -177,7 +221,11 @@ public class Cat {
      * affection = 50
      * hunger    = 100
      * health    = 100
-     * variant    = null
+     * variant   = null
+     *
+     * experience = 0
+     * meowPower  = 0
+     * meowRank   = 0
      */
     public Cat(
             UUID id,
@@ -243,11 +291,21 @@ public class Cat {
         this.ownerUuid = ownerUuid;
         this.name = name;
 
+        this.personality =
+                CatPersonality.fromCatId(
+                        id
+                );
+
         this.level =
                 Math.max(
                         1,
                         level
                 );
+
+        this.experience = 0;
+
+        this.meowPower = 0;
+        this.meowRank = 0;
 
         this.affection =
                 clamp(
@@ -323,6 +381,11 @@ public class Cat {
 
     /**
      * 从完整存档恢复。
+     *
+     * <p>
+     * experience / meowPower / meowRank
+     * 由调用方通过 setter 恢复。
+     * </p>
      */
     public static Cat restore(
             UUID id,
@@ -388,7 +451,18 @@ public class Cat {
 
     /*
      * ============================================================
-     * 等级
+     * 性格
+     * ============================================================
+     */
+
+    public CatPersonality getPersonality() {
+        return personality;
+    }
+
+
+    /*
+     * ============================================================
+     * 等级 / 经验
      * ============================================================
      */
 
@@ -413,6 +487,233 @@ public class Cat {
 
         setLevel(
                 this.level + amount
+        );
+    }
+
+    public int getExperience() {
+        return experience;
+    }
+
+    public void setExperience(
+            int experience
+    ) {
+
+        this.experience =
+                Math.max(
+                        0,
+                        experience
+                );
+    }
+
+    /*
+     * 累计经验 → 等级。
+     *
+     * 升到 L 级需要的累计经验：
+     * cumXp(L) = 50 × L × (L - 1)
+     *
+     * 例如：
+     * cumXp(1) = 0
+     * cumXp(2) = 100
+     * cumXp(3) = 300
+     */
+    private static int levelFromExperience(
+            int totalExperience
+    ) {
+
+        int level = 1;
+
+        /*
+         * 上限保护，防止异常数据死循环。
+         */
+        int safety = 0;
+
+        while (level < 10000 &&
+                safety < 10000) {
+
+            long nextLevelRequired =
+                    50L
+                            * (level + 1L)
+                            * level;
+
+            if (totalExperience < nextLevelRequired) {
+                break;
+            }
+
+            level++;
+            safety++;
+        }
+
+        return level;
+    }
+
+    /**
+     * 增加经验。
+     *
+     * <p>
+     * 返回升了几级（0 表示未升级）。
+     * </p>
+     */
+    public int addExperience(
+            int amount
+    ) {
+
+        if (amount <= 0) {
+            return 0;
+        }
+
+        this.experience += amount;
+
+        int newLevel =
+                levelFromExperience(
+                        this.experience
+                );
+
+        int gained =
+                newLevel - this.level;
+
+        if (gained > 0) {
+
+            this.level =
+                    newLevel;
+        }
+
+        return gained;
+    }
+
+
+    /*
+     * ============================================================
+     * 喵力 / 喵阶
+     * ============================================================
+     */
+
+    public int getMeowPower() {
+        return meowPower;
+    }
+
+    public void setMeowPower(
+            int meowPower
+    ) {
+
+        this.meowPower =
+                Math.max(
+                        0,
+                        meowPower
+                );
+    }
+
+    public int getMeowRank() {
+        return meowRank;
+    }
+
+    public void setMeowRank(
+            int meowRank
+    ) {
+
+        this.meowRank =
+                Math.max(
+                        0,
+                        meowRank
+                );
+    }
+
+    /*
+     * 累计喵力 → 喵阶。
+     *
+     * 升到第 N 阶需要的累计喵力：
+     * cumMeow(N) = N × (N + 19) / 2
+     *
+     * 0 → 1 : 10
+     * 1 → 2 : 21
+     * 2 → 3 : 33
+     */
+    private static int meowRankFromPower(
+            int totalMeowPower
+    ) {
+
+        int rank = 0;
+
+        int safety = 0;
+
+        while (rank < 10000 &&
+                safety < 10000) {
+
+            long nextRankRequired =
+                    (long) (rank + 1)
+                            * (rank + 1 + 19)
+                            / 2;
+
+            if (totalMeowPower < nextRankRequired) {
+                break;
+            }
+
+            rank++;
+            safety++;
+        }
+
+        return rank;
+    }
+
+    /**
+     * 增加喵力。
+     *
+     * <p>
+     * 返回升了几阶（0 表示未升阶）。
+     * </p>
+     */
+    public int addMeowPower(
+            int amount
+    ) {
+
+        if (amount <= 0) {
+            return 0;
+        }
+
+        this.meowPower += amount;
+
+        int newRank =
+                meowRankFromPower(
+                        this.meowPower
+                );
+
+        int gained =
+                newRank - this.meowRank;
+
+        if (gained > 0) {
+
+            this.meowRank =
+                    newRank;
+        }
+
+        return gained;
+    }
+
+
+    /*
+     * ============================================================
+     * 心情
+     * ============================================================
+     */
+
+    public CatMood getMood() {
+
+        return getMood(
+                System.currentTimeMillis()
+        );
+    }
+
+    public CatMood getMood(
+            long now
+    ) {
+
+        int score =
+                CatMood.calculateScore(
+                        this,
+                        now
+                );
+
+        return CatMood.fromScore(
+                score
         );
     }
 
@@ -784,7 +1085,11 @@ public class Cat {
                 "id=" + id +
                 ", ownerUuid=" + ownerUuid +
                 ", name='" + name + '\'' +
+                ", personality=" + personality +
                 ", level=" + level +
+                ", experience=" + experience +
+                ", meowPower=" + meowPower +
+                ", meowRank=" + meowRank +
                 ", hunger=" + hunger +
                 ", affection=" + affection +
                 ", health=" + health +

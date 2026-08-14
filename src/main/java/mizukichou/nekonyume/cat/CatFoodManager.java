@@ -1,8 +1,10 @@
 package mizukichou.nekonyume.cat;
 
 import mizukichou.nekonyume.NekoNYume;
+import mizukichou.nekonyume.event.CatFedEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -11,6 +13,7 @@ import org.bukkit.inventory.ItemStack;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 
 public class CatFoodManager {
@@ -18,9 +21,20 @@ public class CatFoodManager {
     private static final int MAX_HUNGER = 100;
 
     /*
-     * 每次成功喂食增加的好感度。
+     * 每次成功喂食的基础好感度。
+     * 性格额外加成在此基础上叠加。
      */
     private static final int FEED_AFFECTION_GAIN = 15;
+
+    /*
+     * 喂食基础喵力概率（百分点）。
+     */
+    private static final int FEED_MEOW_CHANCE_PERCENT = 8;
+
+    /*
+     * 每天前几次成功喂食才有机会获得喵力。
+     */
+    private static final int DAILY_MEOW_CHANCE_FEEDS = 3;
 
     /*
      * MiniMessage 实例。
@@ -31,6 +45,12 @@ public class CatFoodManager {
      */
     private final MiniMessage mm =
             MiniMessage.miniMessage();
+
+    /*
+     * 喵力概率随机源。
+     */
+    private final Random random =
+            new Random();
 
     /*
      * 食物 → 饱食度。
@@ -346,6 +366,28 @@ public class CatFoodManager {
         }
 
         /*
+         * 性格修正：
+         *
+         * 挑食猫的食物效果打折扣。
+         *
+         * 经验与饱食度使用修正后的实际价值，
+         * 保持一致。
+         */
+        CatPersonality personality =
+                cat.getPersonality();
+
+        int effectiveFoodValue =
+                (int) Math.round(
+                        foodValue
+                                * personality
+                                .getFoodValueMultiplier()
+                );
+
+        if (effectiveFoodValue <= 0) {
+            return false;
+        }
+
+        /*
          * ========================================================
          * 计算实际增加值
          * ========================================================
@@ -362,7 +404,7 @@ public class CatFoodManager {
                 Math.min(
                         MAX_HUNGER,
                         currentHunger
-                                + foodValue
+                                + effectiveFoodValue
                 );
 
         int actualHungerGain =
@@ -384,11 +426,24 @@ public class CatFoodManager {
         );
 
         /*
-         * 喂食增加好感度。
+         * 喂食增加好感度：
+         * 基础 + 性格额外加成。
+         *
+         * 计算实际增加值，
+         * 好感度封顶 100 时如实反馈。
          */
+        int oldAffection =
+                cat.getAffection();
+
         cat.addAffection(
                 FEED_AFFECTION_GAIN
+                        + personality
+                        .getFeedAffectionBonus()
         );
+
+        int actualAffectionGain =
+                cat.getAffection()
+                        - oldAffection;
 
         /*
          * 记录最后喂食时间。
@@ -455,6 +510,92 @@ public class CatFoodManager {
 
         /*
          * ========================================================
+         * 经验
+         * ========================================================
+         *
+         * 喂食经验 = 实际食物价值。
+         * 统一走 CatManager.gainExperience()。
+         */
+
+        int xpGain =
+                effectiveFoodValue;
+
+        plugin.getCatManager()
+                .gainExperience(
+                        player,
+                        cat,
+                        xpGain
+                );
+
+        /*
+         * ========================================================
+         * 喵力概率
+         * ========================================================
+         *
+         * 每天前 3 次成功喂食才有机会。
+         *
+         * 基础 8% + 性格偏移（百分点）。
+         */
+
+        int meowGain = 0;
+
+        int feedCount =
+                plugin.getDataManager()
+                        .getCatFeedCount(
+                                playerUUID
+                        );
+
+        if (feedCount < DAILY_MEOW_CHANCE_FEEDS) {
+
+            int chance =
+                    FEED_MEOW_CHANCE_PERCENT
+                            + personality
+                            .getFeedMeowChanceBonus();
+
+            if (chance > 0 &&
+                    random.nextInt(100) < chance) {
+
+                meowGain = 1;
+
+                plugin.getCatManager()
+                        .grantMeowPower(
+                                player,
+                                cat,
+                                1
+                        );
+            }
+        }
+
+        /*
+         * 成功喂食计数 +1。
+         * （无论是否获得喵力）
+         */
+        plugin.getDataManager()
+                .addCatFeedCount(
+                        playerUUID
+                );
+
+        /*
+         * ========================================================
+         * 触发事件
+         * ========================================================
+         */
+
+        Bukkit.getPluginManager()
+                .callEvent(
+                        new CatFedEvent(
+                                player,
+                                cat,
+                                item,
+                                actualHungerGain,
+                                actualAffectionGain,
+                                xpGain,
+                                meowGain
+                        )
+                );
+
+        /*
+         * ========================================================
          * 获取显示信息
          * ========================================================
          */
@@ -510,7 +651,7 @@ public class CatFoodManager {
         player.sendMessage(
                 mm.deserialize(
                         "<red>❤ 好感度 <green>+"
-                                + FEED_AFFECTION_GAIN
+                                + actualAffectionGain
                                 + " <gray>("
                                 + cat.getAffection()
                                 + "/100)</gray>"

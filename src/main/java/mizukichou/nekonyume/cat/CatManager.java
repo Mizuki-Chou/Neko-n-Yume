@@ -2,12 +2,17 @@ package mizukichou.nekonyume.cat;
 
 import io.papermc.paper.registry.RegistryKey;
 import mizukichou.nekonyume.NekoNYume;
+import mizukichou.nekonyume.event.CatLevelUpEvent;
+import mizukichou.nekonyume.event.CatMeowRankUpEvent;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Particle;
 import org.bukkit.Registry;
+import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Entity;
@@ -36,6 +41,7 @@ public class CatManager {
      * 全局消息格式统一为 MiniMessage。
      * CatManager 中的玩家消息不含玩家可控文本，
      * 因此可以直接使用 MiniMessage。
+     * 含名字的消息用 Component.text 拼接。
      */
     private final MiniMessage mm =
             MiniMessage.miniMessage();
@@ -240,6 +246,27 @@ public class CatManager {
                         cat.getLevel()
                 );
 
+        plugin.getDataManager()
+                .setCatExperience(
+                        ownerUUID,
+                        cat.getExperience()
+                );
+
+        /*
+         * 喵力 / 喵阶
+         */
+        plugin.getDataManager()
+                .setCatMeowPower(
+                        ownerUUID,
+                        cat.getMeowPower()
+                );
+
+        plugin.getDataManager()
+                .setCatMeowRank(
+                        ownerUUID,
+                        cat.getMeowRank()
+                );
+
         /*
          * 状态
          */
@@ -431,6 +458,266 @@ public class CatManager {
 
     /*
      * ============================================================
+     * 增加经验
+     * ============================================================
+     *
+     * 统一入口：
+     * 所有经验来源都应该通过这里。
+     *
+     * 负责：
+     * 1. 修改运行时 Cat
+     * 2. 持久化
+     * 3. 升级检测
+     * 4. 升级反馈（消息 + 音效）
+     * 5. 触发 CatLevelUpEvent
+     */
+
+    public void gainExperience(
+            Player player,
+            mizukichou.nekonyume.cat.Cat cat,
+            int amount
+    ) {
+
+        if (player == null ||
+                cat == null ||
+                amount <= 0) {
+
+            return;
+        }
+
+        int fromLevel =
+                cat.getLevel();
+
+        int gained =
+                cat.addExperience(
+                        amount
+                );
+
+        /*
+         * 持久化。
+         */
+        plugin.getDataManager()
+                .setCatExperience(
+                        player.getUniqueId(),
+                        cat.getExperience()
+                );
+
+        plugin.getDataManager()
+                .setCatLevel(
+                        player.getUniqueId(),
+                        cat.getLevel()
+                );
+
+        if (gained <= 0) {
+            return;
+        }
+
+        /*
+         * 升级反馈。
+         */
+        player.sendMessage(
+                mm.deserialize(
+                        "<gradient:#fde68a:#f59e0b>🎉 </gradient>"
+                ).append(
+                        Component.text(
+                                cat.getName()
+                        )
+                ).append(
+                        mm.deserialize(
+                                "<white> 升级到了 <yellow>"
+                                        + cat.getLevel()
+                                        + " 级</yellow>!</white>"
+                        )
+                )
+        );
+
+        player.playSound(
+                player.getLocation(),
+                Sound.ENTITY_PLAYER_LEVELUP,
+                1.0f,
+                1.0f
+        );
+
+        /*
+         * 事件。
+         */
+        Bukkit.getPluginManager()
+                .callEvent(
+                        new CatLevelUpEvent(
+                                player,
+                                cat,
+                                fromLevel,
+                                cat.getLevel()
+                        )
+                );
+    }
+
+
+    /*
+     * ============================================================
+     * 增加喵力
+     * ============================================================
+     *
+     * 统一入口：
+     * 所有喵力来源都应该通过这里
+     * （抚摸 / 喂食概率 / 未来喵丹）。
+     *
+     * 负责：
+     * 1. 修改运行时 Cat
+     * 2. 持久化
+     * 3. 升阶检测
+     * 4. 升阶反馈（消息 + 音效 + 粒子）
+     * 5. 触发 CatMeowRankUpEvent
+     */
+
+    public void grantMeowPower(
+            Player player,
+            mizukichou.nekonyume.cat.Cat cat,
+            int amount
+    ) {
+
+        if (player == null ||
+                cat == null ||
+                amount <= 0) {
+
+            return;
+        }
+
+        int fromRank =
+                cat.getMeowRank();
+
+        int gained =
+                cat.addMeowPower(
+                        amount
+                );
+
+        /*
+         * 持久化。
+         */
+        plugin.getDataManager()
+                .setCatMeowPower(
+                        player.getUniqueId(),
+                        cat.getMeowPower()
+                );
+
+        plugin.getDataManager()
+                .setCatMeowRank(
+                        player.getUniqueId(),
+                        cat.getMeowRank()
+                );
+
+        /*
+         * 获得喵力的惊喜反馈。
+         * 无论是否升阶都会提示。
+         */
+        player.sendMessage(
+                mm.deserialize(
+                        "<gradient:#c4b5fd:#a78bfa>✨ 喵光一闪!</gradient>"
+                ).append(
+                        Component.text(
+                                " "
+                                        + cat.getName()
+                        )
+                ).append(
+                        mm.deserialize(
+                                "<white> 获得了 <light_purple>"
+                                        + amount
+                                        + " 点喵力</light_purple>!</white>"
+                        )
+                )
+        );
+
+        player.playSound(
+                player.getLocation(),
+                Sound.ENTITY_EXPERIENCE_ORB_PICKUP,
+                1.0f,
+                1.5f
+        );
+
+        if (gained <= 0) {
+            return;
+        }
+
+        /*
+         * 升阶反馈。
+         */
+        player.sendMessage(
+                mm.deserialize(
+                        "<gradient:#c4b5fd:#a78bfa>🌟 喵阶提升!</gradient>"
+                ).append(
+                        Component.text(
+                                " "
+                                        + cat.getName()
+                        )
+                ).append(
+                        mm.deserialize(
+                                "<white> 提升到了 <light_purple>喵阶 "
+                                        + cat.getMeowRank()
+                                        + "</light_purple>!</white>"
+                        )
+                )
+        );
+
+        player.playSound(
+                player.getLocation(),
+                Sound.ENTITY_PLAYER_LEVELUP,
+                1.0f,
+                1.2f
+        );
+
+        /*
+         * 粒子：
+         * 如果猫实体在线，
+         * 在猫的位置生成粒子。
+         */
+        UUID entityUuid =
+                cat.getEntityUuid();
+
+        if (entityUuid != null) {
+
+            Entity entity =
+                    Bukkit.getEntity(
+                            entityUuid
+                    );
+
+            if (entity != null &&
+                    entity.isValid()) {
+
+                entity.getWorld()
+                        .spawnParticle(
+                                Particle.HEART,
+                                entity.getLocation()
+                                        .add(
+                                                0,
+                                                1,
+                                                0
+                                        ),
+                                30,
+                                0.5,
+                                0.5,
+                                0.5,
+                                0.05
+                        );
+            }
+        }
+
+        /*
+         * 事件。
+         */
+        Bukkit.getPluginManager()
+                .callEvent(
+                        new CatMeowRankUpEvent(
+                                player,
+                                cat,
+                                fromRank,
+                                cat.getMeowRank()
+                        )
+                );
+    }
+
+
+    /*
+     * ============================================================
      * 从玩家存档加载
      * ============================================================
      */
@@ -590,6 +877,30 @@ public class CatManager {
                         lastFedAt,
                         lastInteractionAt
                 );
+
+        /*
+         * 双轨成长。
+         */
+        logicalCat.setExperience(
+                plugin.getDataManager()
+                        .getCatExperience(
+                                ownerUUID
+                        )
+        );
+
+        logicalCat.setMeowPower(
+                plugin.getDataManager()
+                        .getCatMeowPower(
+                                ownerUUID
+                        )
+        );
+
+        logicalCat.setMeowRank(
+                plugin.getDataManager()
+                        .getCatMeowRank(
+                                ownerUUID
+                        )
+        );
 
         /*
          * Entity UUID。
@@ -1478,6 +1789,30 @@ public class CatManager {
                                         ownerUUID
                                 )
                 );
+
+        /*
+         * 双轨成长。
+         */
+        logicalCat.setExperience(
+                plugin.getDataManager()
+                        .getCatExperience(
+                                ownerUUID
+                        )
+        );
+
+        logicalCat.setMeowPower(
+                plugin.getDataManager()
+                        .getCatMeowPower(
+                                ownerUUID
+                        )
+        );
+
+        logicalCat.setMeowRank(
+                plugin.getDataManager()
+                        .getCatMeowRank(
+                                ownerUUID
+                        )
+        );
 
         logicalCat.setEntityUuid(
                 entity.getUniqueId()
@@ -2620,7 +2955,6 @@ public class CatManager {
         );
 
         /*
-         * 阶段 1：
          * 猫暂时无敌。
          *
          * 这是纪念性伴侣猫，

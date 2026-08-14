@@ -13,7 +13,14 @@ public class CatHungerTask implements Runnable {
      * 饥饿规则
      * ============================================================
      *
-     * 每 5 分钟减少 1 点饱食度。
+     * 基础：每 5 分钟减少 1 点饱食度。
+     *
+     * 实际间隔由性格的饥饿速率倍率修正：
+     *
+     * 贪吃  ×1.5 → 约 3 分 20 秒
+     * 悠闲  ×0.7 → 约 7 分 9 秒
+     * 独立  ×0.9 → 约 5 分 33 秒
+     * 其他  ×1.0 → 5 分钟
      */
     private static final long HUNGER_INTERVAL =
             5 * 60 * 1000L;
@@ -92,6 +99,44 @@ public class CatHungerTask implements Runnable {
 
             /*
              * ====================================================
+             * 加载运行时 Cat
+             * ====================================================
+             *
+             * 注意：
+             * 即使玩家离线，
+             * 这里仍然可以加载 Cat。
+             *
+             * 需要先拿到性格，
+             * 才能计算实际的饥饿间隔。
+             */
+            mizukichou.nekonyume.cat.Cat cat =
+                    plugin.getCatManager()
+                            .loadCat(
+                                    playerUUID
+                            );
+
+            if (cat == null) {
+                continue;
+            }
+
+            /*
+             * ====================================================
+             * 性格饥饿速率修正
+             * ====================================================
+             */
+            long effectiveInterval =
+                    (long) Math.round(
+                            HUNGER_INTERVAL
+                                    / cat.getPersonality()
+                                    .getHungerRate()
+                    );
+
+            if (effectiveInterval <= 0) {
+                effectiveInterval = HUNGER_INTERVAL;
+            }
+
+            /*
+             * ====================================================
              * 计算经过时间
              * ====================================================
              */
@@ -100,8 +145,18 @@ public class CatHungerTask implements Runnable {
 
             /*
              * 尚未达到一次饥饿结算。
+             *
+             * 若主人离线，
+             * 立即卸载刚才加载的运行时缓存，
+             * 避免缓存滞留。
              */
-            if (elapsed < HUNGER_INTERVAL) {
+            if (elapsed < effectiveInterval) {
+
+                evictIfOffline(
+                        playerUUID,
+                        cat
+                );
+
                 continue;
             }
 
@@ -109,42 +164,15 @@ public class CatHungerTask implements Runnable {
              * ====================================================
              * 计算应该减少多少点
              * ====================================================
-             *
-             * 5 分钟  → -1
-             * 10 分钟 → -2
-             * 15 分钟 → -3
              */
             long decrease =
-                    elapsed / HUNGER_INTERVAL;
+                    elapsed / effectiveInterval;
 
             int decreaseAmount =
                     (int) Math.min(
                             decrease,
                             MAX_HUNGER_DECREASE
                     );
-
-            /*
-             * ====================================================
-             * 加载运行时 Cat
-             * ====================================================
-             *
-             * 注意：
-             * 即使玩家离线，
-             * 这里仍然可以加载 Cat。
-             */
-            mizukichou.nekonyume.cat.Cat cat =
-                    plugin.getCatManager()
-                            .loadCat(
-                                    playerUUID
-                            );
-
-            /*
-             * 如果猫咪数据异常，
-             * 不继续修改。
-             */
-            if (cat == null) {
-                continue;
-            }
 
             /*
              * ====================================================
@@ -258,7 +286,7 @@ public class CatHungerTask implements Runnable {
             long newLastUpdate =
                     lastUpdate
                             + decrease
-                            * HUNGER_INTERVAL;
+                            * effectiveInterval;
 
             plugin.getDataManager()
                     .setCatHungerLastUpdate(
@@ -267,42 +295,57 @@ public class CatHungerTask implements Runnable {
                     );
 
             /*
-             * ====================================================
-             * 离线玩家：结算完成后立即卸载运行时缓存
-             * ====================================================
-             *
-             * 饥饿任务每分钟都会加载所有猫主人，
-             * 包括离线玩家。
-             *
-             * 如果不在这里卸载，
-             * 缓存会长期累积全部离线玩家，
-             * 违背"退出后移除运行时对象"的设计。
-             *
-             * 数据已经通过上面的 setter
-             * 写入 YAML 内存，
-             * 后续由自动保存 / flush 落盘。
-             *
-             * saveCat 再做一次完整同步，
-             * 然后从缓存移除。
+             * 离线玩家：
+             * 结算完成后立即卸载运行时缓存。
              */
-            Player owner =
-                    Bukkit.getPlayer(
-                            playerUUID
+            evictIfOffline(
+                    playerUUID,
+                    cat
+            );
+        }
+    }
+
+    /*
+     * ============================================================
+     * 离线卸载
+     * ============================================================
+     *
+     * 饥饿任务每分钟都会加载所有猫主人，
+     * 包括离线玩家。
+     *
+     * 如果不在这里卸载，
+     * 缓存会长期累积全部离线玩家，
+     * 违背"退出后移除运行时对象"的设计。
+     *
+     * 数据已经通过 setter 写入 YAML 内存，
+     * 后续由自动保存 / flush 落盘。
+     *
+     * saveCat 再做一次完整同步，
+     * 然后从缓存移除。
+     */
+
+    private void evictIfOffline(
+            UUID playerUUID,
+            mizukichou.nekonyume.cat.Cat cat
+    ) {
+
+        Player owner =
+                Bukkit.getPlayer(
+                        playerUUID
+                );
+
+        if (owner == null ||
+                !owner.isOnline()) {
+
+            plugin.getCatManager()
+                    .saveCat(
+                            cat
                     );
 
-            if (owner == null ||
-                    !owner.isOnline()) {
-
-                plugin.getCatManager()
-                        .saveCat(
-                                cat
-                        );
-
-                plugin.getCatManager()
-                        .removeLogicalCat(
-                                playerUUID
-                        );
-            }
+            plugin.getCatManager()
+                    .removeLogicalCat(
+                            playerUUID
+                    );
         }
     }
 }

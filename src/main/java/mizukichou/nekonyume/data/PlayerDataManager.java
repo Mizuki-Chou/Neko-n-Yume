@@ -24,12 +24,14 @@ public class PlayerDataManager {
     /*
      * 数据格式版本。
      *
-     * v1 = 当前格式。
-     *
-     * 未来格式变更时递增此版本，
-     * 并在 migrate() 中添加单向迁移步骤。
+     * v1 = 初始格式。
+     * v2 = 双轨成长：
+     *      + experience
+     *      + meow-power
+     *      + meow-rank
+     *      + feed-count / feed-date
      */
-    private static final int DATA_VERSION = 1;
+    private static final int DATA_VERSION = 2;
 
     /*
      * 猫咪默认值
@@ -42,9 +44,9 @@ public class PlayerDataManager {
     private static final int DEFAULT_CAT_HEALTH = 100;
 
     /*
-     * 抚摸每日上限
+     * 抚摸每日上限。
      */
-    private static final int MAX_DAILY_PETS = 20;
+    private static final int MAX_DAILY_PETS = 3;
 
     /*
      * 数据文件
@@ -285,38 +287,24 @@ public class PlayerDataManager {
         if (version == 0) {
 
             /*
-             * 早期没有版本号的数据。
-             *
-             * 当前格式就是 v1，
-             * 因此无需字段迁移，
-             * 只需补写版本标记。
+             * 早期没有版本号的数据：
+             * 视为 v1，
+             * 补写版本标记后继续执行迁移。
              */
             plugin.getLogger().info(
-                    "players.yml has no data-version. Marking as v"
-                            + DATA_VERSION
-                            + "."
+                    "players.yml has no data-version. Treating as v1."
             );
 
             data.set(
                     "data-version",
-                    DATA_VERSION
+                    1
             );
 
-            saveNow();
-
-            return;
+            version = 1;
         }
 
         if (version < DATA_VERSION) {
 
-            /*
-             * 未来 v1 → v2 等迁移步骤写在这里。
-             *
-             * 规则：
-             * 1. 只能单向升级；
-             * 2. 每一步都先验证再写入；
-             * 3. 迁移完成后立即落盘。
-             */
             plugin.getLogger().info(
                     "Migrating players.yml from data-version "
                             + version
@@ -326,12 +314,14 @@ public class PlayerDataManager {
             );
 
             /*
-             * 预留：
+             * v1 → v2：
              *
-             * if (version < 2) {
-             *     // v1 → v2 迁移
-             * }
+             * 为所有已有猫咪补齐双轨字段。
              */
+            if (version < 2) {
+
+                migrateV1ToV2();
+            }
 
             data.set(
                     "data-version",
@@ -348,13 +338,8 @@ public class PlayerDataManager {
             /*
              * 数据比插件还新。
              *
-             * 说明这个 players.yml 来自更新版本的插件。
-             *
              * 内存中的 YamlConfiguration 仍保留全部未知字段，
              * 因此继续写盘不会丢失数据。
-             *
-             * 但某些新字段我们无法理解，
-             * 这里只警告，由管理员决定是否升级插件。
              */
             plugin.getLogger().warning(
                     "players.yml data-version "
@@ -364,6 +349,144 @@ public class PlayerDataManager {
                             + ". The plugin may not understand all fields."
             );
         }
+    }
+
+    /*
+     * v1 → v2：
+     *
+     * - experience = 到达当前等级所需的累计经验
+     *   （等级绝不重置，老玩家从原地继续成长）
+     * - meow-power = 0
+     * - meow-rank  = 0
+     * - feed-count / feed-date 补齐
+     */
+    /*
+     * v1 → v2：
+     *
+     * - experience = 到达当前等级所需的累计经验
+     *   （等级绝不重置，老玩家从原地继续成长）
+     * - meow-power = 0
+     * - meow-rank  = 0
+     * - feed-count / feed-date 补齐
+     */
+    private void migrateV1ToV2() {
+
+        ConfigurationSection playersSection =
+                data.getConfigurationSection(
+                        PLAYERS_PATH
+                );
+
+        if (playersSection == null) {
+            return;
+        }
+
+        for (String key :
+                playersSection.getKeys(false)) {
+
+            UUID playerUUID =
+                    parseUUID(key);
+
+            if (playerUUID == null) {
+                continue;
+            }
+
+            String path =
+                    catPath(playerUUID);
+
+            if (!data.contains(path)) {
+                continue;
+            }
+
+            /*
+             * 直接读取等级，
+             * 不经过 ensureCat，
+             * 避免迁移期间触发意外的 createCat。
+             */
+            int level =
+                    Math.max(
+                            1,
+                            data.getInt(
+                                    path + ".level",
+                                    DEFAULT_CAT_LEVEL
+                            )
+                    );
+
+            if (!data.contains(
+                    path + ".experience"
+            )) {
+
+                data.set(
+                        path + ".experience",
+                        cumulativeXpForLevel(
+                                level
+                        )
+                );
+            }
+
+            if (!data.contains(
+                    path + ".meow-power"
+            )) {
+
+                data.set(
+                        path + ".meow-power",
+                        0
+                );
+            }
+
+            if (!data.contains(
+                    path + ".meow-rank"
+            )) {
+
+                data.set(
+                        path + ".meow-rank",
+                        0
+                );
+            }
+
+            if (!data.contains(
+                    path + ".feed-count"
+            )) {
+
+                data.set(
+                        path + ".feed-count",
+                        0
+                );
+            }
+
+            if (!data.contains(
+                    path + ".feed-date"
+            )) {
+
+                data.set(
+                        path + ".feed-date",
+                        java.time.LocalDate.now().toString()
+                );
+            }
+        }
+    }
+
+
+    /*
+     * 到达指定等级所需的累计经验：
+     * cumXp(L) = 50 × L × (L - 1)
+     */
+    private int cumulativeXpForLevel(
+            int level
+    ) {
+
+        if (level <= 1) {
+            return 0;
+        }
+
+        long value =
+                50L
+                        * level
+                        * (level - 1L);
+
+        return (int) Math.min(
+                value,
+                Integer.MAX_VALUE
+        );
     }
 
     /*
@@ -490,6 +613,37 @@ public class PlayerDataManager {
 
         data.set(
                 path + ".pet-date",
+                java.time.LocalDate.now().toString()
+        );
+
+        /*
+         * 双轨成长
+         */
+        data.set(
+                path + ".experience",
+                0
+        );
+
+        data.set(
+                path + ".meow-power",
+                0
+        );
+
+        data.set(
+                path + ".meow-rank",
+                0
+        );
+
+        /*
+         * 每日喂食计数
+         */
+        data.set(
+                path + ".feed-count",
+                0
+        );
+
+        data.set(
+                path + ".feed-date",
                 java.time.LocalDate.now().toString()
         );
 
@@ -655,6 +809,141 @@ public class PlayerDataManager {
                 getCatLevel(playerUUID)
                         + amount
         );
+    }
+
+    /*
+     * ============================================================
+     * 猫咪经验
+     * ============================================================
+     */
+
+    public int getCatExperience(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
+
+        return Math.max(
+                0,
+                data.getInt(
+                        catPath(playerUUID)
+                                + ".experience",
+                        0
+                )
+        );
+    }
+
+    public void setCatExperience(
+            UUID playerUUID,
+            int experience
+    ) {
+
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        data.set(
+                catPath(playerUUID)
+                        + ".experience",
+                Math.max(
+                        0,
+                        experience
+                )
+        );
+
+        save();
+    }
+
+    /*
+     * ============================================================
+     * 猫咪喵力
+     * ============================================================
+     */
+
+    public int getCatMeowPower(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
+
+        return Math.max(
+                0,
+                data.getInt(
+                        catPath(playerUUID)
+                                + ".meow-power",
+                        0
+                )
+        );
+    }
+
+    public void setCatMeowPower(
+            UUID playerUUID,
+            int meowPower
+    ) {
+
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        data.set(
+                catPath(playerUUID)
+                        + ".meow-power",
+                Math.max(
+                        0,
+                        meowPower
+                )
+        );
+
+        save();
+    }
+
+    /*
+     * ============================================================
+     * 猫咪喵阶
+     * ============================================================
+     */
+
+    public int getCatMeowRank(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
+
+        return Math.max(
+                0,
+                data.getInt(
+                        catPath(playerUUID)
+                                + ".meow-rank",
+                        0
+                )
+        );
+    }
+
+    public void setCatMeowRank(
+            UUID playerUUID,
+            int meowRank
+    ) {
+
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        data.set(
+                catPath(playerUUID)
+                        + ".meow-rank",
+                Math.max(
+                        0,
+                        meowRank
+                )
+        );
+
+        save();
     }
 
     /*
@@ -1131,6 +1420,116 @@ public class PlayerDataManager {
         String countPath =
                 catPath(playerUUID)
                         + ".pet-count";
+
+        String today =
+                java.time.LocalDate.now().toString();
+
+        String savedDate =
+                data.getString(
+                        datePath
+                );
+
+        if (savedDate == null) {
+
+            data.set(
+                    datePath,
+                    today
+            );
+
+            data.set(
+                    countPath,
+                    0
+            );
+
+            save();
+
+            return;
+        }
+
+        if (!savedDate.equals(today)) {
+
+            data.set(
+                    datePath,
+                    today
+            );
+
+            data.set(
+                    countPath,
+                    0
+            );
+
+            save();
+        }
+    }
+
+    /*
+     * ============================================================
+     * 每日喂食计数
+     * ============================================================
+     *
+     * 每天前几次成功喂食
+     * 才有机会获得喵力。
+     * （机会判定逻辑在 CatFoodManager）
+     */
+
+    public int getCatFeedCount(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
+
+        resetFeedCountIfNewDay(
+                playerUUID
+        );
+
+        return Math.max(
+                0,
+                data.getInt(
+                        catPath(playerUUID)
+                                + ".feed-count",
+                        0
+                )
+        );
+    }
+
+    public void addCatFeedCount(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        resetFeedCountIfNewDay(
+                playerUUID
+        );
+
+        data.set(
+                catPath(playerUUID)
+                        + ".feed-count",
+                data.getInt(
+                        catPath(playerUUID)
+                                + ".feed-count",
+                        0
+                ) + 1
+        );
+
+        save();
+    }
+
+    private void resetFeedCountIfNewDay(
+            UUID playerUUID
+    ) {
+
+        String datePath =
+                catPath(playerUUID)
+                        + ".feed-date";
+
+        String countPath =
+                catPath(playerUUID)
+                        + ".feed-count";
 
         String today =
                 java.time.LocalDate.now().toString();

@@ -1,4 +1,3 @@
-
 package mizukichou.nekonyume.command;
 
 import mizukichou.nekonyume.NekoNYume;
@@ -176,10 +175,6 @@ public class NekoYumeCommand implements CommandExecutor {
 
                                 } else {
 
-                                    /*
-                                     * 理论上 claim 第一次不会走这里，
-                                     * 但保留作为安全处理。
-                                     */
                                     player.sendMessage(
                                             mm.deserialize(
                                                     "<gradient:#ff9de2:#a78bfa>🐱 </gradient>"
@@ -248,17 +243,33 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
-            String name =
-                    cat.getName();
-
+            /*
+             * 经验进度：
+             * 当前累计经验 / 下一级所需累计经验。
+             *
+             * cumXp(L) = 50 × L × (L - 1)
+             */
             int level =
                     cat.getLevel();
 
-            int affection =
-                    cat.getAffection();
+            long nextLevelXp =
+                    50L
+                            * (level + 1L)
+                            * level;
 
-            int hunger =
-                    cat.getHunger();
+            /*
+             * 喵力进度：
+             * 当前喵力 / 下一阶所需累计喵力。
+             *
+             * cumMeow(N) = N × (N + 19) / 2
+             */
+            int meowRank =
+                    cat.getMeowRank();
+
+            long nextRankPower =
+                    (long) (meowRank + 1)
+                            * (meowRank + 1 + 19)
+                            / 2;
 
             player.sendMessage(
                     mm.deserialize(
@@ -273,7 +284,7 @@ public class NekoYumeCommand implements CommandExecutor {
              */
             player.sendMessage(
                     Component.text(
-                            "名字: " + name
+                            "名字: " + cat.getName()
                     )
             );
 
@@ -281,21 +292,42 @@ public class NekoYumeCommand implements CommandExecutor {
                     mm.deserialize(
                             "<white>等级: <yellow>"
                                     + level
+                                    + "</yellow> <gray>(经验 "
+                                    + cat.getExperience()
+                                    + "/"
+                                    + nextLevelXp
+                                    + ")</gray>"
                     )
             );
 
             player.sendMessage(
                     mm.deserialize(
-                            "<white>好感度: <red>"
-                                    + affection
+                            "<white>喵阶: <light_purple>"
+                                    + meowRank
+                                    + "</light_purple> <gray>(喵力 "
+                                    + cat.getMeowPower()
+                                    + "/"
+                                    + nextRankPower
+                                    + ")</gray>"
                     )
             );
 
             player.sendMessage(
                     mm.deserialize(
-                            "<white>饱食度: <yellow>"
-                                    + hunger
-                                    + "<gray>/100"
+                            "<white>心情: <yellow>"
+                                    + cat.getMood().getIcon()
+                                    + " "
+                                    + cat.getMood().getDisplayName()
+                                    + "</yellow>"
+                    )
+            );
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<white>性格: <aqua>"
+                                    + cat.getPersonality()
+                                    .getDisplayName()
+                                    + "</aqua>"
                     )
             );
 

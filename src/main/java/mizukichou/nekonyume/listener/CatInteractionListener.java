@@ -1,8 +1,10 @@
 package mizukichou.nekonyume.listener;
 
 import mizukichou.nekonyume.NekoNYume;
+import mizukichou.nekonyume.event.CatPettedEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.Bukkit;
 import org.bukkit.Sound;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Entity;
@@ -16,23 +18,16 @@ import org.bukkit.persistence.PersistentDataType;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 
 public class CatInteractionListener implements Listener {
 
     /*
-     * 防止连续快速按 Shift 刷好感度。
-     *
-     * 1 秒最多触发一次。
-     */
-    private static final long COOLDOWN =
-            1000L;
-
-    /*
-     * 每天最多抚摸 20 次。
+     * 每天最多抚摸 3 次。
      */
     private static final int MAX_DAILY_PETS =
-            20;
+            3;
 
     /*
      * 抚摸距离。
@@ -41,10 +36,33 @@ public class CatInteractionListener implements Listener {
             3.0;
 
     /*
-     * 每次成功抚摸增加 1 点好感度。
+     * 每次成功抚摸增加的好感度。
      */
     private static final int PET_AFFECTION_GAIN =
-            1;
+            3;
+
+    /*
+     * 抚摸经验随机范围：
+     * [5, 30]
+     */
+    private static final int PET_XP_MIN =
+            5;
+
+    private static final int PET_XP_MAX =
+            30;
+
+    /*
+     * 抚摸基础喵力概率（百分点）。
+     */
+    private static final int PET_MEOW_CHANCE_PERCENT =
+            18;
+
+    /*
+     * 基础抚摸冷却（毫秒）。
+     * 实际冷却由性格决定。
+     */
+    private static final long DEFAULT_PET_COOLDOWN =
+            1000L;
 
     private final NekoNYume plugin;
 
@@ -57,6 +75,12 @@ public class CatInteractionListener implements Listener {
      */
     private final MiniMessage mm =
             MiniMessage.miniMessage();
+
+    /*
+     * 喵力 / 经验随机源。
+     */
+    private final Random random =
+            new Random();
 
     /*
      * 玩家 UUID → 上一次抚摸时间。
@@ -181,7 +205,9 @@ public class CatInteractionListener implements Listener {
 
             player.sendMessage(
                     mm.deserialize(
-                            "<yellow>🐱 今天已经摸过猫咪 20 次啦！</yellow>"
+                            "<yellow>🐱 今天已经摸过猫咪 "
+                                    + MAX_DAILY_PETS
+                                    + " 次啦！</yellow>"
                     )
             );
 
@@ -190,9 +216,20 @@ public class CatInteractionListener implements Listener {
 
         /*
          * ========================================================
-         * 1 秒冷却
+         * 冷却
          * ========================================================
+         *
+         * 冷却时间由性格决定。
+         * 粘人猫冷却更短。
          */
+
+        long cooldownMillis =
+                logicalCat.getPersonality()
+                        .getPetCooldownMillis();
+
+        if (cooldownMillis <= 0) {
+            cooldownMillis = DEFAULT_PET_COOLDOWN;
+        }
 
         long now =
                 System.currentTimeMillis();
@@ -203,17 +240,14 @@ public class CatInteractionListener implements Listener {
                 );
 
         if (last != null &&
-                now - last < COOLDOWN) {
+                now - last < cooldownMillis) {
 
             return;
         }
 
         /*
-         * ========================================================
-         * 记录冷却
-         * ========================================================
+         * 记录冷却。
          */
-
         cooldowns.put(
                 playerUUID,
                 now
@@ -225,10 +259,6 @@ public class CatInteractionListener implements Listener {
          * ========================================================
          *
          * 好感度上限为 100。
-         *
-         * 例如：
-         * 99 → 实际 +1
-         * 100 → 实际 +0
          */
 
         int oldAffection =
@@ -287,21 +317,73 @@ public class CatInteractionListener implements Listener {
                 );
 
         /*
-         * 获取更新后的抚摸次数。
+         * ========================================================
+         * 经验
+         * ========================================================
          *
-         * addCatPetCount() 已经处理了每日重置。
+         * 每次抚摸随机获得 5 ~ 30 经验。
+         * 统一走 CatManager.gainExperience()。
          */
-        int currentPetCount =
-                plugin.getDataManager()
-                        .getCatPetCount(
-                                playerUUID
-                        );
 
-        int remaining =
-                Math.max(
-                        0,
-                        MAX_DAILY_PETS
-                                - currentPetCount
+        int xpGain =
+                PET_XP_MIN
+                        + random.nextInt(
+                        PET_XP_MAX
+                                - PET_XP_MIN
+                                + 1
+                );
+
+        plugin.getCatManager()
+                .gainExperience(
+                        player,
+                        logicalCat,
+                        xpGain
+                );
+
+        /*
+         * ========================================================
+         * 喵力概率
+         * ========================================================
+         *
+         * 基础 18% + 性格偏移（百分点）。
+         */
+
+        int meowGain = 0;
+
+        int chance =
+                PET_MEOW_CHANCE_PERCENT
+                        + logicalCat.getPersonality()
+                        .getPetMeowChanceBonus();
+
+        if (chance > 0 &&
+                random.nextInt(100) < chance) {
+
+            meowGain = 1;
+
+            plugin.getCatManager()
+                    .grantMeowPower(
+                            player,
+                            logicalCat,
+                            1
+                    );
+        }
+
+        /*
+         * ========================================================
+         * 触发事件
+         * ========================================================
+         */
+
+        Bukkit.getPluginManager()
+                .callEvent(
+                        new CatPettedEvent(
+                                player,
+                                logicalCat,
+                                entityCat,
+                                actualAffectionGain,
+                                xpGain,
+                                meowGain
+                        )
                 );
 
         /*
@@ -316,6 +398,25 @@ public class CatInteractionListener implements Listener {
                         Sound.ENTITY_CAT_PURR,
                         1.0f,
                         1.0f
+                );
+
+        /*
+         * ========================================================
+         * 获取更新后的抚摸次数
+         * ========================================================
+         */
+
+        int currentPetCount =
+                plugin.getDataManager()
+                        .getCatPetCount(
+                                playerUUID
+                        );
+
+        int remaining =
+                Math.max(
+                        0,
+                        MAX_DAILY_PETS
+                                - currentPetCount
                 );
 
         /*
@@ -344,7 +445,7 @@ public class CatInteractionListener implements Listener {
 
         /*
          * 如果好感度已经满了，
-         * 不显示虚假的 +1。
+         * 不显示虚假的 +3。
          */
         if (actualAffectionGain > 0) {
 
