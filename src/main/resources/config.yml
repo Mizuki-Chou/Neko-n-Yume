@@ -11,3 +11,61 @@ storage:
   backup:
     enabled: true
     keep: 5
+
+# 物品自定义材质
+items:
+  meowdan:
+    custom-model-data:
+      common: 91001
+      uncommon: 91002
+      rare: 91003
+      epic: 91004
+      legendary: 91005
+
+# 成长
+growth:
+  pet-xp-min: 5
+  pet-xp-max: 30
+  level-curve-base: 100
+
+# 好感
+affection:
+  feed-base: 15
+  pet-base: 3
+
+# 喵力
+meow:
+  pet-chance: 18
+  feed-chance: 8
+  feed-chance-limit: 3
+  rank-curve-offset: 19
+
+# 饥饿
+hunger:
+  base-interval-seconds: 300
+
+# 每日限制
+daily:
+  pet-limit: 3
+
+# 食物
+food:
+  values:
+    COD: 8
+    SALMON: 10
+    COOKED_COD: 15
+    COOKED_SALMON: 18
+    CHICKEN: 10
+    COOKED_CHICKEN: 16
+    BEEF: 12
+    COOKED_BEEF: 20
+    PORKCHOP: 12
+    COOKED_PORKCHOP: 20
+    MUTTON: 12
+    COOKED_MUTTON: 18
+    RABBIT: 10
+    COOKED_RABBIT: 16
+    GOLDEN_CARROT: 30
+    APPLE: 12
+    BREAD: 12
+    CAKE: 25

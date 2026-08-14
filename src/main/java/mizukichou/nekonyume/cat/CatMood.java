@@ -13,6 +13,7 @@ public enum CatMood {
     ECSTATIC(
             "非常开心",
             "😺",
+            "§b✦",
             130,
             Integer.MAX_VALUE
     ),
@@ -20,6 +21,7 @@ public enum CatMood {
     HAPPY(
             "开心",
             "😸",
+            "§a♡",
             100,
             129
     ),
@@ -27,6 +29,7 @@ public enum CatMood {
     CALM(
             "平静",
             "😐",
+            "§7◌",
             70,
             99
     ),
@@ -34,6 +37,7 @@ public enum CatMood {
     LOW(
             "低落",
             "😿",
+            "§e☁",
             40,
             69
     ),
@@ -41,6 +45,7 @@ public enum CatMood {
     SAD(
             "难过",
             "😾",
+            "§8✕",
             Integer.MIN_VALUE,
             39
     );
@@ -52,19 +57,35 @@ public enum CatMood {
             2L * 60 * 60 * 1000;
 
     private final String displayName;
+
+    /*
+     * 命令面板使用的图标（emoji）。
+     */
     private final String icon;
+
+    /*
+     * 头顶 customName 使用的符号。
+     *
+     * 使用 Minecraft 默认字体可显示的
+     * 安全 Unicode 符号 + 传统颜色码，
+     * 避免 emoji 在头顶显示为方块。
+     */
+    private final String headIcon;
+
     private final int minScore;
     private final int maxScore;
 
     CatMood(
             String displayName,
             String icon,
+            String headIcon,
             int minScore,
             int maxScore
     ) {
 
         this.displayName = displayName;
         this.icon = icon;
+        this.headIcon = headIcon;
         this.minScore = minScore;
         this.maxScore = maxScore;
     }
@@ -75,6 +96,10 @@ public enum CatMood {
 
     public String getIcon() {
         return icon;
+    }
+
+    public String getHeadIcon() {
+        return headIcon;
     }
 
     public int getMinScore() {

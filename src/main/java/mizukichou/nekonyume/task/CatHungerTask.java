@@ -13,17 +13,16 @@ public class CatHungerTask implements Runnable {
      * 饥饿规则
      * ============================================================
      *
-     * 基础：每 5 分钟减少 1 点饱食度。
+     * 基础间隔来自 config: hunger.base-interval-seconds
+     * （默认 300 秒 = 5 分钟 -1 点）。
      *
      * 实际间隔由性格的饥饿速率倍率修正：
      *
-     * 贪吃  ×1.5 → 约 3 分 20 秒
-     * 悠闲  ×0.7 → 约 7 分 9 秒
-     * 独立  ×0.9 → 约 5 分 33 秒
-     * 其他  ×1.0 → 5 分钟
+     * 贪吃  ×1.5 → 更快
+     * 悠闲  ×0.7 → 更慢
+     * 独立  ×0.9 → 略慢
+     * 其他  ×1.0 → 基础值
      */
-    private static final long HUNGER_INTERVAL =
-            5 * 60 * 1000L;
 
     /*
      * 饱食度 <= 20：
@@ -124,15 +123,19 @@ public class CatHungerTask implements Runnable {
              * 性格饥饿速率修正
              * ====================================================
              */
+            long baseInterval =
+                    plugin.getPluginConfig()
+                            .getHungerIntervalMillis();
+
             long effectiveInterval =
                     (long) Math.round(
-                            HUNGER_INTERVAL
+                            baseInterval
                                     / cat.getPersonality()
                                     .getHungerRate()
                     );
 
             if (effectiveInterval <= 0) {
-                effectiveInterval = HUNGER_INTERVAL;
+                effectiveInterval = baseInterval;
             }
 
             /*

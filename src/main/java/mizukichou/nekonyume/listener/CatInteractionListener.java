@@ -24,38 +24,10 @@ import java.util.UUID;
 public class CatInteractionListener implements Listener {
 
     /*
-     * 每天最多抚摸 3 次。
-     */
-    private static final int MAX_DAILY_PETS =
-            3;
-
-    /*
      * 抚摸距离。
      */
     private static final double PET_DISTANCE =
             3.0;
-
-    /*
-     * 每次成功抚摸增加的好感度。
-     */
-    private static final int PET_AFFECTION_GAIN =
-            3;
-
-    /*
-     * 抚摸经验随机范围：
-     * [5, 30]
-     */
-    private static final int PET_XP_MIN =
-            5;
-
-    private static final int PET_XP_MAX =
-            30;
-
-    /*
-     * 抚摸基础喵力概率（百分点）。
-     */
-    private static final int PET_MEOW_CHANCE_PERCENT =
-            18;
 
     /*
      * 基础抚摸冷却（毫秒）。
@@ -193,7 +165,13 @@ public class CatInteractionListener implements Listener {
          * ========================================================
          * 每日抚摸次数
          * ========================================================
+         *
+         * 上限来自 config: daily.pet-limit。
          */
+
+        int dailyPetLimit =
+                plugin.getPluginConfig()
+                        .getDailyPetLimit();
 
         int petCount =
                 plugin.getDataManager()
@@ -201,12 +179,12 @@ public class CatInteractionListener implements Listener {
                                 playerUUID
                         );
 
-        if (petCount >= MAX_DAILY_PETS) {
+        if (petCount >= dailyPetLimit) {
 
             player.sendMessage(
                     mm.deserialize(
                             "<yellow>🐱 今天已经摸过猫咪 "
-                                    + MAX_DAILY_PETS
+                                    + dailyPetLimit
                                     + " 次啦！</yellow>"
                     )
             );
@@ -258,6 +236,7 @@ public class CatInteractionListener implements Listener {
          * 计算实际好感度变化
          * ========================================================
          *
+         * 基础好感来自 config: affection.pet-base。
          * 好感度上限为 100。
          */
 
@@ -268,7 +247,8 @@ public class CatInteractionListener implements Listener {
                 Math.min(
                         100,
                         oldAffection
-                                + PET_AFFECTION_GAIN
+                                + plugin.getPluginConfig()
+                                .getPetAffectionBase()
                 );
 
         int actualAffectionGain =
@@ -321,15 +301,24 @@ public class CatInteractionListener implements Listener {
          * 经验
          * ========================================================
          *
-         * 每次抚摸随机获得 5 ~ 30 经验。
+         * 每次抚摸随机获得经验。
+         * 区间来自 config: growth.pet-xp-min / pet-xp-max。
          * 统一走 CatManager.gainExperience()。
          */
 
+        int petXpMin =
+                plugin.getPluginConfig()
+                        .getPetXpMin();
+
+        int petXpMax =
+                plugin.getPluginConfig()
+                        .getPetXpMax();
+
         int xpGain =
-                PET_XP_MIN
+                petXpMin
                         + random.nextInt(
-                        PET_XP_MAX
-                                - PET_XP_MIN
+                        petXpMax
+                                - petXpMin
                                 + 1
                 );
 
@@ -345,13 +334,15 @@ public class CatInteractionListener implements Listener {
          * 喵力概率
          * ========================================================
          *
-         * 基础 18% + 性格偏移（百分点）。
+         * 基础概率 config: meow.pet-chance
+         * + 性格偏移（百分点）。
          */
 
         int meowGain = 0;
 
         int chance =
-                PET_MEOW_CHANCE_PERCENT
+                plugin.getPluginConfig()
+                        .getPetMeowChance()
                         + logicalCat.getPersonality()
                         .getPetMeowChanceBonus();
 
@@ -415,7 +406,7 @@ public class CatInteractionListener implements Listener {
         int remaining =
                 Math.max(
                         0,
-                        MAX_DAILY_PETS
+                        dailyPetLimit
                                 - currentPetCount
                 );
 
@@ -445,7 +436,7 @@ public class CatInteractionListener implements Listener {
 
         /*
          * 如果好感度已经满了，
-         * 不显示虚假的 +3。
+         * 不显示虚假的增加值。
          */
         if (actualAffectionGain > 0) {
 
@@ -475,7 +466,7 @@ public class CatInteractionListener implements Listener {
                         "<yellow>🐾 今日抚摸："
                                 + currentPetCount
                                 + "/"
-                                + MAX_DAILY_PETS
+                                + dailyPetLimit
                                 + " <gray>| 剩余 "
                                 + remaining
                                 + " 次</gray>"

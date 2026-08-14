@@ -106,7 +106,48 @@ public class CatFoodListener implements Listener {
 
         /*
          * ============================================================
-         * 5. 交给 CatFoodManager 判断和处理
+         * 5a. 喵丹优先判定
+         * ============================================================
+         *
+         * 喵丹不算普通食物，
+         * 走独立的使用逻辑。
+         *
+         * 伪造成食物模样的假喵丹
+         * 没有 PDC 标记，无法通过判定。
+         */
+
+        if (plugin.getCatFoodManager()
+                .isMeowDan(item)) {
+
+            /*
+             * 阻止原版右键默认行为。
+             */
+            event.setCancelled(true);
+
+            boolean used =
+                    plugin.getCatFoodManager()
+                            .feedMeowDan(
+                                    player,
+                                    item
+                            );
+
+            if (used) {
+
+                player.getWorld()
+                        .playSound(
+                                cat.getLocation(),
+                                Sound.ENTITY_CAT_EAT,
+                                1.0f,
+                                1.0f
+                        );
+            }
+
+            return;
+        }
+
+        /*
+         * ============================================================
+         * 5b. 交给 CatFoodManager 判断和处理
          * ============================================================
          *
          * 不再在 Listener 里自己操作 hunger / affection。

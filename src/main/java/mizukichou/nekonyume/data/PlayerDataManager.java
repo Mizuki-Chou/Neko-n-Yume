@@ -30,8 +30,10 @@ public class PlayerDataManager {
      *      + meow-power
      *      + meow-rank
      *      + feed-count / feed-date
+     * v3 = 行为模式：
+     *      + behavior-mode
      */
-    private static final int DATA_VERSION = 2;
+    private static final int DATA_VERSION = 3;
 
     /*
      * 猫咪默认值
@@ -323,6 +325,16 @@ public class PlayerDataManager {
                 migrateV1ToV2();
             }
 
+            /*
+             * v2 → v3：
+             *
+             * 为所有已有猫咪补齐行为模式。
+             */
+            if (version < 3) {
+
+                migrateV2ToV3();
+            }
+
             data.set(
                     "data-version",
                     DATA_VERSION
@@ -351,15 +363,6 @@ public class PlayerDataManager {
         }
     }
 
-    /*
-     * v1 → v2：
-     *
-     * - experience = 到达当前等级所需的累计经验
-     *   （等级绝不重置，老玩家从原地继续成长）
-     * - meow-power = 0
-     * - meow-rank  = 0
-     * - feed-count / feed-date 补齐
-     */
     /*
      * v1 → v2：
      *
@@ -465,10 +468,58 @@ public class PlayerDataManager {
         }
     }
 
+    /*
+     * v2 → v3：
+     *
+     * 为所有已有猫咪补齐 behavior-mode。
+     */
+    private void migrateV2ToV3() {
+
+        ConfigurationSection playersSection =
+                data.getConfigurationSection(
+                        PLAYERS_PATH
+                );
+
+        if (playersSection == null) {
+            return;
+        }
+
+        for (String key :
+                playersSection.getKeys(false)) {
+
+            UUID playerUUID =
+                    parseUUID(key);
+
+            if (playerUUID == null) {
+                continue;
+            }
+
+            String path =
+                    catPath(playerUUID);
+
+            if (!data.contains(path)) {
+                continue;
+            }
+
+            if (!data.contains(
+                    path + ".behavior-mode"
+            )) {
+
+                data.set(
+                        path + ".behavior-mode",
+                        "FOLLOW"
+                );
+            }
+        }
+    }
 
     /*
      * 到达指定等级所需的累计经验：
-     * cumXp(L) = 50 × L × (L - 1)
+     * cumXp(L) = (curveBase / 2) × L × (L - 1)
+     *
+     * 曲线基数来自 config: growth.level-curve-base。
+     * 迁移补经验时与运行时使用同一曲线，
+     * 保证老玩家数据一致。
      */
     private int cumulativeXpForLevel(
             int level
@@ -478,16 +529,29 @@ public class PlayerDataManager {
             return 0;
         }
 
+        int curveBase =
+                plugin.getConfig()
+                        .getInt(
+                                "growth.level-curve-base",
+                                100
+                        );
+
+        if (curveBase <= 0) {
+            curveBase = 100;
+        }
+
         long value =
-                50L
+                (long) curveBase
                         * level
-                        * (level - 1L);
+                        * (level - 1L)
+                        / 2;
 
         return (int) Math.min(
                 value,
                 Integer.MAX_VALUE
         );
     }
+
 
     /*
      * ============================================================
@@ -645,6 +709,14 @@ public class PlayerDataManager {
         data.set(
                 path + ".feed-date",
                 java.time.LocalDate.now().toString()
+        );
+
+        /*
+         * 行为模式
+         */
+        data.set(
+                path + ".behavior-mode",
+                "FOLLOW"
         );
 
         /*
@@ -1570,6 +1642,51 @@ public class PlayerDataManager {
 
             save();
         }
+    }
+
+    /*
+     * ============================================================
+     * 行为模式
+     * ============================================================
+     *
+     * 存储枚举名称字符串（FOLLOW / SIT / FREE）。
+     * 枚举解析由 CatBehaviorMode 负责。
+     */
+
+    public String getCatBehaviorMode(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
+
+        return data.getString(
+                catPath(playerUUID)
+                        + ".behavior-mode",
+                "FOLLOW"
+        );
+    }
+
+    public void setCatBehaviorMode(
+            UUID playerUUID,
+            String mode
+    ) {
+
+        if (playerUUID == null ||
+                mode == null ||
+                mode.isBlank()) {
+
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        data.set(
+                catPath(playerUUID)
+                        + ".behavior-mode",
+                mode
+        );
+
+        save();
     }
 
     /*

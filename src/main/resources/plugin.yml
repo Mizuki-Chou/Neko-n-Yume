@@ -8,9 +8,17 @@ load: POSTWORLD
 commands:
   nekoyume:
     description: Neko n' Yume main command
-    usage: /nekoyume <help|claim|cat|summon|reload>
+    usage: /nekoyume <help|claim|cat|rename|summon|mode>
     aliases:
       - ny
+
+  nekoyumeadmin:
+    description: Neko n' Yume admin commands
+    usage: /nekoyumeadmin <meowdan|reload>
+    aliases:
+      - nyadmin
+      - nya
+    permission: nekoyume.admin
 
 
 permissions:

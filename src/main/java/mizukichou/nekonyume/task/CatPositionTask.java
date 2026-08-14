@@ -180,6 +180,19 @@ public class CatPositionTask implements Runnable {
             logicalCat.setEntityUuid(
                     cat.getUniqueId()
             );
+
+            /*
+             * ====================================================
+             * 刷新头顶名称
+             * ====================================================
+             *
+             * 每 30 秒顺带刷新一次心情符号。
+             */
+            plugin.getCatManager()
+                    .refreshCustomName(
+                            cat,
+                            logicalCat
+                    );
         }
     }
 }

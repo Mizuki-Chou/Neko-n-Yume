@@ -268,6 +268,16 @@ public class CatManager {
                 );
 
         /*
+         * 行为模式
+         */
+        plugin.getDataManager()
+                .setCatBehaviorMode(
+                        ownerUUID,
+                        cat.getBehaviorMode()
+                                .name()
+                );
+
+        /*
          * 状态
          */
         plugin.getDataManager()
@@ -470,6 +480,8 @@ public class CatManager {
      * 3. 升级检测
      * 4. 升级反馈（消息 + 音效）
      * 5. 触发 CatLevelUpEvent
+     *
+     * 等级曲线由配置 growth.level-curve-base 决定。
      */
 
     public void gainExperience(
@@ -490,7 +502,9 @@ public class CatManager {
 
         int gained =
                 cat.addExperience(
-                        amount
+                        amount,
+                        plugin.getPluginConfig()
+                                .getLevelCurveBase()
                 );
 
         /*
@@ -560,7 +574,7 @@ public class CatManager {
      *
      * 统一入口：
      * 所有喵力来源都应该通过这里
-     * （抚摸 / 喂食概率 / 未来喵丹）。
+     * （抚摸 / 喂食概率 / 喵丹）。
      *
      * 负责：
      * 1. 修改运行时 Cat
@@ -568,6 +582,8 @@ public class CatManager {
      * 3. 升阶检测
      * 4. 升阶反馈（消息 + 音效 + 粒子）
      * 5. 触发 CatMeowRankUpEvent
+     *
+     * 喵阶曲线由配置 meow.rank-curve-offset 决定。
      */
 
     public void grantMeowPower(
@@ -588,7 +604,9 @@ public class CatManager {
 
         int gained =
                 cat.addMeowPower(
-                        amount
+                        amount,
+                        plugin.getPluginConfig()
+                                .getMeowRankCurveOffset()
                 );
 
         /*
@@ -900,6 +918,18 @@ public class CatManager {
                         .getCatMeowRank(
                                 ownerUUID
                         )
+        );
+
+        /*
+         * 行为模式。
+         */
+        logicalCat.setBehaviorMode(
+                CatBehaviorMode.fromName(
+                        plugin.getDataManager()
+                                .getCatBehaviorMode(
+                                        ownerUUID
+                                )
+                )
         );
 
         /*
@@ -1812,6 +1842,18 @@ public class CatManager {
                         .getCatMeowRank(
                                 ownerUUID
                         )
+        );
+
+        /*
+         * 行为模式。
+         */
+        logicalCat.setBehaviorMode(
+                CatBehaviorMode.fromName(
+                        plugin.getDataManager()
+                                .getCatBehaviorMode(
+                                        ownerUUID
+                                )
+                )
         );
 
         logicalCat.setEntityUuid(
@@ -3104,11 +3146,136 @@ public class CatManager {
             return;
         }
 
-        cat.setCustomName(
-                "§d🐱 " + safeName
+        /*
+         * 刷新头顶名称（含心情符号）。
+         */
+        refreshCustomName(
+                cat,
+                logicalCat
+        );
+    }
+
+
+    /*
+     * ============================================================
+     * 切换行为模式
+     * ============================================================
+     *
+     * 更新运行时 + 持久化 + 立即应用到实体。
+     */
+
+    public void setCatBehaviorMode(
+            Player player,
+            CatBehaviorMode mode
+    ) {
+
+        if (player == null ||
+                mode == null) {
+
+            return;
+        }
+
+        UUID playerUUID =
+                player.getUniqueId();
+
+        mizukichou.nekonyume.cat.Cat logicalCat =
+                loadCat(
+                        player
+                );
+
+        if (logicalCat == null) {
+            return;
+        }
+
+        logicalCat.setBehaviorMode(
+                mode
         );
 
-        cat.setCustomNameVisible(
+        plugin.getDataManager()
+                .setCatBehaviorMode(
+                        playerUUID,
+                        mode.name()
+                );
+
+        /*
+         * 立即应用到实体。
+         */
+        UUID entityUuid =
+                logicalCat.getEntityUuid();
+
+        if (entityUuid == null) {
+            return;
+        }
+
+        Entity entity =
+                Bukkit.getEntity(
+                        entityUuid
+                );
+
+        if (!(entity instanceof Cat cat) ||
+                cat.isDead() ||
+                !cat.isValid()) {
+
+            return;
+        }
+
+        if (mode == CatBehaviorMode.SIT) {
+
+            cat.setSitting(
+                    true
+            );
+
+        } else {
+
+            cat.setSitting(
+                    false
+            );
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * 刷新头顶名称
+     * ============================================================
+     *
+     * 格式：
+     *
+     * §d🐱 <名字> <心情符号>
+     *
+     * 心情符号使用 Minecraft 默认字体
+     * 可显示的安全 Unicode 符号，
+     * 避免 emoji 在头顶显示为方块。
+     */
+
+    public void refreshCustomName(
+            Cat entity,
+            mizukichou.nekonyume.cat.Cat logicalCat
+    ) {
+
+        if (entity == null ||
+                !entity.isValid() ||
+                logicalCat == null) {
+
+            return;
+        }
+
+        String safeName =
+                logicalCat.getName()
+                        .replace(
+                                "§",
+                                ""
+                        );
+
+        entity.setCustomName(
+                "§d🐱 "
+                        + safeName
+                        + " "
+                        + logicalCat.getMood()
+                        .getHeadIcon()
+        );
+
+        entity.setCustomNameVisible(
                 true
         );
     }

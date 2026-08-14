@@ -16,13 +16,18 @@ Sora 2026-今 - 不懂事的猫咪，只能笼养呜呜
 
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.CatManager;
+import mizukichou.nekonyume.command.NekoYumeAdminCommand;
 import mizukichou.nekonyume.command.NekoYumeCommand;
+import mizukichou.nekonyume.config.PluginConfig;
 import mizukichou.nekonyume.data.PlayerDataManager;
+import mizukichou.nekonyume.gui.CatGuiManager;
 import mizukichou.nekonyume.listener.CatEntityListener;
 import mizukichou.nekonyume.listener.CatFoodListener;
+import mizukichou.nekonyume.listener.CatGuiListener;
 import mizukichou.nekonyume.listener.CatInteractionListener;
 import mizukichou.nekonyume.listener.PlayerJoinListener;
 import mizukichou.nekonyume.listener.PlayerQuitListener;
+import mizukichou.nekonyume.task.CatBehaviorTask;
 import mizukichou.nekonyume.task.CatHungerTask;
 import mizukichou.nekonyume.task.CatPositionTask;
 import org.bukkit.command.PluginCommand;
@@ -31,16 +36,23 @@ import org.bukkit.scheduler.BukkitTask;
 
 public final class NekoNYume extends JavaPlugin {
 
+    private PluginConfig pluginConfig;
     private PlayerDataManager dataManager;
     private CatManager catManager;
     private CatFoodManager catFoodManager;
+    private CatGuiManager catGuiManager;
 
     /*
      * 定时任务引用。
      */
     private BukkitTask hungerTask;
     private BukkitTask positionTask;
+    private BukkitTask behaviorTask;
     private BukkitTask autosaveTask;
+
+    public PluginConfig getPluginConfig() {
+        return pluginConfig;
+    }
 
     public PlayerDataManager getDataManager() {
         return dataManager;
@@ -54,10 +66,50 @@ public final class NekoNYume extends JavaPlugin {
         return catFoodManager;
     }
 
+    public CatGuiManager getCatGuiManager() {
+        return catGuiManager;
+    }
+
+    /*
+     * ============================================================
+     * 重载配置与相关系统
+     * ============================================================
+     *
+     * /nekoyumeadmin reload 调用。
+     */
+
+    public void reloadSettings() {
+
+        reloadConfig();
+
+        if (pluginConfig != null) {
+
+            pluginConfig.reload();
+        }
+
+        if (catFoodManager != null) {
+
+            catFoodManager.reloadFoods();
+        }
+    }
+
     @Override
     public void onEnable() {
 
         saveDefaultConfig();
+
+        /*
+         * ========================================================
+         * 数值配置
+         * ========================================================
+         *
+         * 必须先于数据系统与食物系统创建。
+         */
+
+        pluginConfig =
+                new PluginConfig(
+                        this
+                );
 
         /*
          * ========================================================
@@ -94,6 +146,17 @@ public final class NekoNYume extends JavaPlugin {
 
         /*
          * ========================================================
+         * 猫咪面板
+         * ========================================================
+         */
+
+        catGuiManager =
+                new CatGuiManager(
+                        this
+                );
+
+        /*
+         * ========================================================
          * /nekoyume
          * ========================================================
          */
@@ -120,6 +183,38 @@ public final class NekoNYume extends JavaPlugin {
 
         command.setExecutor(
                 new NekoYumeCommand(
+                        this
+                )
+        );
+
+        /*
+         * ========================================================
+         * /nekoyumeadmin（管理员命令）
+         * ========================================================
+         */
+
+        PluginCommand adminCommand =
+                getCommand(
+                        "nekoyumeadmin"
+                );
+
+        if (adminCommand == null) {
+
+            getLogger().severe(
+                    "Command 'nekoyumeadmin' is not defined in plugin.yml!"
+            );
+
+            getServer()
+                    .getPluginManager()
+                    .disablePlugin(
+                            this
+                    );
+
+            return;
+        }
+
+        adminCommand.setExecutor(
+                new NekoYumeAdminCommand(
                         this
                 )
         );
@@ -191,6 +286,19 @@ public final class NekoNYume extends JavaPlugin {
 
         /*
          * ========================================================
+         * 猫咪面板交互
+         * ========================================================
+         */
+
+        getServer()
+                .getPluginManager()
+                .registerEvents(
+                        new CatGuiListener(this),
+                        this
+                );
+
+        /*
+         * ========================================================
          * 猫咪饥饿任务
          * ========================================================
          *
@@ -223,6 +331,24 @@ public final class NekoNYume extends JavaPlugin {
                                 new CatPositionTask(this),
                                 20L * 30L,
                                 20L * 30L
+                        );
+
+        /*
+         * ========================================================
+         * 猫咪行为
+         * ========================================================
+         *
+         * 每秒一次：跟随 / 坐下 / 自由。
+         */
+
+        behaviorTask =
+                getServer()
+                        .getScheduler()
+                        .runTaskTimer(
+                                this,
+                                new CatBehaviorTask(this),
+                                20L,
+                                20L
                         );
 
         /*
@@ -287,6 +413,10 @@ public final class NekoNYume extends JavaPlugin {
 
         if (positionTask != null) {
             positionTask.cancel();
+        }
+
+        if (behaviorTask != null) {
+            behaviorTask.cancel();
         }
 
         if (autosaveTask != null) {

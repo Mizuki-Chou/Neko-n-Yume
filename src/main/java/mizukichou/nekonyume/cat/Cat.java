@@ -92,11 +92,28 @@ public class Cat {
      *
      * 升到第 N 阶的累计喵力：
      * N × (N + 19) / 2
+     *
+     * 曲线参数 19 可通过配置
+     * meow.rank-curve-offset 调整。
      */
 
     private int meowPower;
 
     private int meowRank;
+
+    /*
+     * ============================================================
+     * 行为模式
+     * ============================================================
+     *
+     * FOLLOW = 跟随
+     * SIT    = 坐下
+     * FREE   = 自由
+     *
+     * 持久化到 players.yml 的 behavior-mode。
+     */
+    private CatBehaviorMode behaviorMode =
+            CatBehaviorMode.FOLLOW;
 
 
     /*
@@ -509,16 +526,21 @@ public class Cat {
      * 累计经验 → 等级。
      *
      * 升到 L 级需要的累计经验：
-     * cumXp(L) = 50 × L × (L - 1)
+     * cumXp(L) = (curveBase / 2) × L × (L - 1)
      *
-     * 例如：
+     * 例如 curveBase = 100：
      * cumXp(1) = 0
      * cumXp(2) = 100
      * cumXp(3) = 300
      */
     private static int levelFromExperience(
-            int totalExperience
+            int totalExperience,
+            int curveBase
     ) {
+
+        if (curveBase <= 0) {
+            curveBase = 100;
+        }
 
         int level = 1;
 
@@ -531,9 +553,10 @@ public class Cat {
                 safety < 10000) {
 
             long nextLevelRequired =
-                    50L
+                    (long) curveBase
                             * (level + 1L)
-                            * level;
+                            * level
+                            / 2;
 
             if (totalExperience < nextLevelRequired) {
                 break;
@@ -547,7 +570,7 @@ public class Cat {
     }
 
     /**
-     * 增加经验。
+     * 增加经验（默认曲线 100）。
      *
      * <p>
      * 返回升了几级（0 表示未升级）。
@@ -555,6 +578,24 @@ public class Cat {
      */
     public int addExperience(
             int amount
+    ) {
+
+        return addExperience(
+                amount,
+                100
+        );
+    }
+
+    /**
+     * 增加经验（自定义曲线）。
+     *
+     * <p>
+     * 返回升了几级（0 表示未升级）。
+     * </p>
+     */
+    public int addExperience(
+            int amount,
+            int curveBase
     ) {
 
         if (amount <= 0) {
@@ -565,7 +606,8 @@ public class Cat {
 
         int newLevel =
                 levelFromExperience(
-                        this.experience
+                        this.experience,
+                        curveBase
                 );
 
         int gained =
@@ -621,15 +663,21 @@ public class Cat {
      * 累计喵力 → 喵阶。
      *
      * 升到第 N 阶需要的累计喵力：
-     * cumMeow(N) = N × (N + 19) / 2
+     * cumMeow(N) = N × (N + curveOffset) / 2
      *
+     * curveOffset = 19：
      * 0 → 1 : 10
      * 1 → 2 : 21
      * 2 → 3 : 33
      */
     private static int meowRankFromPower(
-            int totalMeowPower
+            int totalMeowPower,
+            int curveOffset
     ) {
+
+        if (curveOffset <= 0) {
+            curveOffset = 19;
+        }
 
         int rank = 0;
 
@@ -640,7 +688,7 @@ public class Cat {
 
             long nextRankRequired =
                     (long) (rank + 1)
-                            * (rank + 1 + 19)
+                            * (rank + 1 + curveOffset)
                             / 2;
 
             if (totalMeowPower < nextRankRequired) {
@@ -655,7 +703,7 @@ public class Cat {
     }
 
     /**
-     * 增加喵力。
+     * 增加喵力（默认曲线参数 19）。
      *
      * <p>
      * 返回升了几阶（0 表示未升阶）。
@@ -663,6 +711,24 @@ public class Cat {
      */
     public int addMeowPower(
             int amount
+    ) {
+
+        return addMeowPower(
+                amount,
+                19
+        );
+    }
+
+    /**
+     * 增加喵力（自定义曲线参数）。
+     *
+     * <p>
+     * 返回升了几阶（0 表示未升阶）。
+     * </p>
+     */
+    public int addMeowPower(
+            int amount,
+            int curveOffset
     ) {
 
         if (amount <= 0) {
@@ -673,7 +739,8 @@ public class Cat {
 
         int newRank =
                 meowRankFromPower(
-                        this.meowPower
+                        this.meowPower,
+                        curveOffset
                 );
 
         int gained =
@@ -686,6 +753,27 @@ public class Cat {
         }
 
         return gained;
+    }
+
+
+    /*
+     * ============================================================
+     * 行为模式
+     * ============================================================
+     */
+
+    public CatBehaviorMode getBehaviorMode() {
+        return behaviorMode;
+    }
+
+    public void setBehaviorMode(
+            CatBehaviorMode behaviorMode
+    ) {
+
+        this.behaviorMode =
+                behaviorMode == null
+                        ? CatBehaviorMode.FOLLOW
+                        : behaviorMode;
     }
 
 
@@ -1090,6 +1178,7 @@ public class Cat {
                 ", experience=" + experience +
                 ", meowPower=" + meowPower +
                 ", meowRank=" + meowRank +
+                ", behaviorMode=" + behaviorMode +
                 ", hunger=" + hunger +
                 ", affection=" + affection +
                 ", health=" + health +

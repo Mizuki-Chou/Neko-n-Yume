@@ -2,6 +2,7 @@ package mizukichou.nekonyume.command;
 
 import mizukichou.nekonyume.NekoNYume;
 import mizukichou.nekonyume.cat.Cat;
+import mizukichou.nekonyume.cat.CatBehaviorMode;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.command.Command;
@@ -29,34 +30,6 @@ public class NekoYumeCommand implements CommandExecutor {
     ) {
 
         /*
-         * /nekoyume reload
-         */
-        if (args.length > 0 &&
-                args[0].equalsIgnoreCase("reload")) {
-
-            if (!sender.hasPermission("nekoyume.admin")) {
-
-                sender.sendMessage(
-                        mm.deserialize(
-                                "<red>❌ 你没有权限执行此命令!</red>"
-                        )
-                );
-
-                return true;
-            }
-
-            plugin.reloadConfig();
-
-            sender.sendMessage(
-                    mm.deserialize(
-                            "<gradient:#a7f3d0:#60a5fa>✔ Neko n' Yume 配置重载成功!</gradient>"
-                    )
-            );
-
-            return true;
-        }
-
-        /*
          * /nekoyume help
          */
         if (args.length > 0 &&
@@ -73,7 +46,8 @@ public class NekoYumeCommand implements CommandExecutor {
                             <gray>/nekoyume cat</gray> - View your cat
                             <gray>/nekoyume rename &lt;名字&gt;</gray> - Rename your cat
                             <gray>/nekoyume summon</gray> - Summon your cat
-                            <gray>/nekoyume reload</gray> - Reload config
+                            <gray>/nekoyume mode &lt;follow|sit|free&gt;</gray> - Set cat behavior
+                            <gray>/nekoyume gui</gray> - Open cat panel
                             <gray>/nekoyume help</gray> - Show help
                             """
                     )
@@ -331,6 +305,147 @@ public class NekoYumeCommand implements CommandExecutor {
                     )
             );
 
+            player.sendMessage(
+                    mm.deserialize(
+                            "<white>行为: <aqua>"
+                                    + cat.getBehaviorMode()
+                                    .getDisplayName()
+                                    + "</aqua>"
+                    )
+            );
+
+            return true;
+        }
+
+        /*
+         * /nekoyume mode <follow|sit|free>
+         */
+        if (args.length > 0 &&
+                args[0].equalsIgnoreCase("mode")) {
+
+            if (!(sender instanceof Player player)) {
+
+                sender.sendMessage(
+                        "Only players can use this command."
+                );
+
+                return true;
+            }
+
+            if (!plugin.getDataManager()
+                    .hasCat(
+                            player.getUniqueId()
+                    )) {
+
+                player.sendMessage(
+                        mm.deserialize(
+                                "<red>🐱 你还没有猫!</red>"
+                        )
+                );
+
+                return true;
+            }
+
+            if (args.length < 2) {
+
+                player.sendMessage(
+                        mm.deserialize(
+                                "<yellow>用法: /nekoyume mode <follow|sit|free></yellow>"
+                        )
+                );
+
+                return true;
+            }
+
+            /*
+             * 解析模式。
+             * 无效输入不静默回退，
+             * 而是给出明确错误。
+             * （args[1] 是玩家输入，
+             *   用 Component.text 拼接防注入）
+             */
+            CatBehaviorMode mode;
+
+            switch (args[1].toLowerCase()) {
+
+                case "follow" ->
+                        mode = CatBehaviorMode.FOLLOW;
+
+                case "sit" ->
+                        mode = CatBehaviorMode.SIT;
+
+                case "free" ->
+                        mode = CatBehaviorMode.FREE;
+
+                default -> {
+
+                    player.sendMessage(
+                            mm.deserialize(
+                                    "<red>❌ 未知模式: </red>"
+                            ).append(
+                                    Component.text(
+                                            args[1]
+                                    )
+                            )
+                    );
+
+                    return true;
+                }
+            }
+
+            plugin.getCatManager()
+                    .setCatBehaviorMode(
+                            player,
+                            mode
+                    );
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<gradient:#ff9de2:#a78bfa>🐱 行为模式已切换为 </gradient>"
+                    ).append(
+                            Component.text(
+                                    mode.getDisplayName()
+                            )
+                    )
+            );
+
+            return true;
+        }
+
+        /*
+         * /nekoyume gui
+         */
+        if (args.length > 0 &&
+                args[0].equalsIgnoreCase("gui")) {
+
+            if (!(sender instanceof Player player)) {
+
+                sender.sendMessage(
+                        "Only players can use this command."
+                );
+
+                return true;
+            }
+
+            if (!plugin.getDataManager()
+                    .hasCat(
+                            player.getUniqueId()
+                    )) {
+
+                player.sendMessage(
+                        mm.deserialize(
+                                "<red>🐱 你还没有猫咪!</red>"
+                        )
+                );
+
+                return true;
+            }
+
+            plugin.getCatGuiManager()
+                    .open(
+                            player
+                    );
+
             return true;
         }
 
@@ -534,7 +649,7 @@ public class NekoYumeCommand implements CommandExecutor {
          */
         sender.sendMessage(
                 mm.deserialize(
-                        "<yellow>用法: /nekoyume <help|claim|cat|rename|summon|reload></yellow>"
+                        "<yellow>用法: /nekoyume <help|claim|cat|rename|summon|mode|gui></yellow>"
                 )
         );
 
