@@ -968,14 +968,64 @@ public class CatBattleTask implements Runnable {
             Location to
     ) {
 
+        if (from == null ||
+                to == null) {
+
+            return;
+        }
+
+        World world =
+                from.getWorld();
+
+        /*
+         * 防御性守卫：
+         * Location.distance() 对跨世界/空世界同样抛异常。
+         */
+        if (world == null ||
+                to.getWorld() == null ||
+                !world.equals(
+                        to.getWorld()
+                )) {
+
+            return;
+        }
+
         double distance =
                 from.distance(
                         to
                 );
 
+        /*
+         * 边界条件治理：
+         * 猫与目标完全重合时 distance == 0，
+         * 会导致 steps == 0 且 t = 0 / 0.0 = NaN，
+         * NaN 坐标会击穿 spawnParticle 的坐标校验。
+         * 此时只生成一颗粒子即可。
+         */
+        if (distance <= 0.0) {
+
+            world.spawnParticle(
+                    Particle.END_ROD,
+                    from,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0
+            );
+
+            return;
+        }
+
+        /*
+         * steps 下限 1：t 永远不会除以 0。
+         */
         int steps =
-                (int) Math.ceil(
-                        distance * 4
+                Math.max(
+                        1,
+                        (int) Math.ceil(
+                                distance * 4
+                        )
                 );
 
         for (int i = 0;
@@ -995,16 +1045,15 @@ public class CatBattleTask implements Runnable {
                                             .multiply(t)
                             );
 
-            from.getWorld()
-                    .spawnParticle(
-                            Particle.END_ROD,
-                            point,
-                            1,
-                            0,
-                            0,
-                            0,
-                            0
-                    );
+            world.spawnParticle(
+                    Particle.END_ROD,
+                    point,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0
+            );
         }
     }
 }
