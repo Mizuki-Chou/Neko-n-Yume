@@ -11,14 +11,22 @@ import mizukichou.nekonyume.skill.SkillGuiManager;
 import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Arrays;
+import java.util.List;
 
-public class NekoYumeCommand implements CommandExecutor {
+public class NekoYumeCommand
+        implements CommandExecutor, TabCompleter {
 
     private final CatStore store;
     private final CatCache cache;
@@ -26,6 +34,7 @@ public class NekoYumeCommand implements CommandExecutor {
     private final CatEntityService entityService;
     private final CatGuiManager guiManager;
     private final SkillGuiManager skillGuiManager;
+    private final NamespacedKey toolKey;
 
     private final MiniMessage mm = MiniMessage.miniMessage();
 
@@ -35,7 +44,8 @@ public class NekoYumeCommand implements CommandExecutor {
             PluginConfig config,
             CatEntityService entityService,
             CatGuiManager guiManager,
-            SkillGuiManager skillGuiManager
+            SkillGuiManager skillGuiManager,
+            NamespacedKey toolKey
     ) {
 
         this.store = store;
@@ -44,6 +54,7 @@ public class NekoYumeCommand implements CommandExecutor {
         this.entityService = entityService;
         this.guiManager = guiManager;
         this.skillGuiManager = skillGuiManager;
+        this.toolKey = toolKey;
     }
 
     @Override
@@ -74,6 +85,7 @@ public class NekoYumeCommand implements CommandExecutor {
                             <gray>/nekoyume mode &lt;follow|sit|free&gt;</gray> - Set cat behavior
                             <gray>/nekoyume gui</gray> - Open cat panel
                             <gray>/nekoyume skill</gray> - Open skill panel
+                            <gray>/nekoyume tool</gray> - Get quick-access cat wand
                             <gray>/nekoyume help</gray> - Show help
                             """
                     )
@@ -524,6 +536,101 @@ public class NekoYumeCommand implements CommandExecutor {
         }
 
         /*
+         * /nekoyume tool
+         *
+         * 领取快捷工具（逗猫棒）：
+         * 右键打开猫咪面板。
+         */
+        if (args.length > 0 &&
+                args[0].equalsIgnoreCase("tool")) {
+
+            if (!(sender instanceof Player player)) {
+
+                sender.sendMessage(
+                        "Only players can use this command."
+                );
+
+                return true;
+            }
+
+            if (!store.hasCat(
+                    player.getUniqueId()
+            )) {
+
+                player.sendMessage(
+                        mm.deserialize(
+                                "<red>🐱 你还没有猫咪!</red>"
+                        )
+                );
+
+                return true;
+            }
+
+            ItemStack tool =
+                    new ItemStack(
+                            Material.STICK,
+                            1
+                    );
+
+            ItemMeta meta =
+                    tool.getItemMeta();
+
+            if (meta != null) {
+
+                meta.setDisplayName(
+                        "§d🐱 逗猫棒"
+                );
+
+                meta.setLore(
+                        List.of(
+                                "§7右键打开猫咪面板"
+                        )
+                );
+
+                meta.getPersistentDataContainer()
+                        .set(
+                                toolKey,
+                                PersistentDataType.BYTE,
+                                (byte) 1
+                        );
+
+                tool.setItemMeta(
+                        meta
+                );
+            }
+
+            if (player.getInventory()
+                    .addItem(tool)
+                    .isEmpty()) {
+
+                player.sendMessage(
+                        mm.deserialize(
+                                "<gradient:#ff9de2:#a78bfa>🐱 你获得了一根逗猫棒，右键使用!</gradient>"
+                        )
+                );
+
+            } else {
+
+                /*
+                 * 背包满：直接掉在脚边。
+                 */
+                player.getWorld()
+                        .dropItemNaturally(
+                                player.getLocation(),
+                                tool
+                        );
+
+                player.sendMessage(
+                        mm.deserialize(
+                                "<yellow>🐱 背包已满，逗猫棒掉在了你的脚边。</yellow>"
+                        )
+                );
+            }
+
+            return true;
+        }
+
+        /*
          * /nekoyume rename <名字>
          */
         if (args.length > 0 &&
@@ -717,10 +824,72 @@ public class NekoYumeCommand implements CommandExecutor {
          */
         sender.sendMessage(
                 mm.deserialize(
-                        "<yellow>用法: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill></yellow>"
+                        "<yellow>用法: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool></yellow>"
                 )
         );
 
         return true;
+    }
+
+    /*
+     * ============================================================
+     * Tab 补全（Issue #7）
+     * ============================================================
+     */
+
+    @Override
+    public List<String> onTabComplete(
+            CommandSender sender,
+            Command command,
+            String alias,
+            String[] args
+    ) {
+
+        if (args.length == 1) {
+
+            return filter(
+                    args[0],
+                    "help",
+                    "claim",
+                    "cat",
+                    "rename",
+                    "summon",
+                    "mode",
+                    "gui",
+                    "skill",
+                    "tool"
+            );
+        }
+
+        if (args.length == 2 &&
+                args[0].equalsIgnoreCase("mode")) {
+
+            return filter(
+                    args[1],
+                    "follow",
+                    "sit",
+                    "free"
+            );
+        }
+
+        return List.of();
+    }
+
+    private List<String> filter(
+            String prefix,
+            String... values
+    ) {
+
+        String lower =
+                prefix == null
+                        ? ""
+                        : prefix.toLowerCase();
+
+        return Arrays.stream(values)
+                .filter(value ->
+                        value.toLowerCase()
+                                .startsWith(lower)
+                )
+                .toList();
     }
 }

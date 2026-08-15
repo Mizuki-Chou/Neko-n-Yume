@@ -3,19 +3,26 @@ package mizukichou.nekonyume.task;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
 import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.config.PluginConfig;
 import mizukichou.nekonyume.skill.CatBattleState;
+import mizukichou.nekonyume.util.SafeTeleport;
+import mizukichou.nekonyume.util.TargetGuard;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 import java.util.Random;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 /**
  * 猫咪战斗任务。
@@ -25,6 +32,23 @@ import java.util.UUID;
  * 跟随模式下自动攻击主人附近的敌对生物。
  * 近战为主；拥有「灵弹」技能时改为远程魔法弹。
  * </p>
+ *
+ * <p>
+ * 受伤恢复期：
+ * - 恢复期内禁止攻击（含扑击/灵弹）；
+ * - AI 冻结 + 隐身（"幽灵化"，怪物视猫为不存在）；
+ * - 周期性清空怪物的目标锁定并清零监守者愤怒；
+ * - 每 tick 刷新头顶倒计时悬浮字；
+ * - 倒计时结束恢复 AI 与可见性并满血复活；
+ * - 恢复期外，血量不满时每 4 秒缓慢回复 1 点。
+ * </p>
+ *
+ * <p>
+ * 目标规则：
+ * - 自动索敌：只打敌对生物（Monster）；
+ * - 主人出手：任意活物都可成为协同目标（除玩家与本插件猫）；
+ * - 主人被打：仅敌对生物触发反击。
+ * </p>
  */
 public class CatBattleTask implements Runnable {
 
@@ -32,6 +56,22 @@ public class CatBattleTask implements Runnable {
      * 近战范围（格）。
      */
     private static final double MELEE_RANGE = 2.5;
+
+    /*
+     * 单次扑击最大距离（格）。
+     */
+    private static final double MAX_POUNCE_DISTANCE = 6.0;
+
+    /*
+     * 扑击最小间隔（毫秒）。
+     */
+    private static final long POUNCE_INTERVAL_MS =
+            1000L;
+
+    /*
+     * 协助目标的判定半径 = 仇恨半径 × 倍率。
+     */
+    private static final double ASSIST_RADIUS_MULTIPLIER = 1.5;
 
     /*
      * 远程（灵弹）射程（格）。
@@ -44,9 +84,22 @@ public class CatBattleTask implements Runnable {
     private static final long RANGED_ATTACK_INTERVAL_MS =
             3000L;
 
+    /*
+     * 恢复期内清理怪物目标的半径（格）。
+     */
+    private static final double TARGET_CLEAR_RADIUS = 24.0;
+
+    /*
+     * 恢复期隐身效果的续期时长（tick）。
+     * 每 10 tick 续一次，保证持续隐身。
+     */
+    private static final int INVISIBILITY_REFRESH_TICKS = 40;
+
+    private final Logger logger;
     private final PluginConfig config;
     private final CatCache cache;
     private final CatBattleState battleState;
+    private final CatEntityService entityService;
 
     /*
      * 任务内统一随机源（不用 Math.random）。
@@ -55,14 +108,18 @@ public class CatBattleTask implements Runnable {
             new Random();
 
     public CatBattleTask(
+            Logger logger,
             PluginConfig config,
             CatCache cache,
-            CatBattleState battleState
+            CatBattleState battleState,
+            CatEntityService entityService
     ) {
 
+        this.logger = logger;
         this.config = config;
         this.cache = cache;
         this.battleState = battleState;
+        this.entityService = entityService;
     }
 
     @Override
@@ -76,224 +133,598 @@ public class CatBattleTask implements Runnable {
                 cache.getCats()) {
 
             /*
-             * 只在跟随模式战斗。
+             * 单猫异常隔离：
+             * 一只猫的数据/实体出现任何意外，
+             * 都只跳过这一只，绝不瘫痪整个任务。
              */
-            if (logicalCat.getBehaviorMode()
-                    != CatBehaviorMode.FOLLOW) {
+            try {
 
-                continue;
-            }
-
-            Player owner =
-                    Bukkit.getPlayer(
-                            logicalCat.getOwnerUuid()
-                    );
-
-            if (owner == null ||
-                    !owner.isOnline()) {
-
-                continue;
-            }
-
-            UUID entityUuid =
-                    logicalCat.getEntityUuid();
-
-            if (entityUuid == null) {
-                continue;
-            }
-
-            Entity entity =
-                    Bukkit.getEntity(
-                            entityUuid
-                    );
-
-            if (!(entity instanceof org.bukkit.entity.Cat cat) ||
-                    cat.isDead() ||
-                    !cat.isValid()) {
-
-                continue;
-            }
-
-            World world =
-                    cat.getLocation()
-                            .getWorld();
-
-            if (world == null ||
-                    !world.equals(
-                            owner.getWorld()
-                    )) {
-
-                continue;
-            }
-
-            /*
-             * 主人距离限制：
-             * 猫离主人太远不战斗，
-             * 避免在野外乱引怪。
-             */
-            int aggroRadius =
-                    config.getBattleAggroRadius();
-
-            if (cat.getLocation()
-                    .distanceSquared(
-                            owner.getLocation()
-                    )
-                    > (double) aggroRadius
-                    * aggroRadius) {
-
-                continue;
-            }
-
-            /*
-             * 虚弱期不攻击。
-             */
-            long weaknessMs =
-                    (logicalCat.hasSkill(
-                            CatSkill.NINE_LIVES
-                    )
-                            ? 3L
-                            : config.getBattleWeaknessSeconds())
-                            * 1000L;
-
-            if (battleState.isWeakened(
-                    entityUuid,
-                    weaknessMs
-            )) {
-
-                continue;
-            }
-
-            /*
-             * 找最近敌对目标。
-             */
-            Monster target =
-                    findNearestMonster(
-                            cat.getLocation(),
-                            aggroRadius
-                    );
-
-            if (target == null) {
-                continue;
-            }
-
-            /*
-             * 远程（灵弹）。
-             */
-            if (logicalCat.hasSkill(
-                    CatSkill.SPIRIT_SHOT
-            )) {
-
-                handleRangedAttack(
-                        logicalCat,
-                        cat,
-                        owner,
-                        target,
-                        entityUuid
+                processCat(
+                        logicalCat
                 );
 
-                continue;
-            }
+            } catch (Exception exception) {
 
-            /*
-             * 近战。
-             */
-            if (cat.getLocation()
-                    .distanceSquared(
-                            target.getLocation()
-                    )
-                    > MELEE_RANGE * MELEE_RANGE) {
-
-                continue;
-            }
-
-            long intervalTicks =
-                    config.getBattleAttackIntervalTicks();
-
-            /*
-             * 灵步：攻击间隔 -20%。
-             */
-            if (logicalCat.hasSkill(
-                    CatSkill.LIGHT_STEP
-            )) {
-
-                intervalTicks =
-                        (long) (intervalTicks * 0.8);
-            }
-
-            long intervalMs =
-                    intervalTicks * 50L;
-
-            if (!battleState.canAttack(
-                    entityUuid,
-                    intervalMs
-            )) {
-
-                continue;
-            }
-
-            battleState.markAttack(
-                    entityUuid
-            );
-
-            /*
-             * 伤害计算。
-             */
-            int damage =
-                    computeDamage(
-                            logicalCat,
-                            cat
-                    );
-
-            /*
-             * 影袭：每 5 次攻击 3 倍暴击。
-             */
-            if (logicalCat.hasSkill(
-                    CatSkill.SHADOW_STRIKE
-            )) {
-
-                int count =
-                        battleState.nextAttackCount(
-                                entityUuid
-                        );
-
-                if (count % 5 == 0) {
-                    damage *= 3;
-                }
-            }
-
-            target.damage(
-                    damage,
-                    cat
-            );
-
-            /*
-             * 汲取：伤害 20% 治疗主人。
-             */
-            if (logicalCat.hasSkill(
-                    CatSkill.DRAIN
-            )) {
-
-                healOwner(
-                        owner,
-                        damage * 0.2
-                );
-            }
-
-            /*
-             * 星屑：20% 概率溅射。
-             */
-            if (logicalCat.hasSkill(
-                    CatSkill.STAR_DUST
-            ) &&
-                    random.nextDouble() < 0.2) {
-
-                applySplash(
-                        cat,
-                        target,
-                        damage
+                logger.warning(
+                        "Battle tick failed for cat "
+                                + logicalCat.getId()
+                                + ": "
+                                + exception.getMessage()
                 );
             }
         }
+    }
+
+    /*
+     * ============================================================
+     * 单只猫的战斗结算
+     * ============================================================
+     */
+
+    private void processCat(
+            Cat logicalCat
+    ) {
+
+        UUID entityUuid =
+                logicalCat.getEntityUuid();
+
+        if (entityUuid == null) {
+            return;
+        }
+
+        Entity entity =
+                Bukkit.getEntity(
+                        entityUuid
+                );
+
+        if (!(entity instanceof org.bukkit.entity.Cat cat) ||
+                cat.isDead() ||
+                !cat.isValid()) {
+
+            return;
+        }
+
+        /*
+         * ========================================================
+         * 受伤恢复期结算（任何模式下都执行）
+         * ========================================================
+         */
+        Long remaining =
+                battleState.getRecoveryRemainingMillis(
+                        entityUuid
+                );
+
+        if (remaining != null) {
+
+            if (remaining <= 0) {
+
+                /*
+                 * 倒计时结束：恢复 AI 与可见性，满血复活。
+                 */
+                battleState.clearRecovery(
+                        entityUuid
+                );
+
+                cat.setHealth(
+                        cat.getMaxHealth()
+                );
+
+                cat.setAI(
+                        true
+                );
+
+                cat.removePotionEffect(
+                        PotionEffectType.INVISIBILITY
+                );
+
+                cat.getWorld()
+                        .spawnParticle(
+                                Particle.HEART,
+                                cat.getLocation()
+                                        .add(0, 1, 0),
+                                30,
+                                0.5,
+                                0.5,
+                                0.5,
+                                0.05
+                        );
+
+                /*
+                 * 立即恢复正常头顶名称。
+                 */
+                entityService.refreshCustomName(
+                        cat,
+                        logicalCat
+                );
+
+            } else {
+
+                /*
+                 * 恢复期内：
+                 * 1. 持续"幽灵化"（幂等，每 tick 续期）：
+                 *    - AI 冻结：不移动、不产生振动噪声；
+                 *    - 隐身：无粒子，视觉索敌失效；
+                 * 2. 清空怪物目标锁定 + 清零监守者愤怒；
+                 * 3. 每 tick 刷新头顶倒计时悬浮字；
+                 * 4. 禁止一切战斗行为（不扑击、不攻击）；
+                 * 5. 没有缓慢回血（血量固定在 1）。
+                 */
+                cat.setAI(
+                        false
+                );
+
+                cat.addPotionEffect(
+                        new PotionEffect(
+                                PotionEffectType.INVISIBILITY,
+                                INVISIBILITY_REFRESH_TICKS,
+                                0,
+                                false,
+                                false,
+                                false
+                        )
+                );
+
+                TargetGuard.clearTargetsOn(
+                        cat,
+                        TARGET_CLEAR_RADIUS
+                );
+
+                entityService.refreshCustomName(
+                        cat,
+                        logicalCat
+                );
+
+                return;
+            }
+        } else {
+
+            /*
+             * 恢复期外：血量不满时缓慢回血
+             * （每 4 秒 1 点）。
+             */
+            tickRegen(
+                    cat,
+                    entityUuid
+            );
+        }
+
+        /*
+         * 只在跟随模式战斗。
+         */
+        if (logicalCat.getBehaviorMode()
+                != CatBehaviorMode.FOLLOW) {
+
+            battleState.setChasing(
+                    entityUuid,
+                    false
+            );
+
+            return;
+        }
+
+        Player owner =
+                Bukkit.getPlayer(
+                        logicalCat.getOwnerUuid()
+                );
+
+        if (owner == null ||
+                !owner.isOnline()) {
+
+            return;
+        }
+
+        World world =
+                cat.getLocation()
+                        .getWorld();
+
+        if (world == null ||
+                !world.equals(
+                        owner.getWorld()
+                )) {
+
+            return;
+        }
+
+        /*
+         * 主人距离限制：
+         * 猫离主人太远不战斗，
+         * 避免在野外乱引怪。
+         */
+        int aggroRadius =
+                config.getBattleAggroRadius();
+
+        if (cat.getLocation()
+                .distanceSquared(
+                        owner.getLocation()
+                )
+                > (double) aggroRadius
+                * aggroRadius) {
+
+            battleState.setChasing(
+                    entityUuid,
+                    false
+            );
+
+            return;
+        }
+
+        /*
+         * 找目标：
+         * 优先协助目标（主人攻击 / 被攻击的怪物），
+         * 其次猫附近的最近敌对生物。
+         */
+        LivingEntity target =
+                findTarget(
+                        logicalCat,
+                        cat,
+                        aggroRadius
+                );
+
+        if (target == null) {
+
+            battleState.setChasing(
+                    entityUuid,
+                    false
+            );
+
+            return;
+        }
+
+        /*
+         * 有目标：进入追击状态。
+         */
+        battleState.setChasing(
+                entityUuid,
+                true
+        );
+
+        /*
+         * 远程（灵弹）。
+         */
+        if (logicalCat.hasSkill(
+                CatSkill.SPIRIT_SHOT
+        )) {
+
+            handleRangedAttack(
+                    logicalCat,
+                    cat,
+                    owner,
+                    target,
+                    entityUuid
+            );
+
+            return;
+        }
+
+        /*
+         * 近战：目标太远 → 扑击靠近（限速 1 秒一跳），
+         * 进入范围后正常攻击。
+         */
+        double distSq =
+                cat.getLocation()
+                        .distanceSquared(
+                                target.getLocation()
+                        );
+
+        if (distSq >
+                MELEE_RANGE * MELEE_RANGE) {
+
+            if (battleState.canPounce(
+                    entityUuid,
+                    POUNCE_INTERVAL_MS
+            )) {
+
+                battleState.markPounce(
+                        entityUuid
+                );
+
+                pounceTowards(
+                        cat,
+                        target
+                );
+            }
+
+            return;
+        }
+
+        /*
+         * 隔墙不打：
+         * 没有视线就不攻击，
+         * 防止隔墙输出伤害。
+         */
+        if (!cat.hasLineOfSight(target)) {
+            return;
+        }
+
+        long intervalTicks =
+                config.getBattleAttackIntervalTicks();
+
+        /*
+         * 灵步：攻击间隔 -20%。
+         */
+        if (logicalCat.hasSkill(
+                CatSkill.LIGHT_STEP
+        )) {
+
+            intervalTicks =
+                    (long) (intervalTicks * 0.8);
+        }
+
+        long intervalMs =
+                intervalTicks * 50L;
+
+        if (!battleState.canAttack(
+                entityUuid,
+                intervalMs
+        )) {
+
+            return;
+        }
+
+        battleState.markAttack(
+                entityUuid
+        );
+
+        /*
+         * 伤害计算。
+         */
+        int damage =
+                computeDamage(
+                        logicalCat,
+                        cat
+                );
+
+        /*
+         * 影袭：每 5 次攻击 3 倍暴击。
+         */
+        if (logicalCat.hasSkill(
+                CatSkill.SHADOW_STRIKE
+        )) {
+
+            int count =
+                    battleState.nextAttackCount(
+                            entityUuid
+                    );
+
+            if (count % 5 == 0) {
+                damage *= 3;
+            }
+        }
+
+        target.damage(
+                damage,
+                cat
+        );
+
+        /*
+         * 汲取：伤害 20% 治疗主人。
+         */
+        if (logicalCat.hasSkill(
+                CatSkill.DRAIN
+        )) {
+
+            healOwner(
+                    owner,
+                    damage * 0.2
+            );
+        }
+
+        /*
+         * 星屑：20% 概率溅射（溅射只伤敌对生物）。
+         */
+        if (logicalCat.hasSkill(
+                CatSkill.STAR_DUST
+        ) &&
+                random.nextDouble() < 0.2) {
+
+            applySplash(
+                    cat,
+                    target,
+                    damage
+            );
+        }
+    }
+
+    /*
+     * ============================================================
+     * 缓慢回血（4 秒 1 点，恢复期外）
+     * ============================================================
+     */
+
+    private void tickRegen(
+            org.bukkit.entity.Cat cat,
+            UUID entityUuid
+    ) {
+
+        double max =
+                cat.getMaxHealth();
+
+        if (cat.getHealth() >= max) {
+            return;
+        }
+
+        long intervalMillis =
+                config.getBattleRegenIntervalSeconds()
+                        * 1000L;
+
+        if (!battleState.canRegen(
+                entityUuid,
+                intervalMillis
+        )) {
+
+            return;
+        }
+
+        battleState.markRegen(
+                entityUuid
+        );
+
+        cat.setHealth(
+                Math.min(
+                        max,
+                        cat.getHealth() + 1.0
+                )
+        );
+    }
+
+    /*
+     * ============================================================
+     * 目标选择（Issue #6 + 跨世界修复 + 活物协助）
+     * ============================================================
+     */
+
+    private LivingEntity findTarget(
+            Cat logicalCat,
+            org.bukkit.entity.Cat cat,
+            int aggroRadius
+    ) {
+
+        UUID ownerUuid =
+                logicalCat.getOwnerUuid();
+
+        UUID assistId =
+                battleState.getAssistTarget(
+                        ownerUuid
+                );
+
+        if (assistId != null) {
+
+            Entity assistEntity =
+                    Bukkit.getEntity(
+                            assistId
+                    );
+
+            /*
+             * 跨世界修复：
+             * 距离计算前必须先确认协助目标与猫同世界。
+             *
+             * 协助目标可以是任意活物（主人主动攻击的
+             * 和平生物也算），但排除玩家自身。
+             */
+            if (assistEntity instanceof LivingEntity living &&
+                    !(living instanceof Player) &&
+                    !living.isDead() &&
+                    living.isValid() &&
+                    living.getWorld() != null &&
+                    living.getWorld()
+                            .equals(
+                                    cat.getWorld()
+                            )) {
+
+                double assistRadius =
+                        aggroRadius
+                                * ASSIST_RADIUS_MULTIPLIER;
+
+                double distSq =
+                        cat.getLocation()
+                                .distanceSquared(
+                                        living.getLocation()
+                                );
+
+                if (distSq <=
+                        assistRadius * assistRadius) {
+
+                    return living;
+                }
+            }
+
+            /*
+             * 协助目标已失效 / 太远 / 跨世界：
+             * 惰性清除，回落到普通索敌。
+             */
+            battleState.clearAssistTarget(
+                    ownerUuid
+            );
+        }
+
+        /*
+         * 自动索敌仍然只打敌对生物。
+         */
+        return findNearestMonster(
+                cat.getLocation(),
+                aggroRadius
+        );
+    }
+
+    /*
+     * ============================================================
+     * 扑击靠近（Issue #6 + 落点安全）
+     * ============================================================
+     *
+     * 沿"猫 → 目标"连线传送一段距离（单次最多 6 格）。
+     * 已限速 1 秒一跳；
+     * 落点必须通过 SafeTeleport 校验，
+     * 找不到安全落点就放弃这一跳。
+     */
+
+    private void pounceTowards(
+            org.bukkit.entity.Cat cat,
+            LivingEntity target
+    ) {
+
+        Location catLoc =
+                cat.getLocation();
+
+        Location targetLoc =
+                target.getLocation();
+
+        /*
+         * 防御性世界守卫：
+         * 绝不跨世界量距离。
+         */
+        if (catLoc.getWorld() == null ||
+                targetLoc.getWorld() == null ||
+                !catLoc.getWorld()
+                        .equals(
+                                targetLoc.getWorld()
+                        )) {
+
+            return;
+        }
+
+        /*
+         * 安全落点：
+         * 沿连线尝试不同距离与高度，
+         * 脚/头必须可通行、下方有实体、且不在岩浆或水中。
+         * 找不到安全落点就放弃这一跳（下个 tick 再试），
+         * 绝不盲跳进墙里。
+         */
+        Location destination =
+                SafeTeleport.findPounceDestination(
+                        catLoc,
+                        targetLoc,
+                        MAX_POUNCE_DISTANCE
+                );
+
+        if (destination == null) {
+            return;
+        }
+
+        destination.setYaw(
+                catLoc.getYaw()
+        );
+
+        destination.setPitch(
+                catLoc.getPitch()
+        );
+
+        cat.teleport(
+                destination
+        );
+
+        /*
+         * 扑击尘土粒子反馈。
+         */
+        cat.getWorld()
+                .spawnParticle(
+                        Particle.CLOUD,
+                        catLoc,
+                        6,
+                        0.3,
+                        0.1,
+                        0.3,
+                        0.02
+                );
     }
 
     /*
@@ -412,7 +843,7 @@ public class CatBattleTask implements Runnable {
             Cat logicalCat,
             org.bukkit.entity.Cat cat,
             Player owner,
-            Monster target,
+            LivingEntity target,
             UUID entityUuid
     ) {
 
@@ -422,6 +853,13 @@ public class CatBattleTask implements Runnable {
                 )
                 > RANGED_RANGE * RANGED_RANGE) {
 
+            return;
+        }
+
+        /*
+         * 隔墙不打。
+         */
+        if (!cat.hasLineOfSight(target)) {
             return;
         }
 
@@ -491,7 +929,7 @@ public class CatBattleTask implements Runnable {
 
     private void applySplash(
             org.bukkit.entity.Cat cat,
-            Monster target,
+            LivingEntity target,
             int damage
     ) {
 
@@ -508,6 +946,10 @@ public class CatBattleTask implements Runnable {
                                 2
                         )) {
 
+            /*
+             * 溅射只伤敌对生物，
+             * 避免误伤你养的动物。
+             */
             if (entity instanceof Monster monster &&
                     !monster.isDead() &&
                     monster.isValid() &&

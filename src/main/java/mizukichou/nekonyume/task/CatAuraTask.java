@@ -5,6 +5,7 @@ import mizukichou.nekonyume.cat.CatBehaviorMode;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.skill.CatBattleState;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
@@ -22,6 +23,10 @@ import java.util.UUID;
  * 跟随模式 + 光环范围内，
  * 主人获得增益（速度 / 力量 / 再生 / 月华）。
  * </p>
+ *
+ * <p>
+ * 受伤恢复期内光环停摆。
+ * </p>
  */
 public class CatAuraTask implements Runnable {
 
@@ -33,14 +38,17 @@ public class CatAuraTask implements Runnable {
 
     private final PluginConfig config;
     private final CatCache cache;
+    private final CatBattleState battleState;
 
     public CatAuraTask(
             PluginConfig config,
-            CatCache cache
+            CatCache cache,
+            CatBattleState battleState
     ) {
 
         this.config = config;
         this.cache = cache;
+        this.battleState = battleState;
     }
 
     @Override
@@ -85,6 +93,16 @@ public class CatAuraTask implements Runnable {
             if (!(entity instanceof org.bukkit.entity.Cat cat) ||
                     cat.isDead() ||
                     !cat.isValid()) {
+
+                continue;
+            }
+
+            /*
+             * 受伤恢复期内光环停摆。
+             */
+            if (battleState.isRecovering(
+                    cat.getUniqueId()
+            )) {
 
                 continue;
             }

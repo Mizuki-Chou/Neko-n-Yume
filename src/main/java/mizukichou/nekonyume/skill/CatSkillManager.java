@@ -34,6 +34,10 @@ import java.util.logging.Logger;
  * 技能槽的解锁 / 抽取 / 刷新
  * 由 CatProgressionService 负责（涉及持久化）。
  * </p>
+ *
+ * <p>
+ * 受伤恢复期内禁止施放任何主动技能。
+ * </p>
  */
 public class CatSkillManager {
 
@@ -41,6 +45,7 @@ public class CatSkillManager {
     private final CatStore store;
     private final CatCache cache;
     private final PluginConfig config;
+    private final CatBattleState battleState;
 
     private final MiniMessage mm = MiniMessage.miniMessage();
 
@@ -58,13 +63,15 @@ public class CatSkillManager {
             Logger logger,
             CatStore store,
             CatCache cache,
-            PluginConfig config
+            PluginConfig config,
+            CatBattleState battleState
     ) {
 
         this.logger = logger;
         this.store = store;
         this.cache = cache;
         this.config = config;
+        this.battleState = battleState;
 
         loadRefreshCostProvider();
     }
@@ -277,6 +284,22 @@ public class CatSkillManager {
             player.sendMessage(
                     mm.deserialize(
                             "<red>🐱 你的猫咪还没有这个技能。</red>"
+                    )
+            );
+
+            return false;
+        }
+
+        /*
+         * 受伤恢复期内无法使用任何技能。
+         */
+        if (battleState.isRecovering(
+                cat.getEntityUuid()
+        )) {
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<red>🐱 猫咪受伤了，暂时无法使用技能。</red>"
                     )
             );
 

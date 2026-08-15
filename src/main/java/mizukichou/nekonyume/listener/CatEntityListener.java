@@ -7,16 +7,25 @@ import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.config.PluginConfig;
 import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.storage.CatStore;
+import mizukichou.nekonyume.util.TargetGuard;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Monster;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -27,6 +36,12 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 public class CatEntityListener implements Listener {
+
+    /*
+     * 恢复期内清理怪物目标的半径（格）。
+     * 覆盖常规索敌与监守者愤怒系统的生效范围。
+     */
+    private static final double TARGET_CLEAR_RADIUS = 24.0;
 
     /*
      * plugin 仅用于调度器（延迟 PDC 检查）。
@@ -41,6 +56,9 @@ public class CatEntityListener implements Listener {
 
     private final NamespacedKey catKey;
     private final NamespacedKey ownerKey;
+
+    private final MiniMessage mm =
+            MiniMessage.miniMessage();
 
     public CatEntityListener(
             JavaPlugin plugin,
@@ -202,12 +220,180 @@ public class CatEntityListener implements Listener {
 
     /*
      * ============================================================
+     * 协同战斗（Issue #6）
+     * ============================================================
+     *
+     * 主人攻击任意活物 → 猫协同攻击该目标；
+     * 主人被怪物攻击 → 猫反击该目标。
+     *
+     * 目标写入 CatBattleState，
+     * 由 CatBattleTask 在下一个战斗周期接管。
+     */
+
+    @EventHandler(
+            priority = EventPriority.MONITOR,
+            ignoreCancelled = true
+    )
+    public void onOwnerCombat(
+            EntityDamageByEntityEvent event
+    ) {
+
+        if (!config.isBattleEnabled()) {
+            return;
+        }
+
+        /*
+         * 1. 主人被怪物攻击 → 反击。
+         */
+        if (event.getEntity() instanceof Player player) {
+
+            Entity attacker =
+                    unwrapProjectile(
+                            event.getDamager()
+                    );
+
+            if (attacker instanceof Monster monster &&
+                    !monster.isDead() &&
+                    monster.isValid()) {
+
+                registerAssistTarget(
+                        player,
+                        monster
+                );
+            }
+
+            return;
+        }
+
+        /*
+         * 2. 主人攻击任意活物 → 协同。
+         *
+         * 和平生物也算：主人出手了，猫就帮忙。
+         * 排除：玩家（PVP 不介入）与本插件的猫。
+         */
+        if (event.getEntity() instanceof LivingEntity living &&
+                !(living instanceof Player) &&
+                event.getDamager() instanceof Player player &&
+                !living.isDead() &&
+                living.isValid() &&
+                !isOurCat(living)) {
+
+            registerAssistTarget(
+                    player,
+                    living
+            );
+        }
+    }
+
+    private Entity unwrapProjectile(
+            Entity damager
+    ) {
+
+        if (damager instanceof Projectile projectile) {
+
+            Object shooter =
+                    projectile.getShooter();
+
+            if (shooter instanceof Entity shooterEntity) {
+                return shooterEntity;
+            }
+        }
+
+        return damager;
+    }
+
+    private void registerAssistTarget(
+            Player player,
+            LivingEntity target
+    ) {
+
+        /*
+         * 只有拥有猫咪数据的玩家才需要记录。
+         */
+        if (!store.hasCat(
+                player.getUniqueId()
+        )) {
+
+            return;
+        }
+
+        battleState.markAssistTarget(
+                player.getUniqueId(),
+                target.getUniqueId()
+        );
+    }
+
+    /*
+     * 目标是否为本插件的猫实体。
+     */
+    private boolean isOurCat(
+            Entity entity
+    ) {
+
+        if (!(entity instanceof Cat cat)) {
+            return false;
+        }
+
+        return cat.getPersistentDataContainer()
+                .has(
+                        catKey,
+                        PersistentDataType.BYTE
+                );
+    }
+
+    /*
+     * ============================================================
+     * 恢复期目标屏蔽：怪物视猫为不存在
+     * ============================================================
+     *
+     * 拦截标准索敌路径：
+     * 任何怪物尝试锁定一只"恢复期中的本插件猫"时，
+     * 直接取消目标获取。
+     *
+     * 非标准路径（如监守者愤怒系统、受伤前已锁定）
+     * 由 CatBattleTask 的周期性扫荡 + TargetGuard 兜底。
+     */
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onEntityTargetLiving(
+            EntityTargetLivingEntityEvent event
+    ) {
+
+        if (!(event.getTarget()
+                instanceof Cat cat)) {
+
+            return;
+        }
+
+        /*
+         * 只保护我们自己的、处于恢复期的猫；
+         * 其他猫完全不受影响（保留原版索敌行为）。
+         */
+        if (!isOurCat(cat)) {
+            return;
+        }
+
+        if (battleState.isRecovering(
+                cat.getUniqueId()
+        )) {
+
+            event.setCancelled(
+                    true
+            );
+        }
+    }
+
+    /*
+     * ============================================================
      * 猫受伤与致死保护
      * ============================================================
      *
      * 战斗开启时：
      * - 受伤减免（轻毛 / 铁壁）
-     * - 致死拦截：保底 1 血 + 虚弱
+     * - 致死拦截：进入 120 秒受伤恢复期
+     *   （1 血保底、AI 冻结、隐身、
+     *     怪物视猫为不存在、悬浮字倒计时、
+     *     结束满血复活；恢复期内重复受伤不重置倒计时）
      * - 永恒：满血重生（冷却内）
      *
      * 战斗关闭时：
@@ -384,11 +570,22 @@ public class CatEntityListener implements Listener {
                     cooldownMs
             )) {
 
-                double max =
-                        cat.getMaxHealth();
-
                 cat.setHealth(
-                        max
+                        cat.getMaxHealth()
+                );
+
+                battleState.clearRecovery(
+                        cat.getUniqueId()
+                );
+
+                /*
+                 * 恢复 AI 与可见性
+                 * （防止在恢复期冻结状态下触发永恒）。
+                 */
+                cat.setAI(true);
+
+                cat.removePotionEffect(
+                        PotionEffectType.INVISIBILITY
                 );
 
                 cat.addPotionEffect(
@@ -416,20 +613,125 @@ public class CatEntityListener implements Listener {
         }
 
         /*
-         * 普通保护：
-         * 保底 1 血 + 虚弱
-         * （九命的虚弱缩短由战斗任务读取）。
+         * 已经处于恢复期：
+         * 只保底 1 血，绝不重置恢复倒计时。
+         * （否则高伤怪物持续攻击会让猫永远无法复活——
+         *   这正是打坚守者只打一下就不动的根因。）
          */
-        if (cat.getHealth() < 1.0) {
+        if (battleState.isRecovering(
+                cat.getUniqueId()
+        )) {
 
-            cat.setHealth(
-                    1.0
-            );
+            if (cat.getHealth() < 1.0) {
+
+                cat.setHealth(
+                        1.0
+                );
+            }
+
+            return;
         }
 
-        battleState.markProtected(
-                cat.getUniqueId()
+        /*
+         * 首次进入恢复期：
+         * 1 血保底 + 倒计时 + 悬浮字 + 主人提示。
+         */
+        cat.setHealth(
+                1.0
         );
+
+        long recoveryMillis =
+                config.getBattleRecoverySeconds()
+                        * 1000L;
+
+        /*
+         * 九命：恢复期缩短为四分之一。
+         */
+        if (hasNineLives) {
+
+            recoveryMillis /= 4;
+        }
+
+        battleState.markRecovering(
+                cat.getUniqueId(),
+                recoveryMillis
+        );
+
+        /*
+         * 恢复期"幽灵化"：
+         * - AI 冻结：不移动、不发声，
+         *   不给监守者任何振动信号；
+         * - 隐身（无粒子）：视觉/感知类索敌失效。
+         * 配合 TargetGuard 的清目标 + 清愤怒，
+         * 怪物才会真正当作猫不存在。
+         */
+        cat.setAI(
+                false
+        );
+
+        cat.addPotionEffect(
+                new PotionEffect(
+                        PotionEffectType.INVISIBILITY,
+                        (int) (recoveryMillis / 50L),
+                        0,
+                        false,
+                        false,
+                        false
+                )
+        );
+
+        /*
+         * 立刻清空当前以它为目标的怪物：
+         * 让怪物即刻"当作猫不存在"。
+         */
+        TargetGuard.clearTargetsOn(
+                cat,
+                TARGET_CLEAR_RADIUS
+        );
+
+        int recoverySeconds =
+                (int) Math.ceil(
+                        recoveryMillis / 1000.0
+                );
+
+        /*
+         * 悬浮字：立即刷新头顶名称。
+         */
+        entityService.refreshCustomName(
+                cat,
+                logicalCat
+        );
+
+        /*
+         * 主人提示。
+         */
+        if (logicalCat != null) {
+
+            Player owner =
+                    Bukkit.getPlayer(
+                            logicalCat.getOwnerUuid()
+                    );
+
+            if (owner != null &&
+                    owner.isOnline()) {
+
+                owner.sendMessage(
+                        mm.deserialize(
+                                "<red>🐱 </red>"
+                        ).append(
+                                Component.text(
+                                        logicalCat.getName()
+                                )
+                        ).append(
+                                mm.deserialize(
+                                        "<white> 受伤了，<red>"
+                                                + recoverySeconds
+                                                + "</red> 秒内无法继续活动…</white>"
+                                )
+                        )
+                );
+            }
+        }
 
         cat.getWorld()
                 .spawnParticle(

@@ -4,6 +4,8 @@ import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatMood;
+import mizukichou.nekonyume.skill.CatBattleState;
+import mizukichou.nekonyume.util.SafeTeleport;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -31,13 +33,26 @@ public class CatBehaviorTask implements Runnable {
 
     private static final double LOW_FOLLOW_DISTANCE = 16.0;
 
+    /*
+     * 追击结束后的收势宽限（毫秒）。
+     *
+     * 猫刚结束追击的 3 秒内不做跟随传送，
+     * 避免"刚咬死怪就被瞬移拉回主人身边"的突兀感。
+     */
+    private static final long CHASE_END_GRACE_MS =
+            3000L;
+
     private final CatCache cache;
 
+    private final CatBattleState battleState;
+
     public CatBehaviorTask(
-            CatCache cache
+            CatCache cache,
+            CatBattleState battleState
     ) {
 
         this.cache = cache;
+        this.battleState = battleState;
     }
 
     @Override
@@ -125,6 +140,17 @@ public class CatBehaviorTask implements Runnable {
     ) {
 
         /*
+         * 受伤恢复期内完全不干预：
+         * 猫原地冻结，传送振动会向监守者暴露猫的位置。
+         */
+        if (battleState.isRecovering(
+                cat.getUniqueId()
+        )) {
+
+            return;
+        }
+
+        /*
          * 跟随前先解除坐姿。
          */
         if (cat.isSitting()) {
@@ -147,6 +173,22 @@ public class CatBehaviorTask implements Runnable {
         if (catLoc.getWorld() == null ||
                 !catLoc.getWorld()
                         .equals(ownerLoc.getWorld())) {
+
+            return;
+        }
+
+        /*
+         * Issue #6：
+         * 猫正在追击敌人时不把它传送回主人身边，
+         * 否则跟随传送会与战斗扑击互相拉扯。
+         *
+         * 追击结束后保留 3 秒"收势宽限"，
+         * 避免刚咬死怪就被瞬移拉回。
+         */
+        if (battleState.isChasingOrRecentlyEnded(
+                cat.getUniqueId(),
+                CHASE_END_GRACE_MS
+        )) {
 
             return;
         }
@@ -195,7 +237,7 @@ public class CatBehaviorTask implements Runnable {
                                 1.5
                         );
 
-        Location target =
+        Location candidate =
                 ownerLoc.clone()
                         .add(
                                 offsetX,
@@ -203,20 +245,46 @@ public class CatBehaviorTask implements Runnable {
                                 offsetZ
                         );
 
-        target.setYaw(
+        candidate.setYaw(
                 catLoc.getYaw()
         );
 
-        target.setPitch(
+        candidate.setPitch(
                 catLoc.getPitch()
         );
 
         /*
-         * 传送失败（罕见）时
+         * 候选点卡墙时回退到主人脚下；
+         * 主人脚下也不安全（如游泳 / 贴墙）则本 tick 放弃，
          * 下一个 tick 会自然重试。
          */
+        if (!SafeTeleport.isSafeForCat(
+                candidate
+        )) {
+
+            Location fallback =
+                    ownerLoc.clone();
+
+            fallback.setYaw(
+                    catLoc.getYaw()
+            );
+
+            fallback.setPitch(
+                    catLoc.getPitch()
+            );
+
+            if (!SafeTeleport.isSafeForCat(
+                    fallback
+            )) {
+
+                return;
+            }
+
+            candidate = fallback;
+        }
+
         cat.teleport(
-                target
+                candidate
         );
     }
 

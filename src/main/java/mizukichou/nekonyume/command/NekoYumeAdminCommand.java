@@ -12,14 +12,18 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 
-public class NekoYumeAdminCommand implements CommandExecutor {
+public class NekoYumeAdminCommand
+        implements CommandExecutor, TabCompleter {
 
     /*
      * reloadAction：由装配根注入的"重载配置"动作
@@ -603,5 +607,141 @@ public class NekoYumeAdminCommand implements CommandExecutor {
 
             return null;
         }
+    }
+
+    /*
+     * ============================================================
+     * Tab 补全（Issue #7）
+     * ============================================================
+     */
+
+    @Override
+    public List<String> onTabComplete(
+            CommandSender sender,
+            Command command,
+            String alias,
+            String[] args
+    ) {
+
+        if (args.length == 1) {
+
+            return filter(
+                    args[0],
+                    "meowdan",
+                    "cat",
+                    "skill",
+                    "reload"
+            );
+        }
+
+        if (args.length == 2) {
+
+            return switch (args[0].toLowerCase()) {
+
+                case "meowdan", "skill" ->
+                        filter(args[1], "give");
+
+                case "cat" ->
+                        filter(args[1], "remove");
+
+                default -> List.of();
+            };
+        }
+
+        if (args.length == 3) {
+
+            boolean givePath =
+                    (args[0].equalsIgnoreCase("meowdan") ||
+                            args[0].equalsIgnoreCase("skill")) &&
+                            args[1].equalsIgnoreCase("give");
+
+            boolean removePath =
+                    args[0].equalsIgnoreCase("cat") &&
+                            args[1].equalsIgnoreCase("remove");
+
+            if (givePath || removePath) {
+
+                return onlinePlayerNames(
+                        args[2]
+                );
+            }
+
+            return List.of();
+        }
+
+        if (args.length == 4 &&
+                args[0].equalsIgnoreCase("meowdan") &&
+                args[1].equalsIgnoreCase("give")) {
+
+            return filter(
+                    args[3],
+                    "平凡",
+                    "精良",
+                    "独特",
+                    "卓越",
+                    "至极"
+            );
+        }
+
+        if (args.length == 4 &&
+                args[0].equalsIgnoreCase("skill") &&
+                args[1].equalsIgnoreCase("give")) {
+
+            String lower =
+                    args[3] == null
+                            ? ""
+                            : args[3].toLowerCase();
+
+            return Arrays.stream(
+                            CatSkill.values()
+                    )
+                    .map(skill ->
+                            skill.name()
+                                    .toLowerCase()
+                    )
+                    .filter(id ->
+                            id.startsWith(lower)
+                    )
+                    .toList();
+        }
+
+        return List.of();
+    }
+
+    private List<String> onlinePlayerNames(
+            String prefix
+    ) {
+
+        String lower =
+                prefix == null
+                        ? ""
+                        : prefix.toLowerCase();
+
+        return Bukkit.getOnlinePlayers()
+                .stream()
+                .map(Player::getName)
+                .filter(name ->
+                        name.toLowerCase()
+                                .startsWith(lower)
+                )
+                .toList();
+    }
+
+    private List<String> filter(
+            String prefix,
+            String... values
+    ) {
+
+        String lower =
+                prefix == null
+                        ? ""
+                        : prefix.toLowerCase();
+
+        return Arrays.stream(values)
+                .filter(value ->
+                        value.toLowerCase()
+                                .startsWith(lower)
+                )
+                .toList();
     }
 }

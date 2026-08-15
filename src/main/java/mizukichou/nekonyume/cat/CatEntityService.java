@@ -1,6 +1,7 @@
 package mizukichou.nekonyume.cat;
 
 import io.papermc.paper.registry.RegistryKey;
+import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -36,7 +37,8 @@ import java.util.logging.Logger;
  *
  * <p>
  * 构造注入：plugin 仅用于调度器与 isEnabled()，
- * 数据读写走 CatStore，成长走 CatProgressionService。
+ * 数据读写走 CatStore，成长走 CatProgressionService，
+ * 受伤恢复状态走 CatBattleState。
  * </p>
  */
 public class CatEntityService {
@@ -46,6 +48,7 @@ public class CatEntityService {
     private final CatStore store;
     private final CatCache cache;
     private final CatProgressionService progression;
+    private final CatBattleState battleState;
 
     private final NamespacedKey catKey;
     private final NamespacedKey ownerKey;
@@ -77,7 +80,8 @@ public class CatEntityService {
             CatCache cache,
             CatProgressionService progression,
             NamespacedKey catKey,
-            NamespacedKey ownerKey
+            NamespacedKey ownerKey,
+            CatBattleState battleState
     ) {
 
         this.plugin = plugin;
@@ -87,6 +91,7 @@ public class CatEntityService {
         this.progression = progression;
         this.catKey = catKey;
         this.ownerKey = ownerKey;
+        this.battleState = battleState;
     }
 
     /*
@@ -1968,6 +1973,8 @@ public class CatEntityService {
      * ============================================================
      * 刷新头顶名称
      * ============================================================
+     *
+     * 受伤恢复期内显示倒计时悬浮字。
      */
 
     public void refreshCustomName(
@@ -1986,12 +1993,35 @@ public class CatEntityService {
                 logicalCat.getName()
                         .replace("§", "");
 
-        entity.setCustomName(
-                "§d🐱 "
-                        + safeName
-                        + " "
-                        + logicalCat.getMood().getHeadIcon()
-        );
+        /*
+         * 受伤恢复期：悬浮字显示倒计时。
+         */
+        if (battleState.isRecovering(
+                entity.getUniqueId()
+        )) {
+
+            int seconds =
+                    battleState.getRecoveryRemainingSeconds(
+                            entity.getUniqueId()
+                    );
+
+            entity.setCustomName(
+                    "§c❤ "
+                            + safeName
+                            + " 受伤了 · "
+                            + seconds
+                            + "s 后恢复"
+            );
+
+        } else {
+
+            entity.setCustomName(
+                    "§d🐱 "
+                            + safeName
+                            + " "
+                            + logicalCat.getMood().getHeadIcon()
+            );
+        }
 
         entity.setCustomNameVisible(true);
     }

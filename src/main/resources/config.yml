@@ -226,6 +226,8 @@ battle:
   aggro-radius: 12
   weakness-seconds: 10
   eternity-rebirth-seconds: 180
+  recovery-seconds: 120
+  regen-interval-seconds: 4
 
 # 光环
 #

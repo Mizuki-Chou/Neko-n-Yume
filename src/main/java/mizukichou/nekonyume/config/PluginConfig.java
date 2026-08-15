@@ -1093,6 +1093,25 @@ public class PluginConfig {
         return battleWeaknessSeconds;
     }
 
+    public int getBattleRecoverySeconds() {
+
+        return plugin.getConfig()
+                .getInt(
+                        "battle.recovery-seconds",
+                        120
+                );
+    }
+
+    public int getBattleRegenIntervalSeconds() {
+
+        return plugin.getConfig()
+                .getInt(
+                        "battle.regen-interval-seconds",
+                        4
+                );
+    }
+
+
     public int getBattleEternityRebirthSeconds() {
         return battleEternityRebirthSeconds;
     }
