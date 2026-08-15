@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.Map;
+import java.util.UUID;
 
 public class NekoYumeAdminCommand implements CommandExecutor {
 
@@ -50,7 +51,7 @@ public class NekoYumeAdminCommand implements CommandExecutor {
 
             sender.sendMessage(
                     mm.deserialize(
-                            "<yellow>用法: /nekoyumeadmin <meowdan|reload></yellow>"
+                            "<yellow>用法: /nekoyumeadmin <meowdan|cat|reload></yellow>"
                     )
             );
 
@@ -63,6 +64,17 @@ public class NekoYumeAdminCommand implements CommandExecutor {
         if (args[0].equalsIgnoreCase("meowdan")) {
 
             return handleMeowDan(
+                    sender,
+                    args
+            );
+        }
+
+        /*
+         * /nekoyumeadmin cat remove <玩家> [confirm]
+         */
+        if (args[0].equalsIgnoreCase("cat")) {
+
+            return handleCat(
                     sender,
                     args
             );
@@ -89,7 +101,7 @@ public class NekoYumeAdminCommand implements CommandExecutor {
          */
         sender.sendMessage(
                 mm.deserialize(
-                        "<yellow>用法: /nekoyumeadmin <meowdan|reload></yellow>"
+                        "<yellow>用法: /nekoyumeadmin <meowdan|cat|reload></yellow>"
                 )
         );
 
@@ -288,5 +300,156 @@ public class NekoYumeAdminCommand implements CommandExecutor {
         );
 
         return true;
+    }
+
+    /*
+     * ============================================================
+     * cat remove <玩家> [confirm]
+     * ============================================================
+     *
+     * 删除玩家的猫咪（不可逆）。
+     *
+     * 必须二次确认：
+     *
+     * /nekoyumeadmin cat remove <玩家>
+     *     ↓
+     * /nekoyumeadmin cat remove <玩家> confirm
+     */
+
+    private boolean handleCat(
+            CommandSender sender,
+            String[] args
+    ) {
+
+        if (args.length < 3 ||
+                !args[1].equalsIgnoreCase("remove")) {
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<yellow>用法: /nekoyumeadmin cat remove <玩家> [confirm]</yellow>"
+                    )
+            );
+
+            return true;
+        }
+
+        String targetName =
+                args[2];
+
+        UUID playerUUID =
+                resolvePlayerUUID(
+                        targetName
+                );
+
+        if (playerUUID == null) {
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<red>❌ 找不到该玩家。离线玩家请使用玩家 UUID。</red>"
+                    )
+            );
+
+            return true;
+        }
+
+        if (!plugin.getDataManager()
+                .hasCat(
+                        playerUUID
+                )) {
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<yellow>该玩家没有猫咪数据。</yellow>"
+                    )
+            );
+
+            return true;
+        }
+
+        boolean confirm =
+                args.length > 3 &&
+                        args[3].equalsIgnoreCase("confirm");
+
+        if (!confirm) {
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<yellow>⚠ 删除不可逆!</yellow>"
+                    )
+            );
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<yellow>确认请执行: /nekoyumeadmin cat remove "
+                                    + playerUUID
+                                    + " confirm</yellow>"
+                    )
+            );
+
+            return true;
+        }
+
+        boolean removed =
+                plugin.getCatManager()
+                        .removePlayerCat(
+                                playerUUID
+                        );
+
+        if (removed) {
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<green>✔ 已删除该玩家的猫咪数据与实体。</green>"
+                    )
+            );
+
+            plugin.getLogger().info(
+                    "Admin "
+                            + sender.getName()
+                            + " removed cat for "
+                            + playerUUID
+            );
+
+        } else {
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<red>❌ 删除失败。</red>"
+                    )
+            );
+        }
+
+        return true;
+    }
+
+    /*
+     * 解析目标玩家：
+     * 1. 在线玩家名（精确匹配）
+     * 2. 离线玩家 UUID
+     */
+
+    private UUID resolvePlayerUUID(
+            String name
+    ) {
+
+        Player online =
+                Bukkit.getPlayerExact(
+                        name
+                );
+
+        if (online != null) {
+            return online.getUniqueId();
+        }
+
+        try {
+
+            return UUID.fromString(
+                    name
+            );
+
+        } catch (IllegalArgumentException e) {
+
+            return null;
+        }
     }
 }

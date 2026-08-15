@@ -1865,6 +1865,45 @@ public class PlayerDataManager {
         save();
     }
 
+
+    /**
+     * 删除玩家的猫咪数据（不可逆）。
+     *
+     * <p>
+     * 只删除 cat 节点，
+     * 玩家节点保留（不影响未来其他数据）。
+     * </p>
+     *
+     * <p>
+     * 返回是否真的删除了数据。
+     * </p>
+     */
+    public boolean removeCat(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID == null) {
+            return false;
+        }
+
+        if (!hasCat(playerUUID)) {
+            return false;
+        }
+
+        data.set(
+                catPath(playerUUID),
+                null
+        );
+
+        /*
+         * 不可逆操作立即落盘。
+         */
+        saveNow();
+
+        return true;
+    }
+
+
     /*
      * ============================================================
      * 猫咪世界

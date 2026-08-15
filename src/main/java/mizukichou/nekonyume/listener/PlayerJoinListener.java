@@ -152,32 +152,61 @@ public class PlayerJoinListener implements Listener {
 
         /*
          * ============================================================
-         * 4. 恢复猫咪实体
+         * 2. 加载运行时猫咪
          * ============================================================
          *
-         * 登录自动恢复实体。
+         * 只有拥有猫咪记录的玩家才加载与恢复实体。
          *
-         * 恢复顺序：
+         * 没有猫咪的玩家等待 /nekoyume claim，
+         * 登录时绝不自动创建猫。
          *
-         * 1. 保存的 Entity UUID
-         * 2. 最后保存的世界 + 区块
-         * 3. 当前已加载的全部世界
-         * 4. 在最后保存的位置重建
-         * 5. 完全没有可用位置时兜底
-         *
-         * 登录恢复会尽量保留猫咪原来的位置，
-         * 不会主动传送到玩家身边。
-         *
-         * 如果猫咪所在世界尚未加载，
-         * 会进入等待队列，
-         * 世界加载完成后由
-         * CatManager.retryPendingWorldRestores() 重试。
+         * players.yml
+         *      ↓
+         * PlayerDataManager
+         *      ↓
+         * CatManager
+         *      ↓
+         * 内存中的 Cat
          */
 
-        plugin.getCatManager()
-                .restoreCatEntity(
-                        player
-                );
+        if (plugin.getDataManager()
+                .hasCat(
+                        player.getUniqueId()
+                )) {
+
+            plugin.getCatManager()
+                    .loadCat(
+                            player
+                    );
+
+            /*
+             * ====================================================
+             * 3. 恢复猫咪实体
+             * ====================================================
+             *
+             * 恢复顺序：
+             *
+             * 1. 保存的 Entity UUID
+             * 2. 最后保存的世界 + 区块
+             * 3. 当前已加载的全部世界
+             * 4. 在最后保存的位置重建
+             * 5. 完全没有可用位置时兜底
+             *
+             * 登录恢复会尽量保留猫咪原来的位置，
+             * 不会主动传送到玩家身边。
+             *
+             * 如果猫咪所在世界尚未加载，
+             * 会进入等待队列，
+             * 世界加载完成后由
+             * CatManager.retryPendingWorldRestores() 重试。
+             */
+
+            plugin.getCatManager()
+                    .restoreCatEntity(
+                            player
+                    );
+        }
+
 
         /*
          * ============================================================

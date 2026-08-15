@@ -1,6 +1,7 @@
 package mizukichou.nekonyume.listener;
 
 import mizukichou.nekonyume.NekoNYume;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Sound;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Player;
@@ -14,6 +15,9 @@ import org.bukkit.persistence.PersistentDataType;
 public class CatFoodListener implements Listener {
 
     private final NekoNYume plugin;
+
+    private final MiniMessage mm =
+            MiniMessage.miniMessage();
 
     public CatFoodListener(
             NekoNYume plugin
@@ -60,8 +64,16 @@ public class CatFoodListener implements Listener {
 
         /*
          * ============================================================
-         * 3. 只允许主人喂食
+         * 3. 主人校验（安全关键）
          * ============================================================
+         *
+         * 一旦确认这是我们的猫：
+         * 非主人的右键必须立即取消事件。
+         *
+         * 否则原版会对驯服猫执行喂食 / 繁殖，
+         * 出现 love mode 爱心，
+         * 甚至两只猫同时进入 love mode 时
+         * 繁殖出没有 PDC 标记的小猫。
          */
 
         String ownerUUID =
@@ -72,11 +84,24 @@ public class CatFoodListener implements Listener {
                                 PersistentDataType.STRING
                         );
 
-        if (ownerUUID == null ||
-                !ownerUUID.equals(
-                        player.getUniqueId()
-                                .toString()
-                )) {
+        boolean isOwner =
+                ownerUUID != null &&
+                        ownerUUID.equals(
+                                player.getUniqueId()
+                                        .toString()
+                        );
+
+        if (!isOwner) {
+
+            event.setCancelled(
+                    true
+            );
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<red>🐱 这不是你的猫咪。</red>"
+                    )
+            );
 
             return;
         }
@@ -101,6 +126,11 @@ public class CatFoodListener implements Listener {
         if (item == null ||
                 item.getType().isAir()) {
 
+            /*
+             * 空手右键：
+             * 不取消事件，
+             * 保留原版「空手右键切换坐姿」。
+             */
             return;
         }
 
@@ -111,9 +141,6 @@ public class CatFoodListener implements Listener {
          *
          * 喵丹不算普通食物，
          * 走独立的使用逻辑。
-         *
-         * 伪造成食物模样的假喵丹
-         * 没有 PDC 标记，无法通过判定。
          */
 
         if (plugin.getCatFoodManager()
@@ -156,6 +183,10 @@ public class CatFoodListener implements Listener {
         if (!plugin.getCatFoodManager()
                 .isFood(item)) {
 
+            /*
+             * 非食物：
+             * 不取消事件（保留原版交互）。
+             */
             return;
         }
 

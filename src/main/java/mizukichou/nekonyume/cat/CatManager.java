@@ -1684,6 +1684,75 @@ public class CatManager {
 
     /*
      * ============================================================
+     * 删除玩家的猫咪（管理操作，不可逆）
+     * ============================================================
+     *
+     * 流程：
+     * 1. 移除 Bukkit 实体（若存在）
+     * 2. 清除运行时缓存
+     * 3. 清除待恢复队列
+     * 4. 删除 players.yml 中的猫数据
+     *
+     * 仅在 /nekoyumeadmin cat remove confirm 确认后调用。
+     */
+
+    public boolean removePlayerCat(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID == null) {
+            return false;
+        }
+
+        /*
+         * 1. 移除实体。
+         */
+        UUID entityUuid =
+                plugin.getDataManager()
+                        .getCatEntityUUID(
+                                playerUUID
+                        );
+
+        if (entityUuid != null) {
+
+            Entity entity =
+                    Bukkit.getEntity(
+                            entityUuid
+                    );
+
+            if (entity != null &&
+                    entity.isValid()) {
+
+                entity.remove();
+            }
+        }
+
+        /*
+         * 2. 清除运行时缓存。
+         */
+        removeLogicalCat(
+                playerUUID
+        );
+
+        /*
+         * 3. 清除待恢复队列。
+         */
+        clearPendingRestore(
+                playerUUID
+        );
+
+        /*
+         * 4. 删除持久化数据。
+         */
+        return plugin.getDataManager()
+                .removeCat(
+                        playerUUID
+                );
+    }
+
+
+    /*
+     * ============================================================
      * 从存档重新加载
      * ============================================================
      */
@@ -3178,10 +3247,21 @@ public class CatManager {
         UUID playerUUID =
                 player.getUniqueId();
 
+        /*
+         * 防止猫被删除后
+         * 通过 GUI 按钮触发 ensureCat 重建。
+         */
+        if (!plugin.getDataManager()
+                .hasCat(playerUUID)) {
+
+            return;
+        }
+
         mizukichou.nekonyume.cat.Cat logicalCat =
                 loadCat(
                         player
                 );
+
 
         if (logicalCat == null) {
             return;
