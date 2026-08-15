@@ -38,8 +38,27 @@ class GrowthMathTest {
     @Test
     void invalidCurveParamsFallBackToDefaults() {
 
-        assertEquals(1, GrowthMath.levelFromExperience(500, 0));
+        /*
+         * 非法曲线参数必须回退到默认值
+         * （经验曲线 100 / 喵阶曲线 19），
+         * 结果与显式使用默认参数完全一致。
+         *
+         * 500 经验 / 曲线 100：
+         *   L2 需 100，L3 需 300，L4 需 600
+         *   → 500 经验 = 3 级。
+         */
+        assertEquals(3, GrowthMath.levelFromExperience(500, 0));
+        assertEquals(
+                GrowthMath.levelFromExperience(500, 100),
+                GrowthMath.levelFromExperience(500, 0)
+        );
+
         assertEquals(2, GrowthMath.levelFromExperience(100, -10));
+
+        /*
+         * 10 喵力 / 曲线 19：
+         *   第 1 阶需 10 → 喵阶 1。
+         */
         assertEquals(1, GrowthMath.meowRankFromPower(10, 0));
         assertEquals(1, GrowthMath.meowRankFromPower(10, -19));
     }

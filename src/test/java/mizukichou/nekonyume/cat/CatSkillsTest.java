@@ -2,6 +2,7 @@ package mizukichou.nekonyume.cat;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,8 +61,13 @@ class CatSkillsTest {
     @Test
     void replaceAllFiltersDuplicatesAndNull() {
 
+        /*
+         * 注意：
+         * List.of 不接受 null 元素（会直接抛 NPE），
+         * 要构造"含 null 的初始集合"必须用 Arrays.asList。
+         */
         CatSkills skills = new CatSkills(
-                List.of(
+                Arrays.asList(
                         CatSkill.SHARP_CLAW,
                         CatSkill.SHARP_CLAW,
                         null,
