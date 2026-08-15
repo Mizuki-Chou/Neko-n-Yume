@@ -1,6 +1,7 @@
 package mizukichou.nekonyume.command;
 
 import mizukichou.nekonyume.NekoNYume;
+import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.MeowDanQuality;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -51,7 +52,7 @@ public class NekoYumeAdminCommand implements CommandExecutor {
 
             sender.sendMessage(
                     mm.deserialize(
-                            "<yellow>用法: /nekoyumeadmin <meowdan|cat|reload></yellow>"
+                            "<yellow>用法: /nekoyumeadmin <meowdan|cat|skill|reload></yellow>"
                     )
             );
 
@@ -81,6 +82,17 @@ public class NekoYumeAdminCommand implements CommandExecutor {
         }
 
         /*
+         * /nekoyumeadmin skill give <玩家> <技能ID>
+         */
+        if (args[0].equalsIgnoreCase("skill")) {
+
+            return handleSkill(
+                    sender,
+                    args
+            );
+        }
+
+        /*
          * /nekoyumeadmin reload
          */
         if (args[0].equalsIgnoreCase("reload")) {
@@ -101,7 +113,7 @@ public class NekoYumeAdminCommand implements CommandExecutor {
          */
         sender.sendMessage(
                 mm.deserialize(
-                        "<yellow>用法: /nekoyumeadmin <meowdan|cat|reload></yellow>"
+                        "<yellow>用法: /nekoyumeadmin <meowdan|cat|skill|reload></yellow>"
                 )
         );
 
@@ -415,6 +427,123 @@ public class NekoYumeAdminCommand implements CommandExecutor {
             sender.sendMessage(
                     mm.deserialize(
                             "<red>❌ 删除失败。</red>"
+                    )
+            );
+        }
+
+        return true;
+    }
+
+    /*
+     * ============================================================
+     * skill give <玩家> <技能ID>
+     * ============================================================
+     *
+     * 无视槽位上限，追加到技能列表末尾。
+     */
+
+    private boolean handleSkill(
+            CommandSender sender,
+            String[] args
+    ) {
+
+        if (args.length < 4 ||
+                !args[1].equalsIgnoreCase("give")) {
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<yellow>用法: /nekoyumeadmin skill give <玩家> <技能ID></yellow>"
+                    )
+            );
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<gray>技能ID示例: sharp_claw / spirit_shot / dream_awaken</gray>"
+                    )
+            );
+
+            return true;
+        }
+
+        Player target =
+                Bukkit.getPlayer(
+                        args[2]
+                );
+
+        if (target == null ||
+                !target.isOnline()) {
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<red>❌ 玩家不在线!</red>"
+                    )
+            );
+
+            return true;
+        }
+
+        CatSkill skill =
+                CatSkill.fromName(
+                        args[3]
+                );
+
+        if (skill == null) {
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<red>❌ 未知技能: </red>"
+                    ).append(
+                            Component.text(
+                                    args[3]
+                            )
+                    )
+            );
+
+            return true;
+        }
+
+        boolean granted =
+                plugin.getCatManager()
+                        .grantSkill(
+                                target,
+                                skill
+                        );
+
+        if (granted) {
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<green>✔ 已授予 </green>"
+                    ).append(
+                            Component.text(
+                                    target.getName()
+                            )
+                    ).append(
+                            mm.deserialize(
+                                    "<white> 技能 </white>"
+                            )
+                    ).append(
+                            Component.text(
+                                    skill.getDisplayName()
+                            )
+                    )
+            );
+
+            target.sendMessage(
+                    mm.deserialize(
+                            "<gradient:#fde68a:#f59e0b>🎉 你的猫咪学会了新技能：</gradient>"
+                    ).append(
+                            Component.text(
+                                    skill.getDisplayName()
+                            )
+                    )
+            );
+
+        } else {
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<red>❌ 授予失败（可能已拥有该技能）。</red>"
                     )
             );
         }

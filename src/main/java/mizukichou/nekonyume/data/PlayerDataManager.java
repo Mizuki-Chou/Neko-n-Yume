@@ -1,4 +1,5 @@
 package mizukichou.nekonyume.data;
+import mizukichou.nekonyume.cat.CatTier;
 
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -10,6 +11,8 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Date;
@@ -32,8 +35,11 @@ public class PlayerDataManager {
      *      + feed-count / feed-date
      * v3 = 行为模式：
      *      + behavior-mode
+     * v4 = 底蕴与技能：
+     *      + tier
+     *      + skills
      */
-    private static final int DATA_VERSION = 3;
+    private static final int DATA_VERSION = 4;
 
     /*
      * 猫咪默认值
@@ -335,10 +341,21 @@ public class PlayerDataManager {
                 migrateV2ToV3();
             }
 
+            /*
+             * v3 → v4：
+             *
+             * 为所有已有猫咪补齐底蕴与技能槽。
+             */
+            if (version < 4) {
+
+                migrateV3ToV4();
+            }
+
             data.set(
                     "data-version",
                     DATA_VERSION
             );
+
 
             saveNow();
 
@@ -513,6 +530,75 @@ public class PlayerDataManager {
         }
     }
 
+
+    /*
+     * v3 → v4：
+     *
+     * - tier   = 由逻辑猫 UUID 确定性推导
+     * - skills = 空列表
+     */
+    private void migrateV3ToV4() {
+
+        ConfigurationSection playersSection =
+                data.getConfigurationSection(
+                        PLAYERS_PATH
+                );
+
+        if (playersSection == null) {
+            return;
+        }
+
+        for (String key :
+                playersSection.getKeys(false)) {
+
+            UUID playerUUID =
+                    parseUUID(key);
+
+            if (playerUUID == null) {
+                continue;
+            }
+
+            String path =
+                    catPath(playerUUID);
+
+            if (!data.contains(path)) {
+                continue;
+            }
+
+            if (!data.contains(
+                    path + ".tier"
+            )) {
+
+                UUID catId =
+                        parseUUID(
+                                data.getString(
+                                        path + ".id"
+                                )
+                        );
+
+                CatTier tier =
+                        CatTier.fromCatId(
+                                catId
+                        );
+
+                data.set(
+                        path + ".tier",
+                        tier.name()
+                );
+            }
+
+            if (!data.contains(
+                    path + ".skills"
+            )) {
+
+                data.set(
+                        path + ".skills",
+                        new ArrayList<String>()
+                );
+            }
+        }
+    }
+
     /*
      * 到达指定等级所需的累计经验：
      * cumXp(L) = (curveBase / 2) × L × (L - 1)
@@ -620,10 +706,14 @@ public class PlayerDataManager {
         long now =
                 System.currentTimeMillis();
 
+        UUID newCatId =
+                UUID.randomUUID();
+
         data.set(
                 path + ".id",
-                UUID.randomUUID().toString()
+                newCatId.toString()
         );
+
 
         data.set(
                 path + ".name",
@@ -717,6 +807,23 @@ public class PlayerDataManager {
         data.set(
                 path + ".behavior-mode",
                 "FOLLOW"
+        );
+
+
+        /*
+         * 底蕴与技能槽
+         */
+        data.set(
+                path + ".tier",
+                CatTier.fromCatId(
+                                newCatId
+                        )
+                        .name()
+        );
+
+        data.set(
+                path + ".skills",
+                new ArrayList<String>()
         );
 
         /*
@@ -1734,6 +1841,114 @@ public class PlayerDataManager {
                 catPath(playerUUID)
                         + ".behavior-mode",
                 mode
+        );
+
+        save();
+    }
+
+
+    /*
+     * ============================================================
+     * 底蕴
+     * ============================================================
+     *
+     * 存储枚举名称字符串。
+     * 缺失时按逻辑猫 UUID 推导兜底。
+     */
+
+    public String getCatTier(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
+
+        String value =
+                data.getString(
+                        catPath(playerUUID)
+                                + ".tier"
+                );
+
+        if (value == null ||
+                value.isBlank()) {
+
+            CatTier tier =
+                    CatTier.fromCatId(
+                            getCatUUID(
+                                    playerUUID
+                            )
+                    );
+
+            return tier.name();
+        }
+
+        return value;
+    }
+
+    public void setCatTier(
+            UUID playerUUID,
+            String tier
+    ) {
+
+        if (playerUUID == null ||
+                tier == null ||
+                tier.isBlank()) {
+
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        data.set(
+                catPath(playerUUID)
+                        + ".tier",
+                tier
+        );
+
+        save();
+    }
+
+    /*
+     * ============================================================
+     * 技能槽
+     * ============================================================
+     *
+     * 存储技能枚举名列表。
+     */
+
+    public List<String> getCatSkills(
+            UUID playerUUID
+    ) {
+
+        ensureCat(playerUUID);
+
+        List<String> list =
+                data.getStringList(
+                        catPath(playerUUID)
+                                + ".skills"
+                );
+
+        return list == null
+                ? new ArrayList<>()
+                : new ArrayList<>(list);
+    }
+
+    public void setCatSkills(
+            UUID playerUUID,
+            List<String> skills
+    ) {
+
+        if (playerUUID == null) {
+            return;
+        }
+
+        ensureCat(playerUUID);
+
+        data.set(
+                catPath(playerUUID)
+                        + ".skills",
+                skills == null
+                        ? new ArrayList<String>()
+                        : new ArrayList<>(skills)
         );
 
         save();

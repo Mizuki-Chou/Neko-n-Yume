@@ -1,5 +1,8 @@
 package mizukichou.nekonyume.cat;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -52,6 +55,20 @@ public class Cat {
      */
 
     private final CatPersonality personality;
+
+    /*
+     * ============================================================
+     * 底蕴
+     * ============================================================
+     *
+     * 普通 / 稀有 / 独特 / 梦幻。
+     *
+     * 由逻辑猫 UUID 确定性生成，
+     * 创建时持久化到 players.yml（data-version v4）。
+     * 决定技能槽成长轨迹与技能品质上限。
+     */
+
+    private CatTier tier;
 
 
     /*
@@ -114,6 +131,19 @@ public class Cat {
      */
     private CatBehaviorMode behaviorMode =
             CatBehaviorMode.FOLLOW;
+
+    /*
+     * ============================================================
+     * 技能槽
+     * ============================================================
+     *
+     * 按槽位顺序存储。
+     * 梦幻猫的第 0 槽是"梦槽"，
+     * 只有梦槽能出现梦幻级技能。
+     */
+
+    private final List<CatSkill> skills =
+            new ArrayList<>();
 
 
     /*
@@ -313,6 +343,11 @@ public class Cat {
                         id
                 );
 
+        this.tier =
+                CatTier.fromCatId(
+                        id
+                );
+
         this.level =
                 Math.max(
                         1,
@@ -400,7 +435,7 @@ public class Cat {
      * 从完整存档恢复。
      *
      * <p>
-     * experience / meowPower / meowRank
+     * experience / meowPower / meowRank / tier / skills
      * 由调用方通过 setter 恢复。
      * </p>
      */
@@ -474,6 +509,26 @@ public class Cat {
 
     public CatPersonality getPersonality() {
         return personality;
+    }
+
+
+    /*
+     * ============================================================
+     * 底蕴
+     * ============================================================
+     */
+
+    public CatTier getTier() {
+        return tier;
+    }
+
+    public void setTier(
+            CatTier tier
+    ) {
+
+        if (tier != null) {
+            this.tier = tier;
+        }
     }
 
 
@@ -774,6 +829,118 @@ public class Cat {
                 behaviorMode == null
                         ? CatBehaviorMode.FOLLOW
                         : behaviorMode;
+    }
+
+
+    /*
+     * ============================================================
+     * 技能槽
+     * ============================================================
+     */
+
+    public List<CatSkill> getSkills() {
+
+        return List.copyOf(
+                skills
+        );
+    }
+
+    public boolean hasSkill(
+            CatSkill skill
+    ) {
+
+        return skill != null &&
+                skills.contains(skill);
+    }
+
+    public void addSkill(
+            CatSkill skill
+    ) {
+
+        if (skill == null ||
+                skills.contains(skill)) {
+
+            return;
+        }
+
+        skills.add(skill);
+    }
+
+    public void clearSkills() {
+
+        skills.clear();
+    }
+
+    public void setSkills(
+            Collection<CatSkill> newSkills
+    ) {
+
+        skills.clear();
+
+        if (newSkills == null) {
+            return;
+        }
+
+        for (CatSkill skill :
+                newSkills) {
+
+            if (skill != null &&
+                    !skills.contains(skill)) {
+
+                skills.add(skill);
+            }
+        }
+    }
+
+
+    /*
+     * 替换指定槽位的技能（用于刷新）。
+     */
+    public void setSkillAt(
+            int index,
+            CatSkill skill
+    ) {
+
+        if (index < 0 ||
+                index >= skills.size() ||
+                skill == null) {
+
+            return;
+        }
+
+        skills.set(
+                index,
+                skill
+        );
+    }
+
+    /*
+     * 当前应有技能槽数
+     * （按底蕴与成长拐点推导）。
+     */
+    public int getSkillSlotCount() {
+
+        int checkpoints =
+                CatTier.checkpointsReached(
+                        meowRank,
+                        level
+                );
+
+        return tier.slotCount(
+                checkpoints
+        );
+    }
+
+    /*
+     * 该槽位是否是"梦槽"
+     * （梦幻猫的第 0 槽，专属梦幻级技能）。
+     */
+    public boolean isDreamSlot(
+            int slotIndex
+    ) {
+
+        return tier == CatTier.DREAM &&
+                slotIndex == 0;
     }
 
 
@@ -1205,11 +1372,13 @@ public class Cat {
                 ", ownerUuid=" + ownerUuid +
                 ", name='" + name + '\'' +
                 ", personality=" + personality +
+                ", tier=" + tier +
                 ", level=" + level +
                 ", experience=" + experience +
                 ", meowPower=" + meowPower +
                 ", meowRank=" + meowRank +
                 ", behaviorMode=" + behaviorMode +
+                ", skills=" + skills +
                 ", hunger=" + hunger +
                 ", affection=" + affection +
                 ", health=" + health +

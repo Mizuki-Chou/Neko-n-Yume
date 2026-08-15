@@ -70,7 +70,6 @@ public enum MeowDanQuality {
             int xpGain,
             int defaultModelData
     ) {
-
         this.displayName = displayName;
         this.colorCode = colorCode;
         this.meowPowerGain = meowPowerGain;

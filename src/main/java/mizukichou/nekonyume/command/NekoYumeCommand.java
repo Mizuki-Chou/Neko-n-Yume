@@ -48,6 +48,7 @@ public class NekoYumeCommand implements CommandExecutor {
                             <gray>/nekoyume summon</gray> - Summon your cat
                             <gray>/nekoyume mode &lt;follow|sit|free&gt;</gray> - Set cat behavior
                             <gray>/nekoyume gui</gray> - Open cat panel
+                            <gray>/nekoyume skill</gray> - Open skill panel
                             <gray>/nekoyume help</gray> - Show help
                             """
                     )
@@ -272,7 +273,6 @@ public class NekoYumeCommand implements CommandExecutor {
                     )
             );
 
-
             player.sendMessage(
                     mm.deserialize(
                             "<white>等级: <yellow>"
@@ -311,6 +311,15 @@ public class NekoYumeCommand implements CommandExecutor {
                     mm.deserialize(
                             "<white>性格: <aqua>"
                                     + cat.getPersonality()
+                                    .getDisplayName()
+                                    + "</aqua>"
+                    )
+            );
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<white>底蕴: <aqua>"
+                                    + cat.getTier()
                                     .getDisplayName()
                                     + "</aqua>"
                     )
@@ -453,6 +462,43 @@ public class NekoYumeCommand implements CommandExecutor {
             }
 
             plugin.getCatGuiManager()
+                    .open(
+                            player
+                    );
+
+            return true;
+        }
+
+        /*
+         * /nekoyume skill
+         */
+        if (args.length > 0 &&
+                args[0].equalsIgnoreCase("skill")) {
+
+            if (!(sender instanceof Player player)) {
+
+                sender.sendMessage(
+                        "Only players can use this command."
+                );
+
+                return true;
+            }
+
+            if (!plugin.getDataManager()
+                    .hasCat(
+                            player.getUniqueId()
+                    )) {
+
+                player.sendMessage(
+                        mm.deserialize(
+                                "<red>🐱 你还没有猫咪!</red>"
+                        )
+                );
+
+                return true;
+            }
+
+            plugin.getSkillGuiManager()
                     .open(
                             player
                     );
@@ -660,7 +706,7 @@ public class NekoYumeCommand implements CommandExecutor {
          */
         sender.sendMessage(
                 mm.deserialize(
-                        "<yellow>用法: /nekoyume <help|claim|cat|rename|summon|mode|gui></yellow>"
+                        "<yellow>用法: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill></yellow>"
                 )
         );
 

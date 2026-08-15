@@ -82,17 +82,16 @@ food:
 #   tier-3 = 喵阶 11~15
 #   tier-4 = 喵阶 16~20
 #   tier-5 = 喵阶 21+
-#   （超出最高档位一律归入最高档）
 #
 # 条目格式：
-#   - material: 物品ID       （原版物品）
-#     amount: 数量            （固定数量）
-#     weight: 权重            （档内抽取权重，越大越常见）
 #   - material: 物品ID
-#     min: 1                  （或随机区间 min~max）
+#     amount: 数量
+#     weight: 权重
+#   - material: 物品ID
+#     min: 1
 #     max: 2
 #     weight: 30
-#   - meowdan: 品质           （喵丹：COMMON/UNCOMMON/RARE/EPIC/LEGENDARY）
+#   - meowdan: 品质
 #     amount: 1
 #     weight: 5
 #
@@ -195,3 +194,47 @@ gift:
       - meowdan: EPIC
         amount: 1
         weight: 6
+
+# 技能
+#
+# 刷新消耗接口：
+#   cost-type: meow-power | player-points
+#   默认消耗喵力；接入 PlayerPoints 后
+#   消耗其 points（需要安装 PlayerPoints 插件）。
+#
+# 技能数值覆盖（可选）：
+#   skills.values.<技能ID>.<键>
+#   键：power / cooldown / duration / radius / amplifier / chance / multiplier
+
+skills:
+  refresh:
+    cost-type: meow-power
+    cost: 10
+    dream-slot-cost-multiplier: 5
+  values: {}
+
+# 战斗
+#
+# 猫跟随模式下自动攻击主人附近的敌对生物。
+# 猫可受伤但不会死亡（致死保底 1 血 + 虚弱）。
+
+battle:
+  enabled: true
+  base-damage: 5
+  per-rank-damage: 1
+  attack-interval-ticks: 40
+  aggro-radius: 12
+  weakness-seconds: 10
+  eternity-rebirth-seconds: 180
+
+# 光环
+#
+# 跟随模式 + 光环范围内，主人获得增益。
+
+aura:
+  enabled: true
+  base-radius: 10
+  speed-unlock-level: 5
+  strength-unlock-meow-rank: 2
+  regen-unlock-level: 15
+  regen-affection: 80

@@ -1,6 +1,7 @@
 package mizukichou.nekonyume.config;
 
 import mizukichou.nekonyume.cat.CatMood;
+import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.MeowDanQuality;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
@@ -12,6 +13,7 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -77,6 +79,35 @@ public class PluginConfig {
      * key = 档位编号（从 1 开始）
      */
     private Map<Integer, List<GiftItemEntry>> giftTiers;
+
+
+    /*
+     * 技能刷新消耗
+     */
+    private String skillRefreshCostType;
+    private int skillRefreshCost;
+    private int dreamSlotCostMultiplier;
+
+    /*
+     * 战斗
+     */
+    private boolean battleEnabled;
+    private int battleBaseDamage;
+    private int battlePerRankDamage;
+    private int battleAttackIntervalTicks;
+    private int battleAggroRadius;
+    private int battleWeaknessSeconds;
+    private int battleEternityRebirthSeconds;
+
+    /*
+     * 光环
+     */
+    private boolean auraEnabled;
+    private int auraBaseRadius;
+    private int auraSpeedUnlockLevel;
+    private int auraStrengthUnlockMeowRank;
+    private int auraRegenUnlockLevel;
+    private int auraRegenAffection;
 
     public PluginConfig(
             JavaPlugin plugin
@@ -235,7 +266,15 @@ public class PluginConfig {
         loadGift(
                 config
         );
+
+        /*
+         * 技能 / 战斗 / 光环
+         */
+        loadSkillsAndBattle(
+                config
+        );
     }
+
 
     /*
      * ============================================================
@@ -471,6 +510,204 @@ public class PluginConfig {
                         .max(Integer::compareTo)
                         .orElse(0);
     }
+
+
+    private void loadSkillsAndBattle(
+            FileConfiguration config
+    ) {
+
+        skillRefreshCostType =
+                config.getString(
+                        "skills.refresh.cost-type",
+                        "meow-power"
+                );
+
+        skillRefreshCost =
+                positive(
+                        config.getInt(
+                                "skills.refresh.cost",
+                                10
+                        ),
+                        1
+                );
+
+        dreamSlotCostMultiplier =
+                positive(
+                        config.getInt(
+                                "skills.refresh.dream-slot-cost-multiplier",
+                                5
+                        ),
+                        1
+                );
+
+        battleEnabled =
+                config.getBoolean(
+                        "battle.enabled",
+                        true
+                );
+
+        battleBaseDamage =
+                positive(
+                        config.getInt(
+                                "battle.base-damage",
+                                5
+                        ),
+                        1
+                );
+
+        battlePerRankDamage =
+                positive(
+                        config.getInt(
+                                "battle.per-rank-damage",
+                                1
+                        ),
+                        0
+                );
+
+        battleAttackIntervalTicks =
+                positive(
+                        config.getInt(
+                                "battle.attack-interval-ticks",
+                                40
+                        ),
+                        1
+                );
+
+        battleAggroRadius =
+                positive(
+                        config.getInt(
+                                "battle.aggro-radius",
+                                12
+                        ),
+                        1
+                );
+
+        battleWeaknessSeconds =
+                positive(
+                        config.getInt(
+                                "battle.weakness-seconds",
+                                10
+                        ),
+                        1
+                );
+
+        battleEternityRebirthSeconds =
+                positive(
+                        config.getInt(
+                                "battle.eternity-rebirth-seconds",
+                                180
+                        ),
+                        1
+                );
+
+        auraEnabled =
+                config.getBoolean(
+                        "aura.enabled",
+                        true
+                );
+
+        auraBaseRadius =
+                positive(
+                        config.getInt(
+                                "aura.base-radius",
+                                10
+                        ),
+                        1
+                );
+
+        auraSpeedUnlockLevel =
+                positive(
+                        config.getInt(
+                                "aura.speed-unlock-level",
+                                5
+                        ),
+                        1
+                );
+
+        auraStrengthUnlockMeowRank =
+                positive(
+                        config.getInt(
+                                "aura.strength-unlock-meow-rank",
+                                2
+                        ),
+                        0
+                );
+
+        auraRegenUnlockLevel =
+                positive(
+                        config.getInt(
+                                "aura.regen-unlock-level",
+                                15
+                        ),
+                        1
+                );
+
+        auraRegenAffection =
+                clamp(
+                        config.getInt(
+                                "aura.regen-affection",
+                                80
+                        ),
+                        0,
+                        100
+                );
+    }
+
+    /*
+     * ============================================================
+     * 技能数值读取
+     * ============================================================
+     *
+     * 优先 config: skills.values.<技能ID小写>.<key>，
+     * 否则使用调用方默认值。
+     */
+
+    public int getSkillValue(
+            CatSkill skill,
+            String key,
+            int defaultValue
+    ) {
+
+        if (skill == null) {
+            return defaultValue;
+        }
+
+        return plugin.getConfig()
+                .getInt(
+                        "skills.values."
+                                + skill.name()
+                                .toLowerCase(
+                                        Locale.ROOT
+                                )
+                                + "."
+                                + key,
+                        defaultValue
+                );
+    }
+
+    public double getSkillValueDouble(
+            CatSkill skill,
+            String key,
+            double defaultValue
+    ) {
+
+        if (skill == null) {
+            return defaultValue;
+        }
+
+        return plugin.getConfig()
+                .getDouble(
+                        "skills.values."
+                                + skill.name()
+                                .toLowerCase(
+                                        Locale.ROOT
+                                )
+                                + "."
+                                + key,
+                        defaultValue
+                );
+    }
+
 
     private List<GiftItemEntry> parseGiftEntries(
             List<Map<?, ?>> rawEntries
@@ -817,6 +1054,71 @@ public class PluginConfig {
         return Collections.unmodifiableList(
                 entries
         );
+    }
+
+
+    public String getSkillRefreshCostType() {
+        return skillRefreshCostType;
+    }
+
+    public int getSkillRefreshCost() {
+        return skillRefreshCost;
+    }
+
+    public int getDreamSlotCostMultiplier() {
+        return dreamSlotCostMultiplier;
+    }
+
+    public boolean isBattleEnabled() {
+        return battleEnabled;
+    }
+
+    public int getBattleBaseDamage() {
+        return battleBaseDamage;
+    }
+
+    public int getBattlePerRankDamage() {
+        return battlePerRankDamage;
+    }
+
+    public int getBattleAttackIntervalTicks() {
+        return battleAttackIntervalTicks;
+    }
+
+    public int getBattleAggroRadius() {
+        return battleAggroRadius;
+    }
+
+    public int getBattleWeaknessSeconds() {
+        return battleWeaknessSeconds;
+    }
+
+    public int getBattleEternityRebirthSeconds() {
+        return battleEternityRebirthSeconds;
+    }
+
+    public boolean isAuraEnabled() {
+        return auraEnabled;
+    }
+
+    public int getAuraBaseRadius() {
+        return auraBaseRadius;
+    }
+
+    public int getAuraSpeedUnlockLevel() {
+        return auraSpeedUnlockLevel;
+    }
+
+    public int getAuraStrengthUnlockMeowRank() {
+        return auraStrengthUnlockMeowRank;
+    }
+
+    public int getAuraRegenUnlockLevel() {
+        return auraRegenUnlockLevel;
+    }
+
+    public int getAuraRegenAffection() {
+        return auraRegenAffection;
     }
 
     /*

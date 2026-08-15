@@ -2,8 +2,10 @@ package mizukichou.nekonyume.cat;
 
 import io.papermc.paper.registry.RegistryKey;
 import mizukichou.nekonyume.NekoNYume;
+import mizukichou.nekonyume.event.CatSkillRollEvent;
 import mizukichou.nekonyume.event.CatLevelUpEvent;
 import mizukichou.nekonyume.event.CatMeowRankUpEvent;
+import mizukichou.nekonyume.skill.SkillRefreshCostProvider;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
@@ -275,6 +277,34 @@ public class CatManager {
                         ownerUUID,
                         cat.getBehaviorMode()
                                 .name()
+                );
+
+
+        /*
+         * 底蕴与技能
+         */
+        plugin.getDataManager()
+                .setCatTier(
+                        ownerUUID,
+                        cat.getTier()
+                                .name()
+                );
+
+        List<String> skillNames =
+                new ArrayList<>();
+
+        for (CatSkill skill :
+                cat.getSkills()) {
+
+            skillNames.add(
+                    skill.name()
+            );
+        }
+
+        plugin.getDataManager()
+                .setCatSkills(
+                        ownerUUID,
+                        skillNames
                 );
 
         /*
@@ -564,6 +594,16 @@ public class CatManager {
                                 cat.getLevel()
                         )
                 );
+
+
+        /*
+         * 等级可能触发了技能槽拐点。
+         */
+        syncSkillSlots(
+                player,
+                cat
+        );
+
     }
 
 
@@ -731,6 +771,16 @@ public class CatManager {
                                 cat.getMeowRank()
                         )
                 );
+
+
+        /*
+         * 喵阶可能触发了技能槽拐点。
+         */
+        syncSkillSlots(
+                player,
+                cat
+        );
+
     }
 
 
@@ -753,7 +803,6 @@ public class CatManager {
                 player.getName()
         );
     }
-
 
     /*
      * ============================================================
@@ -932,6 +981,16 @@ public class CatManager {
                 )
         );
 
+
+        /*
+         * 底蕴与技能。
+         */
+        applyTierAndSkills(
+                logicalCat,
+                ownerUUID,
+                catUUID
+        );
+
         /*
          * Entity UUID。
          */
@@ -1010,6 +1069,65 @@ public class CatManager {
         return logicalCat;
     }
 
+
+    /*
+     * 从存档恢复底蕴与技能槽。
+     * 底蕴缺失时按逻辑猫 UUID 推导兜底。
+     */
+
+    private void applyTierAndSkills(
+            mizukichou.nekonyume.cat.Cat logicalCat,
+            UUID ownerUUID,
+            UUID catUUID
+    ) {
+
+        CatTier tier =
+                CatTier.fromName(
+                        plugin.getDataManager()
+                                .getCatTier(
+                                        ownerUUID
+                                )
+                );
+
+        if (tier == null) {
+
+            tier =
+                    CatTier.fromCatId(
+                            catUUID
+                    );
+        }
+
+        logicalCat.setTier(
+                tier
+        );
+
+        List<CatSkill> skills =
+                new ArrayList<>();
+
+        for (String skillName :
+                plugin.getDataManager()
+                        .getCatSkills(
+                                ownerUUID
+                        )) {
+
+            CatSkill skill =
+                    CatSkill.fromName(
+                            skillName
+                    );
+
+            if (skill != null &&
+                    !skills.contains(skill)) {
+
+                skills.add(
+                        skill
+                );
+            }
+        }
+
+        logicalCat.setSkills(
+                skills
+        );
+    }
 
     /*
      * ============================================================
@@ -1925,6 +2043,15 @@ public class CatManager {
                 )
         );
 
+        /*
+         * 底蕴与技能。
+         */
+        applyTierAndSkills(
+                logicalCat,
+                ownerUUID,
+                catUUID
+        );
+
         logicalCat.setEntityUuid(
                 entity.getUniqueId()
         );
@@ -1950,6 +2077,7 @@ public class CatManager {
 
         return logicalCat;
     }
+
 
 
     /*
@@ -3066,18 +3194,15 @@ public class CatManager {
         );
 
         /*
-         * 猫暂时无敌。
+         * 猫参与战斗：
+         * 可受伤，但不会死亡。
          *
-         * 这是纪念性伴侣猫，
-         * 不应死于岩浆 / 怪物 / 摔落。
-         *
-         * 注意：
-         * /kill 与部分插件的直接致死仍然有效，
-         * 因此 EntityDeathEvent 的兜底处理
-         * 依然保留。
+         * 受伤减免与致死保护
+         * 由 CatEntityListener 处理；
+         * 战斗关闭时同样由监听器恢复无敌。
          */
         cat.setInvulnerable(
-                true
+                false
         );
 
         cat.getPersistentDataContainer()
@@ -3360,6 +3485,445 @@ public class CatManager {
         );
     }
 
+
+    /*
+     * ============================================================
+     * 技能槽同步
+     * ============================================================
+     *
+     * 在经验 / 喵力变化后调用。
+     * 若技能数少于应有槽数，
+     * 对每个新槽免费抽取一次并通知玩家。
+     */
+
+    public void syncSkillSlots(
+            Player player,
+            mizukichou.nekonyume.cat.Cat cat
+    ) {
+
+        if (player == null ||
+                cat == null ||
+                !player.isOnline()) {
+
+            return;
+        }
+
+        int current =
+                cat.getSkills()
+                        .size();
+
+        int expected =
+                cat.getSkillSlotCount();
+
+        if (current >= expected) {
+            return;
+        }
+
+        for (int slot = current;
+             slot < expected;
+             slot++) {
+
+            CatSkill rolled =
+                    rollSkillForSlot(
+                            cat,
+                            slot
+                    );
+
+            if (rolled != null) {
+
+                cat.addSkill(
+                        rolled
+                );
+
+                player.sendMessage(
+                        mm.deserialize(
+                                "<gradient:#fde68a:#f59e0b>🎉 </gradient>"
+                        ).append(
+                                Component.text(
+                                        cat.getName()
+                                )
+                        ).append(
+                                mm.deserialize(
+                                        "<white> 学会了新技能：</white>"
+                                )
+                        ).append(
+                                Component.text(
+                                        rolled.getDisplayName()
+                                )
+                        )
+                );
+            }
+        }
+
+        if (cat.getSkills()
+                .size() > current) {
+
+            persistSkills(
+                    player.getUniqueId(),
+                    cat
+            );
+        }
+    }
+
+    /*
+     * 为指定槽位抽取技能（不修改任何状态）。
+     *
+     * 品质上限：
+     * 梦槽 → 梦幻；
+     * 梦幻猫其他槽 → 独特；
+     * 其余 → 自身底蕴。
+     *
+     * 排除已有技能，
+     * 按品质权重抽取。
+     */
+
+    private CatSkill rollSkillForSlot(
+            mizukichou.nekonyume.cat.Cat cat,
+            int slotIndex
+    ) {
+
+        boolean dreamSlot =
+                cat.isDreamSlot(
+                        slotIndex
+                );
+
+        CatTier maxTier =
+                CatTier.maxSkillTierForSlot(
+                        cat.getTier(),
+                        dreamSlot
+                );
+
+        List<CatSkill> pool =
+                new ArrayList<>();
+
+        for (CatSkill skill :
+                CatSkill.poolFor(
+                        maxTier
+                )) {
+
+            if (!cat.hasSkill(
+                    skill
+            )) {
+
+                pool.add(
+                        skill
+                );
+            }
+        }
+
+        return weightedSkillRoll(
+                pool
+        );
+    }
+
+    private CatSkill weightedSkillRoll(
+            List<CatSkill> pool
+    ) {
+
+        int totalWeight = 0;
+
+        for (CatSkill skill :
+                pool) {
+
+            totalWeight +=
+                    skill.getTier()
+                            .getWeight();
+        }
+
+        if (totalWeight <= 0) {
+            return null;
+        }
+
+        int roll =
+                random.nextInt(
+                        totalWeight
+                );
+
+        CatSkill chosen =
+                pool.get(
+                        pool.size() - 1
+                );
+
+        for (CatSkill skill :
+                pool) {
+
+            roll -= skill.getTier()
+                    .getWeight();
+
+            if (roll < 0) {
+
+                chosen = skill;
+                break;
+            }
+        }
+
+        return chosen;
+    }
+
+    /*
+     * ============================================================
+     * 刷新技能槽
+     * ============================================================
+     *
+     * 消耗由 CatSkillManager 的刷新消耗提供者处理。
+     * 梦槽消耗 × 倍率。
+     *
+     * true = 刷新成功。
+     */
+
+    public boolean refreshSkillSlot(
+            Player player,
+            int slotIndex
+    ) {
+
+        if (player == null) {
+            return false;
+        }
+
+        mizukichou.nekonyume.cat.Cat cat =
+                getCat(player);
+
+        if (cat == null) {
+
+            cat =
+                    loadCat(
+                            player
+                    );
+        }
+
+        if (cat == null) {
+            return false;
+        }
+
+        List<CatSkill> currentSkills =
+                cat.getSkills();
+
+        if (slotIndex < 0 ||
+                slotIndex >= currentSkills.size()) {
+
+            return false;
+        }
+
+        boolean dreamSlot =
+                cat.isDreamSlot(
+                        slotIndex
+                );
+
+        int cost =
+                plugin.getCatSkillManager()
+                        .getRefreshCost(
+                                dreamSlot
+                        );
+
+        SkillRefreshCostProvider provider =
+                plugin.getCatSkillManager()
+                        .getRefreshCostProvider();
+
+        if (!provider.canAfford(
+                player,
+                cost
+        )) {
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<red>❌ "
+                                    + plugin.getCatSkillManager()
+                                    .getRefreshCostDisplay(
+                                            dreamSlot
+                                    )
+                                    + " 不足，无法刷新。</red>"
+                    )
+            );
+
+            return false;
+        }
+
+        CatSkill oldSkill =
+                currentSkills.get(
+                        slotIndex
+                );
+
+        /*
+         * 排除已有技能（重抽必然换新）。
+         */
+        CatTier maxTier =
+                CatTier.maxSkillTierForSlot(
+                        cat.getTier(),
+                        dreamSlot
+                );
+
+        List<CatSkill> pool =
+                new ArrayList<>();
+
+        for (CatSkill skill :
+                CatSkill.poolFor(
+                        maxTier
+                )) {
+
+            if (!cat.hasSkill(
+                    skill
+            )) {
+
+                pool.add(
+                        skill
+                );
+            }
+        }
+
+        if (pool.isEmpty()) {
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<yellow>没有可抽取的新技能了。</yellow>"
+                    )
+            );
+
+            return false;
+        }
+
+        /*
+         * 扣费。
+         */
+        if (!provider.charge(
+                player,
+                cost
+        )) {
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<red>❌ 扣除"
+                                    + provider.getDisplayName()
+                                    + "失败。</red>"
+                    )
+            );
+
+            return false;
+        }
+
+        CatSkill newSkill =
+                weightedSkillRoll(
+                        pool
+                );
+
+        if (newSkill == null) {
+            return false;
+        }
+
+        cat.setSkillAt(
+                slotIndex,
+                newSkill
+        );
+
+        persistSkills(
+                player.getUniqueId(),
+                cat
+        );
+
+        /*
+         * 事件与反馈。
+         */
+        Bukkit.getPluginManager()
+                .callEvent(
+                        new CatSkillRollEvent(
+                                player,
+                                cat,
+                                slotIndex,
+                                oldSkill,
+                                newSkill,
+                                true
+                        )
+                );
+
+        player.sendMessage(
+                mm.deserialize(
+                        "<gradient:#c4b5fd:#a78bfa>✨ 技能槽刷新成功：</gradient>"
+                ).append(
+                        Component.text(
+                                oldSkill.getDisplayName()
+                        )
+                ).append(
+                        mm.deserialize(
+                                "<white> → </white>"
+                        )
+                ).append(
+                        Component.text(
+                                newSkill.getDisplayName()
+                        )
+                )
+        );
+
+        return true;
+    }
+
+    /*
+     * ============================================================
+     * 管理员发放技能
+     * ============================================================
+     *
+     * 无视槽位上限，追加到技能列表末尾。
+     */
+
+    public boolean grantSkill(
+            Player player,
+            CatSkill skill
+    ) {
+
+        if (player == null ||
+                skill == null) {
+
+            return false;
+        }
+
+        mizukichou.nekonyume.cat.Cat cat =
+                loadCat(
+                        player
+                );
+
+        if (cat == null) {
+            return false;
+        }
+
+        if (cat.hasSkill(
+                skill
+        )) {
+
+            return false;
+        }
+
+        cat.addSkill(
+                skill
+        );
+
+        persistSkills(
+                player.getUniqueId(),
+                cat
+        );
+
+        return true;
+    }
+
+    private void persistSkills(
+            UUID playerUUID,
+            mizukichou.nekonyume.cat.Cat cat
+    ) {
+
+        List<String> names =
+                new ArrayList<>();
+
+        for (CatSkill skill :
+                cat.getSkills()) {
+
+            names.add(
+                    skill.name()
+            );
+        }
+
+        plugin.getDataManager()
+                .setCatSkills(
+                        playerUUID,
+                        names
+                );
+    }
 
     /*
      * ============================================================

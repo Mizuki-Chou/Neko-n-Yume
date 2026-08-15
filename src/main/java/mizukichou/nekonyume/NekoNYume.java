@@ -28,6 +28,11 @@ import mizukichou.nekonyume.listener.CatGuiListener;
 import mizukichou.nekonyume.listener.CatInteractionListener;
 import mizukichou.nekonyume.listener.PlayerJoinListener;
 import mizukichou.nekonyume.listener.PlayerQuitListener;
+import mizukichou.nekonyume.skill.CatBattleState;
+import mizukichou.nekonyume.skill.CatSkillManager;
+import mizukichou.nekonyume.skill.SkillGuiManager;
+import mizukichou.nekonyume.task.CatAuraTask;
+import mizukichou.nekonyume.task.CatBattleTask;
 import mizukichou.nekonyume.task.CatBehaviorTask;
 import mizukichou.nekonyume.task.CatHungerTask;
 import mizukichou.nekonyume.task.CatPositionTask;
@@ -46,6 +51,9 @@ public final class NekoNYume extends JavaPlugin {
     private CatGuiManager catGuiManager;
     private GiftManager giftManager;
     private PlayerJoinListener playerJoinListener;
+    private CatSkillManager catSkillManager;
+    private CatBattleState battleState;
+    private SkillGuiManager skillGuiManager;
 
     /*
      * 定时任务引用。
@@ -53,6 +61,8 @@ public final class NekoNYume extends JavaPlugin {
     private BukkitTask hungerTask;
     private BukkitTask positionTask;
     private BukkitTask behaviorTask;
+    private BukkitTask battleTask;
+    private BukkitTask auraTask;
     private BukkitTask autosaveTask;
 
     public PluginConfig getPluginConfig() {
@@ -77,6 +87,18 @@ public final class NekoNYume extends JavaPlugin {
 
     public GiftManager getGiftManager() {
         return giftManager;
+    }
+
+    public CatSkillManager getCatSkillManager() {
+        return catSkillManager;
+    }
+
+    public CatBattleState getBattleState() {
+        return battleState;
+    }
+
+    public SkillGuiManager getSkillGuiManager() {
+        return skillGuiManager;
     }
 
     /*
@@ -105,8 +127,12 @@ public final class NekoNYume extends JavaPlugin {
 
             playerJoinListener.reload();
         }
-    }
 
+        if (catSkillManager != null) {
+
+            catSkillManager.loadRefreshCostProvider();
+        }
+    }
 
     @Override
     public void onEnable() {
@@ -183,6 +209,25 @@ public final class NekoNYume extends JavaPlugin {
 
         /*
          * ========================================================
+         * 技能与战斗
+         * ========================================================
+         */
+
+        battleState =
+                new CatBattleState();
+
+        catSkillManager =
+                new CatSkillManager(
+                        this
+                );
+
+        skillGuiManager =
+                new SkillGuiManager(
+                        this
+                );
+
+        /*
+         * ========================================================
          * 命令
          * ========================================================
          *
@@ -224,7 +269,6 @@ public final class NekoNYume extends JavaPlugin {
         registerListeners(
                 playerJoinListener,
                 new PlayerQuitListener(this),
-
                 new CatFoodListener(this),
                 new CatEntityListener(this),
                 new CatInteractionListener(this),
@@ -283,6 +327,42 @@ public final class NekoNYume extends JavaPlugin {
                                 new CatBehaviorTask(this),
                                 20L,
                                 20L
+                        );
+
+        /*
+         * ========================================================
+         * 猫咪战斗
+         * ========================================================
+         *
+         * 每 10 tick 检查一次。
+         */
+
+        battleTask =
+                getServer()
+                        .getScheduler()
+                        .runTaskTimer(
+                                this,
+                                new CatBattleTask(this),
+                                10L,
+                                10L
+                        );
+
+        /*
+         * ========================================================
+         * 猫咪光环
+         * ========================================================
+         *
+         * 每 2 秒刷新一次。
+         */
+
+        auraTask =
+                getServer()
+                        .getScheduler()
+                        .runTaskTimer(
+                                this,
+                                new CatAuraTask(this),
+                                40L,
+                                40L
                         );
 
         /*
@@ -351,6 +431,14 @@ public final class NekoNYume extends JavaPlugin {
 
         if (behaviorTask != null) {
             behaviorTask.cancel();
+        }
+
+        if (battleTask != null) {
+            battleTask.cancel();
+        }
+
+        if (auraTask != null) {
+            auraTask.cancel();
         }
 
         if (autosaveTask != null) {
