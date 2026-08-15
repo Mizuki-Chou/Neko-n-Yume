@@ -1,6 +1,5 @@
 package mizukichou.nekonyume.cat;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -15,7 +14,15 @@ import java.util.UUID;
  *
  * <p>
  * Cat 是运行期间的猫咪状态真相。
- * PlayerDataManager 负责持久化这些状态。
+ * CatStore 负责持久化这些状态。
+ * </p>
+ *
+ * <p>
+ * Step 6 治理：
+ * 曲线数学 → GrowthMath；
+ * 技能集合 → CatSkills；
+ * 梦槽判定 → CatTier。
+ * Cat 只保留状态持有与合法的领域查询。
  * </p>
  */
 public class Cat {
@@ -70,7 +77,6 @@ public class Cat {
 
     private CatTier tier;
 
-
     /*
      * ============================================================
      * 成长
@@ -86,11 +92,10 @@ public class Cat {
      * 累计经验。
      *
      * <p>
-     * 等级由累计经验推导。
+     * 等级由累计经验推导（GrowthMath）。
      * </p>
      */
     private int experience;
-
 
     /*
      * ============================================================
@@ -99,13 +104,6 @@ public class Cat {
      *
      * 喵力是稀有机缘资源。
      * 抚摸与喂食有低概率获得。
-     *
-     * 喵阶从 0 开始：
-     *
-     * 0 → 1 : 10 点
-     * 1 → 2 : 11 点
-     * 2 → 3 : 12 点
-     * ...
      *
      * 升到第 N 阶的累计喵力：
      * N × (N + 19) / 2
@@ -137,14 +135,13 @@ public class Cat {
      * 技能槽
      * ============================================================
      *
-     * 按槽位顺序存储。
+     * 按槽位顺序存储（CatSkills 保证唯一）。
      * 梦幻猫的第 0 槽是"梦槽"，
      * 只有梦槽能出现梦幻级技能。
      */
 
-    private final List<CatSkill> skills =
-            new ArrayList<>();
-
+    private final CatSkills skills =
+            new CatSkills();
 
     /*
      * ============================================================
@@ -176,7 +173,6 @@ public class Cat {
      */
     private int health;
 
-
     /*
      * ============================================================
      * 外观
@@ -187,17 +183,11 @@ public class Cat {
      * Minecraft 猫咪花色的 NamespacedKey 字符串。
      *
      * <p>
-     * 例如：
-     * minecraft:tabby
-     * </p>
-     *
-     * <p>
      * 使用字符串而不是 Bukkit Cat.Type，
      * 避免数据模型直接依赖 Bukkit Registry。
      * </p>
      */
     private String variant;
-
 
     /*
      * ============================================================
@@ -214,7 +204,6 @@ public class Cat {
     private float yaw;
     private float pitch;
 
-
     /*
      * ============================================================
      * Bukkit 实体
@@ -229,7 +218,6 @@ public class Cat {
      * </p>
      */
     private UUID entityUuid;
-
 
     /*
      * ============================================================
@@ -251,7 +239,6 @@ public class Cat {
      * 上一次互动时间。
      */
     private long lastInteractionAt;
-
 
     /*
      * ============================================================
@@ -294,7 +281,6 @@ public class Cat {
                 System.currentTimeMillis()
         );
     }
-
 
     /*
      * ============================================================
@@ -404,10 +390,9 @@ public class Cat {
                         : this.createdAt;
     }
 
-
     /*
      * ============================================================
-     * 创建新猫
+     * 工厂
      * ============================================================
      */
 
@@ -423,13 +408,6 @@ public class Cat {
                 name
         );
     }
-
-
-    /*
-     * ============================================================
-     * 从存档恢复
-     * ============================================================
-     */
 
     /**
      * 从完整存档恢复。
@@ -468,7 +446,6 @@ public class Cat {
         );
     }
 
-
     /*
      * ============================================================
      * 基础身份
@@ -500,7 +477,6 @@ public class Cat {
         this.name = name;
     }
 
-
     /*
      * ============================================================
      * 性格
@@ -510,7 +486,6 @@ public class Cat {
     public CatPersonality getPersonality() {
         return personality;
     }
-
 
     /*
      * ============================================================
@@ -530,7 +505,6 @@ public class Cat {
             this.tier = tier;
         }
     }
-
 
     /*
      * ============================================================
@@ -577,53 +551,6 @@ public class Cat {
                 );
     }
 
-    /*
-     * 累计经验 → 等级。
-     *
-     * 升到 L 级需要的累计经验：
-     * cumXp(L) = (curveBase / 2) × L × (L - 1)
-     *
-     * 例如 curveBase = 100：
-     * cumXp(1) = 0
-     * cumXp(2) = 100
-     * cumXp(3) = 300
-     */
-    private static int levelFromExperience(
-            int totalExperience,
-            int curveBase
-    ) {
-
-        if (curveBase <= 0) {
-            curveBase = 100;
-        }
-
-        int level = 1;
-
-        /*
-         * 上限保护，防止异常数据死循环。
-         */
-        int safety = 0;
-
-        while (level < 10000 &&
-                safety < 10000) {
-
-            long nextLevelRequired =
-                    (long) curveBase
-                            * (level + 1L)
-                            * level
-                            / 2;
-
-            if (totalExperience < nextLevelRequired) {
-                break;
-            }
-
-            level++;
-            safety++;
-        }
-
-        return level;
-    }
-
     /**
      * 增加经验（默认曲线 100）。
      *
@@ -637,7 +564,7 @@ public class Cat {
 
         return addExperience(
                 amount,
-                100
+                GrowthMath.DEFAULT_XP_CURVE_BASE
         );
     }
 
@@ -660,7 +587,7 @@ public class Cat {
         this.experience += amount;
 
         int newLevel =
-                levelFromExperience(
+                GrowthMath.levelFromExperience(
                         this.experience,
                         curveBase
                 );
@@ -676,7 +603,6 @@ public class Cat {
 
         return gained;
     }
-
 
     /*
      * ============================================================
@@ -714,49 +640,6 @@ public class Cat {
                 );
     }
 
-    /*
-     * 累计喵力 → 喵阶。
-     *
-     * 升到第 N 阶需要的累计喵力：
-     * cumMeow(N) = N × (N + curveOffset) / 2
-     *
-     * curveOffset = 19：
-     * 0 → 1 : 10
-     * 1 → 2 : 21
-     * 2 → 3 : 33
-     */
-    private static int meowRankFromPower(
-            int totalMeowPower,
-            int curveOffset
-    ) {
-
-        if (curveOffset <= 0) {
-            curveOffset = 19;
-        }
-
-        int rank = 0;
-
-        int safety = 0;
-
-        while (rank < 10000 &&
-                safety < 10000) {
-
-            long nextRankRequired =
-                    (long) (rank + 1)
-                            * (rank + 1 + curveOffset)
-                            / 2;
-
-            if (totalMeowPower < nextRankRequired) {
-                break;
-            }
-
-            rank++;
-            safety++;
-        }
-
-        return rank;
-    }
-
     /**
      * 增加喵力（默认曲线参数 19）。
      *
@@ -770,7 +653,7 @@ public class Cat {
 
         return addMeowPower(
                 amount,
-                19
+                GrowthMath.DEFAULT_MEOW_CURVE_OFFSET
         );
     }
 
@@ -793,7 +676,7 @@ public class Cat {
         this.meowPower += amount;
 
         int newRank =
-                meowRankFromPower(
+                GrowthMath.meowRankFromPower(
                         this.meowPower,
                         curveOffset
                 );
@@ -809,7 +692,6 @@ public class Cat {
 
         return gained;
     }
-
 
     /*
      * ============================================================
@@ -831,37 +713,29 @@ public class Cat {
                         : behaviorMode;
     }
 
-
     /*
      * ============================================================
-     * 技能槽
+     * 技能槽（委托 CatSkills）
      * ============================================================
      */
 
     public List<CatSkill> getSkills() {
 
-        return List.copyOf(
-                skills
-        );
+        return skills.toList();
     }
 
     public boolean hasSkill(
             CatSkill skill
     ) {
 
-        return skill != null &&
-                skills.contains(skill);
+        return skills.contains(
+                skill
+        );
     }
 
     public void addSkill(
             CatSkill skill
     ) {
-
-        if (skill == null ||
-                skills.contains(skill)) {
-
-            return;
-        }
 
         skills.add(skill);
     }
@@ -875,23 +749,10 @@ public class Cat {
             Collection<CatSkill> newSkills
     ) {
 
-        skills.clear();
-
-        if (newSkills == null) {
-            return;
-        }
-
-        for (CatSkill skill :
-                newSkills) {
-
-            if (skill != null &&
-                    !skills.contains(skill)) {
-
-                skills.add(skill);
-            }
-        }
+        skills.replaceAll(
+                newSkills
+        );
     }
-
 
     /*
      * 替换指定槽位的技能（用于刷新）。
@@ -900,13 +761,6 @@ public class Cat {
             int index,
             CatSkill skill
     ) {
-
-        if (index < 0 ||
-                index >= skills.size() ||
-                skill == null) {
-
-            return;
-        }
 
         skills.set(
                 index,
@@ -934,15 +788,16 @@ public class Cat {
     /*
      * 该槽位是否是"梦槽"
      * （梦幻猫的第 0 槽，专属梦幻级技能）。
+     * 委托 CatTier。
      */
     public boolean isDreamSlot(
             int slotIndex
     ) {
 
-        return tier == CatTier.DREAM &&
-                slotIndex == 0;
+        return tier.isDreamSlot(
+                slotIndex
+        );
     }
-
 
     /*
      * ============================================================
@@ -971,7 +826,6 @@ public class Cat {
                 score
         );
     }
-
 
     /*
      * ============================================================
@@ -1013,7 +867,6 @@ public class Cat {
         );
     }
 
-
     /*
      * ============================================================
      * 好感度
@@ -1053,7 +906,6 @@ public class Cat {
                 this.affection - amount
         );
     }
-
 
     /*
      * ============================================================
@@ -1095,7 +947,6 @@ public class Cat {
         );
     }
 
-
     /*
      * ============================================================
      * 花色
@@ -1128,7 +979,6 @@ public class Cat {
 
         return variant.trim();
     }
-
 
     /*
      * ============================================================
@@ -1203,7 +1053,6 @@ public class Cat {
         this.pitch = pitch;
     }
 
-
     /*
      * ============================================================
      * Bukkit Entity UUID
@@ -1221,7 +1070,6 @@ public class Cat {
         this.entityUuid =
                 entityUuid;
     }
-
 
     /*
      * ============================================================
@@ -1277,7 +1125,6 @@ public class Cat {
                 System.currentTimeMillis();
     }
 
-
     /*
      * ============================================================
      * 陪伴天数
@@ -1308,7 +1155,6 @@ public class Cat {
         return (int) days + 1;
     }
 
-
     /*
      * ============================================================
      * 状态判断
@@ -1335,7 +1181,6 @@ public class Cat {
         return affection >= 100;
     }
 
-
     /*
      * ============================================================
      * 工具
@@ -1356,7 +1201,6 @@ public class Cat {
                 )
         );
     }
-
 
     /*
      * ============================================================

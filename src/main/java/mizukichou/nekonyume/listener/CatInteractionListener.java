@@ -1,10 +1,14 @@
 package mizukichou.nekonyume.listener;
 
-import mizukichou.nekonyume.NekoNYume;
+import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatProgressionService;
+import mizukichou.nekonyume.config.PluginConfig;
 import mizukichou.nekonyume.event.CatPettedEvent;
+import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Entity;
@@ -36,7 +40,13 @@ public class CatInteractionListener implements Listener {
     private static final long DEFAULT_PET_COOLDOWN =
             1000L;
 
-    private final NekoNYume plugin;
+    private final CatCache cache;
+    private final CatProgressionService progression;
+    private final CatStore store;
+    private final PluginConfig config;
+
+    private final NamespacedKey catKey;
+    private final NamespacedKey ownerKey;
 
     /*
      * MiniMessage 实例。
@@ -64,10 +74,20 @@ public class CatInteractionListener implements Listener {
             new HashMap<>();
 
     public CatInteractionListener(
-            NekoNYume plugin
+            CatCache cache,
+            CatProgressionService progression,
+            CatStore store,
+            PluginConfig config,
+            NamespacedKey catKey,
+            NamespacedKey ownerKey
     ) {
 
-        this.plugin = plugin;
+        this.cache = cache;
+        this.progression = progression;
+        this.store = store;
+        this.config = config;
+        this.catKey = catKey;
+        this.ownerKey = ownerKey;
     }
 
     /*
@@ -126,10 +146,9 @@ public class CatInteractionListener implements Listener {
          */
 
         mizukichou.nekonyume.cat.Cat logicalCat =
-                plugin.getCatManager()
-                        .getCatByEntity(
-                                entityCat.getUniqueId()
-                        );
+                cache.getCatByEntity(
+                        entityCat.getUniqueId()
+                );
 
         /*
          * 如果内存中还没有对应 Cat，
@@ -138,10 +157,9 @@ public class CatInteractionListener implements Listener {
         if (logicalCat == null) {
 
             logicalCat =
-                    plugin.getCatManager()
-                            .loadCat(
-                                    player
-                            );
+                    cache.loadCat(
+                            player
+                    );
         }
 
         if (logicalCat == null) {
@@ -170,14 +188,12 @@ public class CatInteractionListener implements Listener {
          */
 
         int dailyPetLimit =
-                plugin.getPluginConfig()
-                        .getDailyPetLimit();
+                config.getDailyPetLimit();
 
         int petCount =
-                plugin.getDataManager()
-                        .getCatPetCount(
-                                playerUUID
-                        );
+                store.getCatPetCount(
+                        playerUUID
+                );
 
         if (petCount >= dailyPetLimit) {
 
@@ -247,7 +263,7 @@ public class CatInteractionListener implements Listener {
                 Math.min(
                         100,
                         oldAffection
-                                + plugin.getPluginConfig()
+                                + config
                                 .getPetAffectionBase()
                 );
 
@@ -273,10 +289,9 @@ public class CatInteractionListener implements Listener {
          * ========================================================
          */
 
-        plugin.getDataManager()
-                .addCatPetCount(
-                        playerUUID
-                );
+        store.addCatPetCount(
+                playerUUID
+        );
 
         /*
          * ========================================================
@@ -284,17 +299,15 @@ public class CatInteractionListener implements Listener {
          * ========================================================
          */
 
-        plugin.getDataManager()
-                .setCatAffection(
-                        playerUUID,
-                        logicalCat.getAffection()
-                );
+        store.setCatAffection(
+                playerUUID,
+                logicalCat.getAffection()
+        );
 
-        plugin.getDataManager()
-                .setCatLastInteractionAt(
-                        playerUUID,
-                        logicalCat.getLastInteractionAt()
-                );
+        store.setCatLastInteractionAt(
+                playerUUID,
+                logicalCat.getLastInteractionAt()
+        );
 
         /*
          * ========================================================
@@ -303,16 +316,14 @@ public class CatInteractionListener implements Listener {
          *
          * 每次抚摸随机获得经验。
          * 区间来自 config: growth.pet-xp-min / pet-xp-max。
-         * 统一走 CatManager.gainExperience()。
+         * 统一走 CatProgressionService.gainExperience()。
          */
 
         int petXpMin =
-                plugin.getPluginConfig()
-                        .getPetXpMin();
+                config.getPetXpMin();
 
         int petXpMax =
-                plugin.getPluginConfig()
-                        .getPetXpMax();
+                config.getPetXpMax();
 
         int xpGain =
                 petXpMin
@@ -322,12 +333,11 @@ public class CatInteractionListener implements Listener {
                                 + 1
                 );
 
-        plugin.getCatManager()
-                .gainExperience(
-                        player,
-                        logicalCat,
-                        xpGain
-                );
+        progression.gainExperience(
+                player,
+                logicalCat,
+                xpGain
+        );
 
         /*
          * ========================================================
@@ -341,8 +351,7 @@ public class CatInteractionListener implements Listener {
         int meowGain = 0;
 
         int chance =
-                plugin.getPluginConfig()
-                        .getPetMeowChance()
+                config.getPetMeowChance()
                         + logicalCat.getPersonality()
                         .getPetMeowChanceBonus();
 
@@ -351,12 +360,11 @@ public class CatInteractionListener implements Listener {
 
             meowGain = 1;
 
-            plugin.getCatManager()
-                    .grantMeowPower(
-                            player,
-                            logicalCat,
-                            1
-                    );
+            progression.grantMeowPower(
+                    player,
+                    logicalCat,
+                    1
+            );
         }
 
         /*
@@ -398,10 +406,9 @@ public class CatInteractionListener implements Listener {
          */
 
         int currentPetCount =
-                plugin.getDataManager()
-                        .getCatPetCount(
-                                playerUUID
-                        );
+                store.getCatPetCount(
+                        playerUUID
+                );
 
         int remaining =
                 Math.max(
@@ -533,8 +540,7 @@ public class CatInteractionListener implements Listener {
              */
             if (!cat.getPersistentDataContainer()
                     .has(
-                            plugin.getCatManager()
-                                    .getCatKey(),
+                            catKey,
                             PersistentDataType.BYTE
                     )) {
 
@@ -547,8 +553,7 @@ public class CatInteractionListener implements Listener {
             String ownerUUID =
                     cat.getPersistentDataContainer()
                             .get(
-                                    plugin.getCatManager()
-                                            .getOwnerKey(),
+                                    ownerKey,
                                     PersistentDataType.STRING
                             );
 

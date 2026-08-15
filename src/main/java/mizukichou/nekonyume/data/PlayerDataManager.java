@@ -1,2204 +1,336 @@
 package mizukichou.nekonyume.data;
-import mizukichou.nekonyume.cat.CatTier;
 
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.plugin.java.JavaPlugin;
+import mizukichou.nekonyume.storage.CatStore;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
-import java.text.SimpleDateFormat;
 import java.util.List;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-public class PlayerDataManager {
-
-    private static final String PLAYERS_PATH = "players";
-
-    /*
-     * 数据格式版本。
-     *
-     * v1 = 初始格式。
-     * v2 = 双轨成长：
-     *      + experience
-     *      + meow-power
-     *      + meow-rank
-     *      + feed-count / feed-date
-     * v3 = 行为模式：
-     *      + behavior-mode
-     * v4 = 底蕴与技能：
-     *      + tier
-     *      + skills
-     */
-    private static final int DATA_VERSION = 4;
-
-    /*
-     * 猫咪默认值
-     */
-    private static final String DEFAULT_CAT_NAME = "Mikan";
-
-    private static final int DEFAULT_CAT_LEVEL = 1;
-    private static final int DEFAULT_CAT_AFFECTION = 50;
-    private static final int DEFAULT_CAT_HUNGER = 100;
-    private static final int DEFAULT_CAT_HEALTH = 100;
-
-    /*
-     * 抚摸每日上限。
-     */
-    private static final int MAX_DAILY_PETS = 3;
-
-    /*
-     * 数据文件
-     */
-    private final JavaPlugin plugin;
-    private final File file;
-    private final YamlConfiguration data;
-
-    /*
-     * 是否存在尚未写入磁盘的数据。
-     */
-    private boolean dirty;
-
-    /*
-     * 连续保存失败次数。
-     *
-     * 成功保存后清零。
-     * 用于在日志中观察持久化健康度。
-     */
-    private int consecutiveSaveFailures;
-
-    public PlayerDataManager(
-            JavaPlugin plugin
-    ) {
-
-        this.plugin = plugin;
-
-        file = new File(
-                plugin.getDataFolder(),
-                "players.yml"
-        );
-
-        if (!file.exists()) {
-
-            try {
-
-                File parent =
-                        file.getParentFile();
-
-                if (parent != null &&
-                        !parent.exists()) {
-
-                    if (!parent.mkdirs() &&
-                            !parent.exists()) {
-
-                        throw new IOException(
-                                "Failed to create plugin data directory."
-                        );
-                    }
-                }
-
-                if (!file.createNewFile()) {
-
-                    throw new IOException(
-                            "Failed to create players.yml."
-                    );
-                }
-
-            } catch (IOException e) {
-
-                throw new RuntimeException(
-                        "Failed to create players.yml",
-                        e
-                );
-            }
-        }
-
-        data =
-                YamlConfiguration.loadConfiguration(
-                        file
-                );
-
-        dirty = false;
-
-        consecutiveSaveFailures = 0;
-
-        /*
-         * 启动备份。
-         *
-         * 备份发生在迁移之前，
-         * 因此备份保留的是
-         * "上次运行结束后"的原始状态。
-         */
-        createBackupIfEnabled();
-
-        /*
-         * 数据迁移。
-         */
-        migrate();
-    }
-
-    /*
-     * ============================================================
-     * 启动备份
-     * ============================================================
-     *
-     * 每次插件启动时，
-     * 把当前 players.yml 复制到 backup/ 目录。
-     *
-     * 只保留最近 keep 份，
-     * 更早的备份自动删除。
-     */
-
-    private void createBackupIfEnabled() {
-
-        if (!plugin.getConfig()
-                .getBoolean(
-                        "storage.backup.enabled",
-                        true
-                )) {
-
-            return;
-        }
-
-        try {
-
-            File backupDir =
-                    new File(
-                            plugin.getDataFolder(),
-                            "backup"
-                    );
-
-            if (!backupDir.exists() &&
-                    !backupDir.mkdirs()) {
-
-                plugin.getLogger().warning(
-                        "Failed to create backup directory."
-                );
-
-                return;
-            }
-
-            String timestamp =
-                    new SimpleDateFormat(
-                            "yyyy-MM-dd-HH-mm-ss"
-                    ).format(
-                            new Date()
-                    );
-
-            File backupFile =
-                    new File(
-                            backupDir,
-                            "players-"
-                                    + timestamp
-                                    + ".yml"
-                    );
-
-            Files.copy(
-                    file.toPath(),
-                    backupFile.toPath()
-            );
-
-            /*
-             * 清理旧备份，
-             * 只保留最近 keep 份。
-             */
-            int keep =
-                    plugin.getConfig()
-                            .getInt(
-                                    "storage.backup.keep",
-                                    5
-                            );
-
-            File[] backups =
-                    backupDir.listFiles(
-                            (dir, name) ->
-                                    name.startsWith("players-")
-                                            && name.endsWith(".yml")
-                    );
-
-            if (backups == null ||
-                    backups.length <= keep) {
-
-                return;
-            }
-
-            Arrays.sort(
-                    backups,
-                    Comparator.comparingLong(
-                            File::lastModified
-                    )
-            );
-
-            int deleteCount =
-                    backups.length
-                            - keep;
-
-            for (int i = 0;
-                 i < deleteCount;
-                 i++) {
-
-                File old =
-                        backups[i];
-
-                if (old.delete()) {
-
-                    plugin.getLogger().info(
-                            "Removed old backup: "
-                                    + old.getName()
-                    );
-
-                } else {
-
-                    plugin.getLogger().warning(
-                            "Failed to remove old backup: "
-                                    + old.getName()
-                    );
-                }
-            }
-
-        } catch (Exception e) {
-
-            plugin.getLogger().warning(
-                    "Failed to create players.yml backup: "
-                            + e.getMessage()
-            );
-        }
-    }
-
-    /*
-     * ============================================================
-     * 数据迁移
-     * ============================================================
-     *
-     * 单向迁移：
-     * 旧版本数据在加载时被转换为新版本，
-     * 迁移逻辑永远不会"回退"。
-     */
-
-    private void migrate() {
-
-        int version =
-                data.getInt(
-                        "data-version",
-                        0
-                );
-
-        if (version == 0) {
-
-            /*
-             * 早期没有版本号的数据：
-             * 视为 v1，
-             * 补写版本标记后继续执行迁移。
-             */
-            plugin.getLogger().info(
-                    "players.yml has no data-version. Treating as v1."
-            );
-
-            data.set(
-                    "data-version",
-                    1
-            );
-
-            version = 1;
-        }
-
-        if (version < DATA_VERSION) {
-
-            plugin.getLogger().info(
-                    "Migrating players.yml from data-version "
-                            + version
-                            + " to "
-                            + DATA_VERSION
-                            + "."
-            );
-
-            /*
-             * v1 → v2：
-             *
-             * 为所有已有猫咪补齐双轨字段。
-             */
-            if (version < 2) {
-
-                migrateV1ToV2();
-            }
-
-            /*
-             * v2 → v3：
-             *
-             * 为所有已有猫咪补齐行为模式。
-             */
-            if (version < 3) {
-
-                migrateV2ToV3();
-            }
-
-            /*
-             * v3 → v4：
-             *
-             * 为所有已有猫咪补齐底蕴与技能槽。
-             */
-            if (version < 4) {
-
-                migrateV3ToV4();
-            }
-
-            data.set(
-                    "data-version",
-                    DATA_VERSION
-            );
-
-
-            saveNow();
-
-            return;
-        }
-
-        if (version > DATA_VERSION) {
-
-            /*
-             * 数据比插件还新。
-             *
-             * 内存中的 YamlConfiguration 仍保留全部未知字段，
-             * 因此继续写盘不会丢失数据。
-             */
-            plugin.getLogger().warning(
-                    "players.yml data-version "
-                            + version
-                            + " is newer than supported version "
-                            + DATA_VERSION
-                            + ". The plugin may not understand all fields."
-            );
-        }
-    }
-
-    /*
-     * v1 → v2：
-     *
-     * - experience = 到达当前等级所需的累计经验
-     *   （等级绝不重置，老玩家从原地继续成长）
-     * - meow-power = 0
-     * - meow-rank  = 0
-     * - feed-count / feed-date 补齐
-     */
-    private void migrateV1ToV2() {
-
-        ConfigurationSection playersSection =
-                data.getConfigurationSection(
-                        PLAYERS_PATH
-                );
-
-        if (playersSection == null) {
-            return;
-        }
-
-        for (String key :
-                playersSection.getKeys(false)) {
-
-            UUID playerUUID =
-                    parseUUID(key);
-
-            if (playerUUID == null) {
-                continue;
-            }
-
-            String path =
-                    catPath(playerUUID);
-
-            if (!data.contains(path)) {
-                continue;
-            }
-
-            /*
-             * 直接读取等级，
-             * 不经过 ensureCat，
-             * 避免迁移期间触发意外的 createCat。
-             */
-            int level =
-                    Math.max(
-                            1,
-                            data.getInt(
-                                    path + ".level",
-                                    DEFAULT_CAT_LEVEL
-                            )
-                    );
-
-            if (!data.contains(
-                    path + ".experience"
-            )) {
-
-                data.set(
-                        path + ".experience",
-                        cumulativeXpForLevel(
-                                level
-                        )
-                );
-            }
-
-            if (!data.contains(
-                    path + ".meow-power"
-            )) {
-
-                data.set(
-                        path + ".meow-power",
-                        0
-                );
-            }
-
-            if (!data.contains(
-                    path + ".meow-rank"
-            )) {
-
-                data.set(
-                        path + ".meow-rank",
-                        0
-                );
-            }
-
-            if (!data.contains(
-                    path + ".feed-count"
-            )) {
-
-                data.set(
-                        path + ".feed-count",
-                        0
-                );
-            }
-
-            if (!data.contains(
-                    path + ".feed-date"
-            )) {
-
-                data.set(
-                        path + ".feed-date",
-                        java.time.LocalDate.now().toString()
-                );
-            }
-        }
-    }
-
-    /*
-     * v2 → v3：
-     *
-     * 为所有已有猫咪补齐 behavior-mode。
-     */
-    private void migrateV2ToV3() {
-
-        ConfigurationSection playersSection =
-                data.getConfigurationSection(
-                        PLAYERS_PATH
-                );
-
-        if (playersSection == null) {
-            return;
-        }
-
-        for (String key :
-                playersSection.getKeys(false)) {
-
-            UUID playerUUID =
-                    parseUUID(key);
-
-            if (playerUUID == null) {
-                continue;
-            }
-
-            String path =
-                    catPath(playerUUID);
-
-            if (!data.contains(path)) {
-                continue;
-            }
-
-            if (!data.contains(
-                    path + ".behavior-mode"
-            )) {
-
-                data.set(
-                        path + ".behavior-mode",
-                        "FOLLOW"
-                );
-            }
-        }
-    }
-
-
-    /*
-     * v3 → v4：
-     *
-     * - tier   = 由逻辑猫 UUID 确定性推导
-     * - skills = 空列表
-     */
-    private void migrateV3ToV4() {
-
-        ConfigurationSection playersSection =
-                data.getConfigurationSection(
-                        PLAYERS_PATH
-                );
-
-        if (playersSection == null) {
-            return;
-        }
-
-        for (String key :
-                playersSection.getKeys(false)) {
-
-            UUID playerUUID =
-                    parseUUID(key);
-
-            if (playerUUID == null) {
-                continue;
-            }
-
-            String path =
-                    catPath(playerUUID);
-
-            if (!data.contains(path)) {
-                continue;
-            }
-
-            if (!data.contains(
-                    path + ".tier"
-            )) {
-
-                UUID catId =
-                        parseUUID(
-                                data.getString(
-                                        path + ".id"
-                                )
-                        );
-
-                CatTier tier =
-                        CatTier.fromCatId(
-                                catId
-                        );
-
-                data.set(
-                        path + ".tier",
-                        tier.name()
-                );
-            }
-
-            if (!data.contains(
-                    path + ".skills"
-            )) {
-
-                data.set(
-                        path + ".skills",
-                        new ArrayList<String>()
-                );
-            }
-        }
-    }
-
-    /*
-     * 到达指定等级所需的累计经验：
-     * cumXp(L) = (curveBase / 2) × L × (L - 1)
-     *
-     * 曲线基数来自 config: growth.level-curve-base。
-     * 迁移补经验时与运行时使用同一曲线，
-     * 保证老玩家数据一致。
-     */
-    private int cumulativeXpForLevel(
-            int level
-    ) {
-
-        if (level <= 1) {
-            return 0;
-        }
-
-        int curveBase =
-                plugin.getConfig()
-                        .getInt(
-                                "growth.level-curve-base",
-                                100
-                        );
-
-        if (curveBase <= 0) {
-            curveBase = 100;
-        }
-
-        long value =
-                (long) curveBase
-                        * level
-                        * (level - 1L)
-                        / 2;
-
-        return (int) Math.min(
-                value,
-                Integer.MAX_VALUE
-        );
-    }
-
-
-    /*
-     * ============================================================
-     * 基础路径
-     * ============================================================
-     */
+/**
+ * 玩家猫咪数据存储门面。
+ *
+ * <p>
+ * Step 3 起退化为薄适配器：
+ * 字段语义与 P0 不变量集中在 storage.AbstractCatStore；
+ * 磁盘实现（备份 / 迁移 / 原子写 / 损坏检测）在 storage.YamlCatStore。
+ * </p>
+ *
+ * <p>
+ * 本类保留全部历史公开签名并实现 CatStore 接口，
+ * 既有调用方（CatCache / 监听器 / 任务等）零改动。
+ * Step 5（去 Service Locator）完成后，调用方将直连 CatStore。
+ * </p>
+ */
+public class PlayerDataManager implements CatStore {
 
-    private String playerPath(
-            UUID playerUUID
-    ) {
+    private final CatStore delegate;
 
-        return PLAYERS_PATH
-                + "."
-                + playerUUID;
-    }
-
-    private String catPath(
-            UUID playerUUID
-    ) {
-
-        return playerPath(playerUUID)
-                + ".cat";
-    }
-
-    /*
-     * ============================================================
-     * 猫咪基础数据
-     * ============================================================
-     */
-
-    public boolean hasCat(
-            UUID playerUUID
-    ) {
-
-        if (playerUUID == null) {
-            return false;
-        }
-
-        return data.contains(
-                catPath(playerUUID)
-        );
-    }
-
-    /**
-     * 创建一只新猫咪。
-     *
-     * <p>
-     * 如果玩家已经有猫咪，不会覆盖原数据。
-     * </p>
-     */
-    public void createCat(
-            UUID playerUUID
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        String path =
-                catPath(playerUUID);
-
-        if (data.contains(path)) {
-            return;
-        }
-
-        long now =
-                System.currentTimeMillis();
-
-        UUID newCatId =
-                UUID.randomUUID();
-
-        data.set(
-                path + ".id",
-                newCatId.toString()
-        );
-
-
-        data.set(
-                path + ".name",
-                DEFAULT_CAT_NAME
-        );
-
-        data.set(
-                path + ".level",
-                DEFAULT_CAT_LEVEL
-        );
-
-        data.set(
-                path + ".affection",
-                DEFAULT_CAT_AFFECTION
-        );
-
-        data.set(
-                path + ".hunger",
-                DEFAULT_CAT_HUNGER
-        );
-
-        data.set(
-                path + ".health",
-                DEFAULT_CAT_HEALTH
-        );
-
-        data.set(
-                path + ".hunger-last-update",
-                now
-        );
-
-        data.set(
-                path + ".created-at",
-                now
-        );
-
-        data.set(
-                path + ".last-fed-at",
-                now
-        );
-
-        data.set(
-                path + ".last-interaction-at",
-                now
-        );
-
-        data.set(
-                path + ".pet-count",
-                0
-        );
-
-        data.set(
-                path + ".pet-date",
-                java.time.LocalDate.now().toString()
-        );
-
-        /*
-         * 双轨成长
-         */
-        data.set(
-                path + ".experience",
-                0
-        );
-
-        data.set(
-                path + ".meow-power",
-                0
-        );
-
-        data.set(
-                path + ".meow-rank",
-                0
-        );
-
-        /*
-         * 每日喂食计数
-         */
-        data.set(
-                path + ".feed-count",
-                0
-        );
-
-        data.set(
-                path + ".feed-date",
-                java.time.LocalDate.now().toString()
-        );
-
-        /*
-         * 行为模式
-         */
-        data.set(
-                path + ".behavior-mode",
-                "FOLLOW"
-        );
-
-
-        /*
-         * 底蕴与技能槽
-         */
-        data.set(
-                path + ".tier",
-                CatTier.fromCatId(
-                                newCatId
-                        )
-                        .name()
-        );
-
-        data.set(
-                path + ".skills",
-                new ArrayList<String>()
-        );
-
-        /*
-         * 第一次创建猫咪属于关键操作，
-         * 立即保存。
-         */
-        saveNow();
-    }
+    public PlayerDataManager(CatStore delegate) {
 
-    public void ensureCat(
-            UUID playerUUID
-    ) {
-
-        if (!hasCat(playerUUID)) {
-
-            createCat(playerUUID);
-        }
-    }
-
-    /*
-     * ============================================================
-     * 猫咪逻辑 UUID
-     * ============================================================
-     */
-
-    public UUID getCatUUID(
-            UUID playerUUID
-    ) {
-
-        if (playerUUID == null) {
-            return null;
-        }
-
-        String value =
-                data.getString(
-                        catPath(playerUUID)
-                                + ".id"
-                );
-
-        return parseUUID(value);
+        this.delegate = delegate;
     }
-
-    public void setCatUUID(
-            UUID playerUUID,
-            UUID catUUID
-    ) {
-
-        if (playerUUID == null ||
-                catUUID == null) {
-
-            return;
-        }
-
-        ensureCat(playerUUID);
 
-        data.set(
-                catPath(playerUUID)
-                        + ".id",
-                catUUID.toString()
-        );
-
-        save();
+    @Override
+    public boolean hasCat(UUID playerUUID) {
+        return delegate.hasCat(playerUUID);
     }
 
-    /*
-     * ============================================================
-     * 猫咪名称
-     * ============================================================
-     */
-
-    public String getCatName(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return data.getString(
-                catPath(playerUUID)
-                        + ".name",
-                DEFAULT_CAT_NAME
-        );
+    @Override
+    public void createCat(UUID playerUUID) {
+        delegate.createCat(playerUUID);
     }
-
-    public void setCatName(
-            UUID playerUUID,
-            String name
-    ) {
-
-        if (playerUUID == null ||
-                name == null ||
-                name.isBlank()) {
-
-            return;
-        }
 
-        ensureCat(playerUUID);
-
-        data.set(
-                catPath(playerUUID)
-                        + ".name",
-                name
-        );
-
-        save();
+    @Override
+    public void ensureCat(UUID playerUUID) {
+        delegate.ensureCat(playerUUID);
     }
 
-    /*
-     * ============================================================
-     * 猫咪等级
-     * ============================================================
-     */
-
-    public int getCatLevel(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return Math.max(
-                1,
-                data.getInt(
-                        catPath(playerUUID)
-                                + ".level",
-                        DEFAULT_CAT_LEVEL
-                )
-        );
+    @Override
+    public UUID getCatUUID(UUID playerUUID) {
+        return delegate.getCatUUID(playerUUID);
     }
 
-    public void setCatLevel(
-            UUID playerUUID,
-            int level
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        level =
-                Math.max(
-                        1,
-                        level
-                );
-
-        data.set(
-                catPath(playerUUID)
-                        + ".level",
-                level
-        );
-
-        save();
+    @Override
+    public void setCatUUID(UUID playerUUID, UUID catUUID) {
+        delegate.setCatUUID(playerUUID, catUUID);
     }
 
-    public void addCatLevel(
-            UUID playerUUID,
-            int amount
-    ) {
-
-        setCatLevel(
-                playerUUID,
-                getCatLevel(playerUUID)
-                        + amount
-        );
+    @Override
+    public String getCatName(UUID playerUUID) {
+        return delegate.getCatName(playerUUID);
     }
 
-    /*
-     * ============================================================
-     * 猫咪经验
-     * ============================================================
-     */
-
-    public int getCatExperience(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return Math.max(
-                0,
-                data.getInt(
-                        catPath(playerUUID)
-                                + ".experience",
-                        0
-                )
-        );
+    @Override
+    public void setCatName(UUID playerUUID, String name) {
+        delegate.setCatName(playerUUID, name);
     }
 
-    public void setCatExperience(
-            UUID playerUUID,
-            int experience
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        data.set(
-                catPath(playerUUID)
-                        + ".experience",
-                Math.max(
-                        0,
-                        experience
-                )
-        );
-
-        save();
+    @Override
+    public int getCatLevel(UUID playerUUID) {
+        return delegate.getCatLevel(playerUUID);
     }
 
-    /*
-     * ============================================================
-     * 猫咪喵力
-     * ============================================================
-     */
-
-    public int getCatMeowPower(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return Math.max(
-                0,
-                data.getInt(
-                        catPath(playerUUID)
-                                + ".meow-power",
-                        0
-                )
-        );
+    @Override
+    public void setCatLevel(UUID playerUUID, int level) {
+        delegate.setCatLevel(playerUUID, level);
     }
 
-    public void setCatMeowPower(
-            UUID playerUUID,
-            int meowPower
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        data.set(
-                catPath(playerUUID)
-                        + ".meow-power",
-                Math.max(
-                        0,
-                        meowPower
-                )
-        );
-
-        save();
+    @Override
+    public void addCatLevel(UUID playerUUID, int amount) {
+        delegate.addCatLevel(playerUUID, amount);
     }
 
-    /*
-     * ============================================================
-     * 猫咪喵阶
-     * ============================================================
-     */
-
-    public int getCatMeowRank(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return Math.max(
-                0,
-                data.getInt(
-                        catPath(playerUUID)
-                                + ".meow-rank",
-                        0
-                )
-        );
+    @Override
+    public int getCatExperience(UUID playerUUID) {
+        return delegate.getCatExperience(playerUUID);
     }
 
-    public void setCatMeowRank(
-            UUID playerUUID,
-            int meowRank
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        data.set(
-                catPath(playerUUID)
-                        + ".meow-rank",
-                Math.max(
-                        0,
-                        meowRank
-                )
-        );
-
-        save();
+    @Override
+    public void setCatExperience(UUID playerUUID, int experience) {
+        delegate.setCatExperience(playerUUID, experience);
     }
 
-    /*
-     * ============================================================
-     * 猫咪好感度
-     * ============================================================
-     */
-
-    public int getCatAffection(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return clamp100(
-                data.getInt(
-                        catPath(playerUUID)
-                                + ".affection",
-                        DEFAULT_CAT_AFFECTION
-                )
-        );
+    @Override
+    public int getCatMeowPower(UUID playerUUID) {
+        return delegate.getCatMeowPower(playerUUID);
     }
-
-    public void setCatAffection(
-            UUID playerUUID,
-            int affection
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
 
-        ensureCat(playerUUID);
-
-        data.set(
-                catPath(playerUUID)
-                        + ".affection",
-                clamp100(affection)
-        );
-
-        save();
+    @Override
+    public void setCatMeowPower(UUID playerUUID, int meowPower) {
+        delegate.setCatMeowPower(playerUUID, meowPower);
     }
 
-    public void addCatAffection(
-            UUID playerUUID,
-            int amount
-    ) {
-
-        setCatAffection(
-                playerUUID,
-                getCatAffection(playerUUID)
-                        + amount
-        );
+    @Override
+    public int getCatMeowRank(UUID playerUUID) {
+        return delegate.getCatMeowRank(playerUUID);
     }
 
-    /*
-     * ============================================================
-     * 猫咪健康度
-     * ============================================================
-     */
-
-    public int getCatHealth(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return clamp100(
-                data.getInt(
-                        catPath(playerUUID)
-                                + ".health",
-                        DEFAULT_CAT_HEALTH
-                )
-        );
+    @Override
+    public void setCatMeowRank(UUID playerUUID, int meowRank) {
+        delegate.setCatMeowRank(playerUUID, meowRank);
     }
-
-    public void setCatHealth(
-            UUID playerUUID,
-            int health
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
 
-        ensureCat(playerUUID);
-
-        data.set(
-                catPath(playerUUID)
-                        + ".health",
-                clamp100(health)
-        );
-
-        save();
+    @Override
+    public int getCatAffection(UUID playerUUID) {
+        return delegate.getCatAffection(playerUUID);
     }
 
-    public void addCatHealth(
-            UUID playerUUID,
-            int amount
-    ) {
-
-        setCatHealth(
-                playerUUID,
-                getCatHealth(playerUUID)
-                        + amount
-        );
+    @Override
+    public void setCatAffection(UUID playerUUID, int affection) {
+        delegate.setCatAffection(playerUUID, affection);
     }
 
-    public boolean isCatUnhealthy(
-            UUID playerUUID
-    ) {
-
-        return getCatHealth(
-                playerUUID
-        ) <= 0;
+    @Override
+    public void addCatAffection(UUID playerUUID, int amount) {
+        delegate.addCatAffection(playerUUID, amount);
     }
 
-    /*
-     * ============================================================
-     * 猫咪饱食度
-     * ============================================================
-     */
-
-    public int getCatHunger(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return clamp100(
-                data.getInt(
-                        catPath(playerUUID)
-                                + ".hunger",
-                        DEFAULT_CAT_HUNGER
-                )
-        );
+    @Override
+    public int getCatHealth(UUID playerUUID) {
+        return delegate.getCatHealth(playerUUID);
     }
-
-    public void setCatHunger(
-            UUID playerUUID,
-            int hunger
-    ) {
 
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        data.set(
-                catPath(playerUUID)
-                        + ".hunger",
-                clamp100(hunger)
-        );
-
-        save();
+    @Override
+    public void setCatHealth(UUID playerUUID, int health) {
+        delegate.setCatHealth(playerUUID, health);
     }
 
-    public void addCatHunger(
-            UUID playerUUID,
-            int amount
-    ) {
-
-        setCatHunger(
-                playerUUID,
-                getCatHunger(playerUUID)
-                        + amount
-        );
+    @Override
+    public void addCatHealth(UUID playerUUID, int amount) {
+        delegate.addCatHealth(playerUUID, amount);
     }
 
-    public void removeCatHunger(
-            UUID playerUUID,
-            int amount
-    ) {
-
-        addCatHunger(
-                playerUUID,
-                -amount
-        );
+    @Override
+    public boolean isCatUnhealthy(UUID playerUUID) {
+        return delegate.isCatUnhealthy(playerUUID);
     }
-
-    public boolean isCatHungry(
-            UUID playerUUID
-    ) {
 
-        return getCatHunger(
-                playerUUID
-        ) <= 0;
+    @Override
+    public int getCatHunger(UUID playerUUID) {
+        return delegate.getCatHunger(playerUUID);
     }
 
-    public double getCatHungerPercent(
-            UUID playerUUID
-    ) {
-
-        return getCatHunger(
-                playerUUID
-        ) / 100.0;
+    @Override
+    public void setCatHunger(UUID playerUUID, int hunger) {
+        delegate.setCatHunger(playerUUID, hunger);
     }
 
-    /*
-     * ============================================================
-     * 饥饿更新时间
-     * ============================================================
-     */
-
-    public long getCatHungerLastUpdate(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return data.getLong(
-                catPath(playerUUID)
-                        + ".hunger-last-update",
-                System.currentTimeMillis()
-        );
+    @Override
+    public void addCatHunger(UUID playerUUID, int amount) {
+        delegate.addCatHunger(playerUUID, amount);
     }
-
-    public void setCatHungerLastUpdate(
-            UUID playerUUID,
-            long timestamp
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
 
-        if (timestamp < 0) {
-            timestamp =
-                    System.currentTimeMillis();
-        }
-
-        data.set(
-                catPath(playerUUID)
-                        + ".hunger-last-update",
-                timestamp
-        );
-
-        save();
+    @Override
+    public void removeCatHunger(UUID playerUUID, int amount) {
+        delegate.removeCatHunger(playerUUID, amount);
     }
 
-    /*
-     * ============================================================
-     * 创建时间
-     * ============================================================
-     */
-
-    public long getCatCreatedAt(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return data.getLong(
-                catPath(playerUUID)
-                        + ".created-at",
-                System.currentTimeMillis()
-        );
+    @Override
+    public boolean isCatHungry(UUID playerUUID) {
+        return delegate.isCatHungry(playerUUID);
     }
-
-    public void setCatCreatedAt(
-            UUID playerUUID,
-            long timestamp
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
 
-        ensureCat(playerUUID);
-
-        if (timestamp < 0) {
-            timestamp =
-                    System.currentTimeMillis();
-        }
-
-        data.set(
-                catPath(playerUUID)
-                        + ".created-at",
-                timestamp
-        );
-
-        save();
+    @Override
+    public double getCatHungerPercent(UUID playerUUID) {
+        return delegate.getCatHungerPercent(playerUUID);
     }
 
-    /*
-     * ============================================================
-     * 上次喂食
-     * ============================================================
-     */
-
-    public long getCatLastFedAt(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return data.getLong(
-                catPath(playerUUID)
-                        + ".last-fed-at",
-                getCatCreatedAt(playerUUID)
-        );
+    @Override
+    public long getCatHungerLastUpdate(UUID playerUUID) {
+        return delegate.getCatHungerLastUpdate(playerUUID);
     }
-
-    public void setCatLastFedAt(
-            UUID playerUUID,
-            long timestamp
-    ) {
 
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        if (timestamp < 0) {
-            timestamp =
-                    System.currentTimeMillis();
-        }
-
-        data.set(
-                catPath(playerUUID)
-                        + ".last-fed-at",
-                timestamp
-        );
-
-        save();
+    @Override
+    public void setCatHungerLastUpdate(UUID playerUUID, long timestamp) {
+        delegate.setCatHungerLastUpdate(playerUUID, timestamp);
     }
 
-    /*
-     * ============================================================
-     * 上次互动
-     * ============================================================
-     */
-
-    public long getCatLastInteractionAt(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return data.getLong(
-                catPath(playerUUID)
-                        + ".last-interaction-at",
-                getCatCreatedAt(playerUUID)
-        );
+    @Override
+    public long getCatCreatedAt(UUID playerUUID) {
+        return delegate.getCatCreatedAt(playerUUID);
     }
-
-    public void setCatLastInteractionAt(
-            UUID playerUUID,
-            long timestamp
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        if (timestamp < 0) {
-            timestamp =
-                    System.currentTimeMillis();
-        }
 
-        data.set(
-                catPath(playerUUID)
-                        + ".last-interaction-at",
-                timestamp
-        );
-
-        save();
+    @Override
+    public void setCatCreatedAt(UUID playerUUID, long timestamp) {
+        delegate.setCatCreatedAt(playerUUID, timestamp);
     }
 
-    /*
-     * ============================================================
-     * 每日抚摸
-     * ============================================================
-     */
-
-    public int getCatPetCount(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        resetPetCountIfNewDay(
-                playerUUID
-        );
-
-        return Math.max(
-                0,
-                data.getInt(
-                        catPath(playerUUID)
-                                + ".pet-count",
-                        0
-                )
-        );
+    @Override
+    public long getCatLastFedAt(UUID playerUUID) {
+        return delegate.getCatLastFedAt(playerUUID);
     }
 
-    public void addCatPetCount(
-            UUID playerUUID
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        resetPetCountIfNewDay(
-                playerUUID
-        );
-
-        String path =
-                catPath(playerUUID)
-                        + ".pet-count";
-
-        int current =
-                data.getInt(
-                        path,
-                        0
-                );
-
-        if (current >= MAX_DAILY_PETS) {
-            return;
-        }
-
-        data.set(
-                path,
-                current + 1
-        );
-
-        data.set(
-                catPath(playerUUID)
-                        + ".last-interaction-at",
-                System.currentTimeMillis()
-        );
-
-        save();
+    @Override
+    public void setCatLastFedAt(UUID playerUUID, long timestamp) {
+        delegate.setCatLastFedAt(playerUUID, timestamp);
     }
-
-    public boolean canPetCat(
-            UUID playerUUID
-    ) {
 
-        return getCatPetCount(
-                playerUUID
-        ) < MAX_DAILY_PETS;
+    @Override
+    public long getCatLastInteractionAt(UUID playerUUID) {
+        return delegate.getCatLastInteractionAt(playerUUID);
     }
 
-    public int getRemainingPetCount(
-            UUID playerUUID
-    ) {
-
-        return Math.max(
-                0,
-                MAX_DAILY_PETS
-                        - getCatPetCount(
-                        playerUUID
-                )
-        );
+    @Override
+    public void setCatLastInteractionAt(UUID playerUUID, long timestamp) {
+        delegate.setCatLastInteractionAt(playerUUID, timestamp);
     }
-
-    private void resetPetCountIfNewDay(
-            UUID playerUUID
-    ) {
-
-        String datePath =
-                catPath(playerUUID)
-                        + ".pet-date";
-
-        String countPath =
-                catPath(playerUUID)
-                        + ".pet-count";
-
-        String today =
-                java.time.LocalDate.now().toString();
-
-        String savedDate =
-                data.getString(
-                        datePath
-                );
-
-        if (savedDate == null) {
 
-            data.set(
-                    datePath,
-                    today
-            );
-
-            data.set(
-                    countPath,
-                    0
-            );
-
-            save();
-
-            return;
-        }
-
-        if (!savedDate.equals(today)) {
-
-            data.set(
-                    datePath,
-                    today
-            );
-
-            data.set(
-                    countPath,
-                    0
-            );
-
-            save();
-        }
+    @Override
+    public int getCatPetCount(UUID playerUUID) {
+        return delegate.getCatPetCount(playerUUID);
     }
 
-    /*
-     * ============================================================
-     * 每日喂食计数
-     * ============================================================
-     *
-     * 每天前几次成功喂食
-     * 才有机会获得喵力。
-     * （机会判定逻辑在 CatFoodManager）
-     */
-
-    public int getCatFeedCount(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        resetFeedCountIfNewDay(
-                playerUUID
-        );
-
-        return Math.max(
-                0,
-                data.getInt(
-                        catPath(playerUUID)
-                                + ".feed-count",
-                        0
-                )
-        );
+    @Override
+    public void addCatPetCount(UUID playerUUID) {
+        delegate.addCatPetCount(playerUUID);
     }
 
-    public void addCatFeedCount(
-            UUID playerUUID
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        resetFeedCountIfNewDay(
-                playerUUID
-        );
-
-        data.set(
-                catPath(playerUUID)
-                        + ".feed-count",
-                data.getInt(
-                        catPath(playerUUID)
-                                + ".feed-count",
-                        0
-                ) + 1
-        );
-
-        save();
+    @Override
+    public int getCatFeedCount(UUID playerUUID) {
+        return delegate.getCatFeedCount(playerUUID);
     }
-
-    private void resetFeedCountIfNewDay(
-            UUID playerUUID
-    ) {
-
-        String datePath =
-                catPath(playerUUID)
-                        + ".feed-date";
-
-        String countPath =
-                catPath(playerUUID)
-                        + ".feed-count";
-
-        String today =
-                java.time.LocalDate.now().toString();
-
-        String savedDate =
-                data.getString(
-                        datePath
-                );
-
-        if (savedDate == null) {
-
-            data.set(
-                    datePath,
-                    today
-            );
-
-            data.set(
-                    countPath,
-                    0
-            );
-
-            save();
 
-            return;
-        }
-
-        if (!savedDate.equals(today)) {
-
-            data.set(
-                    datePath,
-                    today
-            );
-
-            data.set(
-                    countPath,
-                    0
-            );
-
-            save();
-        }
+    @Override
+    public void addCatFeedCount(UUID playerUUID) {
+        delegate.addCatFeedCount(playerUUID);
     }
 
-
-    /*
-     * ============================================================
-     * 每日礼物判定
-     * ============================================================
-     *
-     * 记录"今天已经判定过礼物"。
-     * 无论是否真的收到礼物，
-     * 每天只判定一次。
-     */
-
-    public boolean isGiftCheckedToday(
-            UUID playerUUID
-    ) {
-
-        if (playerUUID == null) {
-            return true;
-        }
-
-        String today =
-                java.time.LocalDate.now().toString();
-
-        String savedDate =
-                data.getString(
-                        catPath(playerUUID)
-                                + ".gift-date"
-                );
-
-        return today.equals(savedDate);
+    @Override
+    public boolean isGiftCheckedToday(UUID playerUUID) {
+        return delegate.isGiftCheckedToday(playerUUID);
     }
-
-    public void markGiftChecked(
-            UUID playerUUID
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
 
-        data.set(
-                catPath(playerUUID)
-                        + ".gift-date",
-                java.time.LocalDate.now().toString()
-        );
-
-        save();
+    @Override
+    public void markGiftChecked(UUID playerUUID) {
+        delegate.markGiftChecked(playerUUID);
     }
 
-    /*
-     * ============================================================
-     * 行为模式
-     * ============================================================
-     *
-     * 存储枚举名称字符串（FOLLOW / SIT / FREE）。
-     * 枚举解析由 CatBehaviorMode 负责。
-     */
-
-    public String getCatBehaviorMode(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        return data.getString(
-                catPath(playerUUID)
-                        + ".behavior-mode",
-                "FOLLOW"
-        );
+    @Override
+    public String getCatBehaviorMode(UUID playerUUID) {
+        return delegate.getCatBehaviorMode(playerUUID);
     }
-
-    public void setCatBehaviorMode(
-            UUID playerUUID,
-            String mode
-    ) {
-
-        if (playerUUID == null ||
-                mode == null ||
-                mode.isBlank()) {
-
-            return;
-        }
 
-        ensureCat(playerUUID);
-
-        data.set(
-                catPath(playerUUID)
-                        + ".behavior-mode",
-                mode
-        );
-
-        save();
+    @Override
+    public void setCatBehaviorMode(UUID playerUUID, String mode) {
+        delegate.setCatBehaviorMode(playerUUID, mode);
     }
 
-
-    /*
-     * ============================================================
-     * 底蕴
-     * ============================================================
-     *
-     * 存储枚举名称字符串。
-     * 缺失时按逻辑猫 UUID 推导兜底。
-     */
-
-    public String getCatTier(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        String value =
-                data.getString(
-                        catPath(playerUUID)
-                                + ".tier"
-                );
-
-        if (value == null ||
-                value.isBlank()) {
-
-            CatTier tier =
-                    CatTier.fromCatId(
-                            getCatUUID(
-                                    playerUUID
-                            )
-                    );
-
-            return tier.name();
-        }
-
-        return value;
+    @Override
+    public String getCatTier(UUID playerUUID) {
+        return delegate.getCatTier(playerUUID);
     }
-
-    public void setCatTier(
-            UUID playerUUID,
-            String tier
-    ) {
 
-        if (playerUUID == null ||
-                tier == null ||
-                tier.isBlank()) {
-
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        data.set(
-                catPath(playerUUID)
-                        + ".tier",
-                tier
-        );
-
-        save();
+    @Override
+    public void setCatTier(UUID playerUUID, String tier) {
+        delegate.setCatTier(playerUUID, tier);
     }
 
-    /*
-     * ============================================================
-     * 技能槽
-     * ============================================================
-     *
-     * 存储技能枚举名列表。
-     */
-
-    public List<String> getCatSkills(
-            UUID playerUUID
-    ) {
-
-        ensureCat(playerUUID);
-
-        List<String> list =
-                data.getStringList(
-                        catPath(playerUUID)
-                                + ".skills"
-                );
-
-        return list == null
-                ? new ArrayList<>()
-                : new ArrayList<>(list);
+    @Override
+    public List<String> getCatSkills(UUID playerUUID) {
+        return delegate.getCatSkills(playerUUID);
     }
 
-    public void setCatSkills(
-            UUID playerUUID,
-            List<String> skills
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        data.set(
-                catPath(playerUUID)
-                        + ".skills",
-                skills == null
-                        ? new ArrayList<String>()
-                        : new ArrayList<>(skills)
-        );
-
-        save();
+    @Override
+    public void setCatSkills(UUID playerUUID, List<String> skills) {
+        delegate.setCatSkills(playerUUID, skills);
     }
 
-    /*
-     * ============================================================
-     * 猫咪花色
-     * ============================================================
-     */
-
-    public String getCatVariant(
-            UUID playerUUID
-    ) {
-
-        if (playerUUID == null) {
-            return null;
-        }
-
-        return data.getString(
-                catPath(playerUUID)
-                        + ".variant"
-        );
+    @Override
+    public String getCatVariant(UUID playerUUID) {
+        return delegate.getCatVariant(playerUUID);
     }
-
-    public void setCatVariant(
-            UUID playerUUID,
-            String variant
-    ) {
-
-        if (playerUUID == null ||
-                variant == null ||
-                variant.isBlank()) {
-
-            return;
-        }
-
-        ensureCat(playerUUID);
 
-        data.set(
-                catPath(playerUUID)
-                        + ".variant",
-                variant
-        );
-
-        save();
+    @Override
+    public void setCatVariant(UUID playerUUID, String variant) {
+        delegate.setCatVariant(playerUUID, variant);
     }
 
-    /*
-     * ============================================================
-     * Bukkit 实体 UUID
-     * ============================================================
-     */
-
-    public UUID getCatEntityUUID(
-            UUID playerUUID
-    ) {
-
-        if (playerUUID == null) {
-            return null;
-        }
-
-        return parseUUID(
-                data.getString(
-                        catPath(playerUUID)
-                                + ".entity-uuid"
-                )
-        );
+    @Override
+    public UUID getCatEntityUUID(UUID playerUUID) {
+        return delegate.getCatEntityUUID(playerUUID);
     }
 
-    public void setCatEntityUUID(
-            UUID playerUUID,
-            UUID entityUUID
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        if (entityUUID == null) {
-
-            /*
-             * 传入 null 表示清除绑定。
-             */
-            data.set(
-                    catPath(playerUUID)
-                            + ".entity-uuid",
-                    null
-            );
-
-        } else {
-
-            data.set(
-                    catPath(playerUUID)
-                            + ".entity-uuid",
-                    entityUUID.toString()
-            );
-        }
-
-        save();
+    @Override
+    public void setCatEntityUUID(UUID playerUUID, UUID entityUUID) {
+        delegate.setCatEntityUUID(playerUUID, entityUUID);
     }
 
-    /**
-     * 清除当前绑定的 Bukkit 实体 UUID。
-     *
-     * <p>
-     * 实体死亡 / 被移除时使用。
-     * 只影响实体绑定，不影响逻辑猫本身。
-     * </p>
-     */
-    public void removeCatEntityUUID(
-            UUID playerUUID
-    ) {
-
-        if (playerUUID == null) {
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        data.set(
-                catPath(playerUUID)
-                        + ".entity-uuid",
-                null
-        );
-
-        save();
+    @Override
+    public void removeCatEntityUUID(UUID playerUUID) {
+        delegate.removeCatEntityUUID(playerUUID);
     }
-
 
-    /**
-     * 删除玩家的猫咪数据（不可逆）。
-     *
-     * <p>
-     * 只删除 cat 节点，
-     * 玩家节点保留（不影响未来其他数据）。
-     * </p>
-     *
-     * <p>
-     * 返回是否真的删除了数据。
-     * </p>
-     */
-    public boolean removeCat(
-            UUID playerUUID
-    ) {
-
-        if (playerUUID == null) {
-            return false;
-        }
-
-        if (!hasCat(playerUUID)) {
-            return false;
-        }
-
-        data.set(
-                catPath(playerUUID),
-                null
-        );
-
-        /*
-         * 不可逆操作立即落盘。
-         */
-        saveNow();
-
-        return true;
+    @Override
+    public boolean removeCat(UUID playerUUID) {
+        return delegate.removeCat(playerUUID);
     }
 
-
-    /*
-     * ============================================================
-     * 猫咪世界
-     * ============================================================
-     */
-
-    public UUID getCatWorldUUID(
-            UUID playerUUID
-    ) {
-
-        if (playerUUID == null) {
-            return null;
-        }
-
-        return parseUUID(
-                data.getString(
-                        catPath(playerUUID)
-                                + ".world-uuid"
-                )
-        );
+    @Override
+    public UUID getCatWorldUUID(UUID playerUUID) {
+        return delegate.getCatWorldUUID(playerUUID);
     }
-
-    public void setCatWorldUUID(
-            UUID playerUUID,
-            UUID worldUUID
-    ) {
-
-        if (playerUUID == null ||
-                worldUUID == null) {
-
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        data.set(
-                catPath(playerUUID)
-                        + ".world-uuid",
-                worldUUID.toString()
-        );
 
-        save();
+    @Override
+    public void setCatWorldUUID(UUID playerUUID, UUID worldUUID) {
+        delegate.setCatWorldUUID(playerUUID, worldUUID);
     }
 
-    /*
-     * ============================================================
-     * 坐标
-     * ============================================================
-     */
-
-    public double getCatX(
-            UUID playerUUID
-    ) {
-
-        return data.getDouble(
-                catPath(playerUUID)
-                        + ".x"
-        );
+    @Override
+    public double getCatX(UUID playerUUID) {
+        return delegate.getCatX(playerUUID);
     }
 
-    public double getCatY(
-            UUID playerUUID
-    ) {
-
-        return data.getDouble(
-                catPath(playerUUID)
-                        + ".y"
-        );
+    @Override
+    public double getCatY(UUID playerUUID) {
+        return delegate.getCatY(playerUUID);
     }
 
-    public double getCatZ(
-            UUID playerUUID
-    ) {
-
-        return data.getDouble(
-                catPath(playerUUID)
-                        + ".z"
-        );
+    @Override
+    public double getCatZ(UUID playerUUID) {
+        return delegate.getCatZ(playerUUID);
     }
 
+    @Override
     public void setCatLocation(
             UUID playerUUID,
             UUID worldUUID,
@@ -2207,248 +339,37 @@ public class PlayerDataManager {
             double z
     ) {
 
-        if (playerUUID == null ||
-                worldUUID == null) {
-
-            return;
-        }
-
-        ensureCat(playerUUID);
-
-        String path =
-                catPath(playerUUID);
-
-        data.set(
-                path + ".world-uuid",
-                worldUUID.toString()
-        );
-
-        data.set(
-                path + ".x",
-                x
-        );
-
-        data.set(
-                path + ".y",
-                y
-        );
-
-        data.set(
-                path + ".z",
+        delegate.setCatLocation(
+                playerUUID,
+                worldUUID,
+                x,
+                y,
                 z
         );
-
-        save();
     }
 
-    /*
-     * ============================================================
-     * 所有猫主人
-     * ============================================================
-     */
-
+    @Override
     public Set<UUID> getCatPlayers() {
-
-        Set<UUID> players =
-                new HashSet<>();
-
-        if (!data.contains(
-                PLAYERS_PATH
-        )) {
-
-            return players;
-        }
-
-        ConfigurationSection section =
-                data.getConfigurationSection(
-                        PLAYERS_PATH
-                );
-
-        if (section == null) {
-            return players;
-        }
-
-        for (String key :
-                section.getKeys(false)) {
-
-            UUID uuid =
-                    parseUUID(key);
-
-            if (uuid == null) {
-                continue;
-            }
-
-            if (hasCat(uuid)) {
-                players.add(uuid);
-            }
-        }
-
-        return players;
+        return delegate.getCatPlayers();
     }
 
-    /*
-     * ============================================================
-     * Dirty / Save
-     * ============================================================
-     */
-
-    /**
-     * 标记数据已经发生变化。
-     *
-     * <p>
-     * 为了避免高频 YAML 写盘，这里不立即写磁盘。
-     * </p>
-     */
+    @Override
     public void save() {
-
-        dirty = true;
+        delegate.save();
     }
 
-    /**
-     * 当前是否有未保存的数据。
-     */
+    @Override
     public boolean isDirty() {
-
-        return dirty;
+        return delegate.isDirty();
     }
 
-    /**
-     * 如果存在修改，则立即写入磁盘。
-     */
+    @Override
     public void flush() {
-
-        if (!dirty) {
-            return;
-        }
-
-        saveNow();
+        delegate.flush();
     }
 
-    /**
-     * 立即将当前内存中的 YAML 数据写入磁盘。
-     *
-     * <p>
-     * 原子写盘：
-     * 先写入临时文件，
-     * 再原子替换正式文件，
-     * 防止写入过程中断电 / 崩溃
-     * 损坏 players.yml。
-     * </p>
-     *
-     * <p>
-     * 只应该在同步服务器线程中调用。
-     * </p>
-     */
-    public synchronized void saveNow() {
-
-        File temp =
-                new File(
-                        file.getParentFile(),
-                        "players.yml.tmp"
-                );
-
-        try {
-
-            data.save(
-                    temp
-            );
-
-            try {
-
-                Files.move(
-                        temp.toPath(),
-                        file.toPath(),
-                        StandardCopyOption.REPLACE_EXISTING,
-                        StandardCopyOption.ATOMIC_MOVE
-                );
-
-            } catch (AtomicMoveNotSupportedException e) {
-
-                /*
-                 * 文件系统不支持原子移动时
-                 * 回退为普通替换移动。
-                 */
-                Files.move(
-                        temp.toPath(),
-                        file.toPath(),
-                        StandardCopyOption.REPLACE_EXISTING
-                );
-            }
-
-            dirty = false;
-
-            consecutiveSaveFailures = 0;
-
-        } catch (Exception e) {
-
-            /*
-             * 保存失败时保留 dirty=true，
-             * 下一次自动保存仍然会重试。
-             */
-            dirty = true;
-
-            consecutiveSaveFailures++;
-
-            plugin.getLogger().severe(
-                    "Failed to save players.yml (consecutive failures: "
-                            + consecutiveSaveFailures
-                            + "): "
-                            + e.getMessage()
-            );
-
-            e.printStackTrace();
-
-            /*
-             * 清理残留的临时文件。
-             */
-            if (temp.exists() &&
-                    !temp.delete()) {
-
-                plugin.getLogger().warning(
-                        "Failed to clean up temp file players.yml.tmp"
-                );
-            }
-        }
-    }
-
-    /*
-     * ============================================================
-     * 工具
-     * ============================================================
-     */
-
-    private int clamp100(
-            int value
-    ) {
-
-        return Math.max(
-                0,
-                Math.min(
-                        100,
-                        value
-                )
-        );
-    }
-
-    private UUID parseUUID(
-            String value
-    ) {
-
-        if (value == null ||
-                value.isBlank()) {
-
-            return null;
-        }
-
-        try {
-
-            return UUID.fromString(
-                    value
-            );
-
-        } catch (IllegalArgumentException ignored) {
-
-            return null;
-        }
+    @Override
+    public void saveNow() {
+        delegate.saveNow();
     }
 }

@@ -1,8 +1,14 @@
 package mizukichou.nekonyume.command;
 
-import mizukichou.nekonyume.NekoNYume;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
+import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatEntityService;
+import mizukichou.nekonyume.cat.GrowthMath;
+import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.gui.CatGuiManager;
+import mizukichou.nekonyume.skill.SkillGuiManager;
+import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.command.Command;
@@ -14,11 +20,30 @@ import java.util.Arrays;
 
 public class NekoYumeCommand implements CommandExecutor {
 
-    private final NekoNYume plugin;
+    private final CatStore store;
+    private final CatCache cache;
+    private final PluginConfig config;
+    private final CatEntityService entityService;
+    private final CatGuiManager guiManager;
+    private final SkillGuiManager skillGuiManager;
+
     private final MiniMessage mm = MiniMessage.miniMessage();
 
-    public NekoYumeCommand(NekoNYume plugin) {
-        this.plugin = plugin;
+    public NekoYumeCommand(
+            CatStore store,
+            CatCache cache,
+            PluginConfig config,
+            CatEntityService entityService,
+            CatGuiManager guiManager,
+            SkillGuiManager skillGuiManager
+    ) {
+
+        this.store = store;
+        this.cache = cache;
+        this.config = config;
+        this.entityService = entityService;
+        this.guiManager = guiManager;
+        this.skillGuiManager = skillGuiManager;
     }
 
     @Override
@@ -75,10 +100,9 @@ public class NekoYumeCommand implements CommandExecutor {
             /*
              * 玩家已经有猫
              */
-            if (plugin.getDataManager()
-                    .hasCat(
-                            player.getUniqueId()
-                    )) {
+            if (store.hasCat(
+                    player.getUniqueId()
+            )) {
 
                 player.sendMessage(
                         mm.deserialize(
@@ -92,10 +116,9 @@ public class NekoYumeCommand implements CommandExecutor {
             /*
              * 创建猫咪数据
              */
-            plugin.getDataManager()
-                    .createCat(
-                            player.getUniqueId()
-                    );
+            store.createCat(
+                    player.getUniqueId()
+            );
 
             /*
              * 获取猫咪名字
@@ -103,10 +126,9 @@ public class NekoYumeCommand implements CommandExecutor {
              * 新猫默认是 Mikan
              */
             String name =
-                    plugin.getDataManager()
-                            .getCatName(
-                                    player.getUniqueId()
-                            );
+                    store.getCatName(
+                            player.getUniqueId()
+                    );
 
             /*
              * 第一次领取时直接生成猫咪
@@ -114,54 +136,53 @@ public class NekoYumeCommand implements CommandExecutor {
              * spawnCat 是异步的，
              * 等猫咪成功生成/恢复后再发送提示。
              */
-            plugin.getCatManager()
-                    .spawnCat(
-                            player,
-                            name,
-                            summoned -> {
+            entityService.spawnCat(
+                    player,
+                    name,
+                    summoned -> {
 
-                                /*
-                                 * 玩家在生成完成前退出
-                                 */
-                                if (!player.isOnline()) {
-                                    return;
-                                }
+                        /*
+                         * 玩家在生成完成前退出
+                         */
+                        if (!player.isOnline()) {
+                            return;
+                        }
 
-                                /*
-                                 * summoned == true：
-                                 * 这次创建了新的实体。
-                                 */
-                                if (summoned) {
+                        /*
+                         * summoned == true：
+                         * 这次创建了新的实体。
+                         */
+                        if (summoned) {
 
-                                    /*
-                                     * 名字是玩家可控文本，
-                                     * 使用 Component.text 拼接，
-                                     * 避免 MiniMessage 标签注入。
-                                     */
-                                    player.sendMessage(
-                                            mm.deserialize(
-                                                    "<gradient:#ff9de2:#a78bfa>🐱 恭喜！你获得了第一只猫 </gradient>"
-                                            ).append(
-                                                    Component.text(name)
-                                            ).append(
-                                                    Component.text("!")
-                                            )
-                                    );
+                            /*
+                             * 名字是玩家可控文本，
+                             * 使用 Component.text 拼接，
+                             * 避免 MiniMessage 标签注入。
+                             */
+                            player.sendMessage(
+                                    mm.deserialize(
+                                            "<gradient:#ff9de2:#a78bfa>🐱 恭喜！你获得了第一只猫 </gradient>"
+                                    ).append(
+                                            Component.text(name)
+                                    ).append(
+                                            Component.text("!")
+                                    )
+                            );
 
-                                } else {
+                        } else {
 
-                                    player.sendMessage(
-                                            mm.deserialize(
-                                                    "<gradient:#ff9de2:#a78bfa>🐱 </gradient>"
-                                            ).append(
-                                                    Component.text(name)
-                                            ).append(
-                                                    Component.text(" 已经来到了你身边!")
-                                            )
-                                    );
-                                }
-                            }
-                    );
+                            player.sendMessage(
+                                    mm.deserialize(
+                                            "<gradient:#ff9de2:#a78bfa>🐱 </gradient>"
+                                    ).append(
+                                            Component.text(name)
+                                    ).append(
+                                            Component.text(" 已经来到了你身边!")
+                                    )
+                            );
+                        }
+                    }
+            );
 
             return true;
         }
@@ -181,10 +202,9 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
-            if (!plugin.getDataManager()
-                    .hasCat(
-                            player.getUniqueId()
-                    )) {
+            if (!store.hasCat(
+                    player.getUniqueId()
+            )) {
 
                 player.sendMessage(
                         mm.deserialize(
@@ -202,10 +222,9 @@ public class NekoYumeCommand implements CommandExecutor {
              * 不会重复构造。
              */
             Cat cat =
-                    plugin.getCatManager()
-                            .loadCat(
-                                    player
-                            );
+                    cache.loadCat(
+                            player
+                    );
 
             if (cat == null) {
 
@@ -222,29 +241,33 @@ public class NekoYumeCommand implements CommandExecutor {
              * 经验进度：
              * 当前累计经验 / 下一级所需累计经验。
              *
-             * cumXp(L) = 50 × L × (L - 1)
+             * cumXp(L) = base × L × (L-1) / 2
+             * （base 来自 config: growth.level-curve-base）
              */
             int level =
                     cat.getLevel();
 
             long nextLevelXp =
-                    50L
-                            * (level + 1L)
-                            * level;
+                    GrowthMath.xpRequiredForLevel(
+                            level + 1,
+                            config.getLevelCurveBase()
+                    );
 
             /*
              * 喵力进度：
              * 当前喵力 / 下一阶所需累计喵力。
              *
-             * cumMeow(N) = N × (N + 19) / 2
+             * cumMeow(N) = N × (N + offset) / 2
+             * （offset 来自 config: meow.rank-curve-offset）
              */
             int meowRank =
                     cat.getMeowRank();
 
             long nextRankPower =
-                    (long) (meowRank + 1)
-                            * (meowRank + 1 + 19)
-                            / 2;
+                    GrowthMath.meowRequiredForRank(
+                            meowRank + 1,
+                            config.getMeowRankCurveOffset()
+                    );
 
             player.sendMessage(
                     mm.deserialize(
@@ -352,10 +375,9 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
-            if (!plugin.getDataManager()
-                    .hasCat(
-                            player.getUniqueId()
-                    )) {
+            if (!store.hasCat(
+                    player.getUniqueId()
+            )) {
 
                 player.sendMessage(
                         mm.deserialize(
@@ -413,11 +435,10 @@ public class NekoYumeCommand implements CommandExecutor {
                 }
             }
 
-            plugin.getCatManager()
-                    .setCatBehaviorMode(
-                            player,
-                            mode
-                    );
+            entityService.setCatBehaviorMode(
+                    player,
+                    mode
+            );
 
             player.sendMessage(
                     mm.deserialize(
@@ -447,10 +468,9 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
-            if (!plugin.getDataManager()
-                    .hasCat(
-                            player.getUniqueId()
-                    )) {
+            if (!store.hasCat(
+                    player.getUniqueId()
+            )) {
 
                 player.sendMessage(
                         mm.deserialize(
@@ -461,10 +481,9 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
-            plugin.getCatGuiManager()
-                    .open(
-                            player
-                    );
+            guiManager.open(
+                    player
+            );
 
             return true;
         }
@@ -484,10 +503,9 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
-            if (!plugin.getDataManager()
-                    .hasCat(
-                            player.getUniqueId()
-                    )) {
+            if (!store.hasCat(
+                    player.getUniqueId()
+            )) {
 
                 player.sendMessage(
                         mm.deserialize(
@@ -498,10 +516,9 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
-            plugin.getSkillGuiManager()
-                    .open(
-                            player
-                    );
+            skillGuiManager.open(
+                    player
+            );
 
             return true;
         }
@@ -521,10 +538,9 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
-            if (!plugin.getDataManager()
-                    .hasCat(
-                            player.getUniqueId()
-                    )) {
+            if (!store.hasCat(
+                    player.getUniqueId()
+            )) {
 
                 player.sendMessage(
                         mm.deserialize(
@@ -591,21 +607,19 @@ public class NekoYumeCommand implements CommandExecutor {
             /*
              * 保存新名字
              */
-            plugin.getDataManager()
-                    .setCatName(
-                            player.getUniqueId(),
-                            newName
-                    );
+            store.setCatName(
+                    player.getUniqueId(),
+                    newName
+            );
 
             /*
              * 如果猫咪当前存在，
              * 立即同步头顶名称
              */
-            plugin.getCatManager()
-                    .updateCatName(
-                            player,
-                            newName
-                    );
+            entityService.updateCatName(
+                    player,
+                    newName
+            );
 
             player.sendMessage(
                     mm.deserialize(
@@ -635,10 +649,9 @@ public class NekoYumeCommand implements CommandExecutor {
                 return true;
             }
 
-            if (!plugin.getDataManager()
-                    .hasCat(
-                            player.getUniqueId()
-                    )) {
+            if (!store.hasCat(
+                    player.getUniqueId()
+            )) {
 
                 player.sendMessage(
                         mm.deserialize(
@@ -650,53 +663,51 @@ public class NekoYumeCommand implements CommandExecutor {
             }
 
             String name =
-                    plugin.getDataManager()
-                            .getCatName(
-                                    player.getUniqueId()
-                            );
+                    store.getCatName(
+                            player.getUniqueId()
+                    );
 
             /*
              * 异步召唤猫咪
              */
-            plugin.getCatManager()
-                    .spawnCat(
-                            player,
-                            name,
-                            summoned -> {
+            entityService.spawnCat(
+                    player,
+                    name,
+                    summoned -> {
 
-                                /*
-                                 * 玩家在召唤过程中退出
-                                 */
-                                if (!player.isOnline()) {
-                                    return;
-                                }
+                        /*
+                         * 玩家在召唤过程中退出
+                         */
+                        if (!player.isOnline()) {
+                            return;
+                        }
 
-                                if (summoned) {
+                        if (summoned) {
 
-                                    player.sendMessage(
-                                            mm.deserialize(
-                                                    "<gradient:#ff9de2:#a78bfa>🐱 </gradient>"
-                                            ).append(
-                                                    Component.text(name)
-                                            ).append(
-                                                    Component.text(" 出现在你身边!")
-                                            )
-                                    );
+                            player.sendMessage(
+                                    mm.deserialize(
+                                            "<gradient:#ff9de2:#a78bfa>🐱 </gradient>"
+                                    ).append(
+                                            Component.text(name)
+                                    ).append(
+                                            Component.text(" 出现在你身边!")
+                                    )
+                            );
 
-                                } else {
+                        } else {
 
-                                    player.sendMessage(
-                                            mm.deserialize(
-                                                    "<gradient:#ff9de2:#a78bfa>🐱 </gradient>"
-                                            ).append(
-                                                    Component.text(name)
-                                            ).append(
-                                                    Component.text(" 来到你身边啦!")
-                                            )
-                                    );
-                                }
-                            }
-                    );
+                            player.sendMessage(
+                                    mm.deserialize(
+                                            "<gradient:#ff9de2:#a78bfa>🐱 </gradient>"
+                                    ).append(
+                                            Component.text(name)
+                                    ).append(
+                                            Component.text(" 来到你身边啦!")
+                                    )
+                            );
+                        }
+                    }
+            );
 
             return true;
         }

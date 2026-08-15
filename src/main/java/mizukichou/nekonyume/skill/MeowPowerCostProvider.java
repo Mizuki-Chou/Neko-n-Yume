@@ -1,7 +1,8 @@
 package mizukichou.nekonyume.skill;
 
-import mizukichou.nekonyume.NekoNYume;
 import mizukichou.nekonyume.cat.Cat;
+import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.entity.Player;
 
 /**
@@ -14,13 +15,16 @@ import org.bukkit.entity.Player;
  */
 public class MeowPowerCostProvider implements SkillRefreshCostProvider {
 
-    private final NekoNYume plugin;
+    private final CatCache cache;
+    private final CatStore store;
 
     public MeowPowerCostProvider(
-            NekoNYume plugin
+            CatCache cache,
+            CatStore store
     ) {
 
-        this.plugin = plugin;
+        this.cache = cache;
+        this.store = store;
     }
 
     @Override
@@ -39,10 +43,7 @@ public class MeowPowerCostProvider implements SkillRefreshCostProvider {
         }
 
         Cat cat =
-                plugin.getCatManager()
-                        .loadCat(
-                                player
-                        );
+                cache.loadCat(player);
 
         return cat != null &&
                 cat.getMeowPower() >= cost;
@@ -59,10 +60,7 @@ public class MeowPowerCostProvider implements SkillRefreshCostProvider {
         }
 
         Cat cat =
-                plugin.getCatManager()
-                        .loadCat(
-                                player
-                        );
+                cache.loadCat(player);
 
         if (cat == null) {
             return false;
@@ -76,11 +74,10 @@ public class MeowPowerCostProvider implements SkillRefreshCostProvider {
                 cat.getMeowPower() - cost
         );
 
-        plugin.getDataManager()
-                .setCatMeowPower(
-                        player.getUniqueId(),
-                        cat.getMeowPower()
-                );
+        store.setCatMeowPower(
+                player.getUniqueId(),
+                cat.getMeowPower()
+        );
 
         return true;
     }

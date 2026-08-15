@@ -1,11 +1,16 @@
 package mizukichou.nekonyume.listener;
 
-import mizukichou.nekonyume.NekoNYume;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
+import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatEntityService;
+import mizukichou.nekonyume.cat.CatProgressionService;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.gui.CatGuiHolder;
+import mizukichou.nekonyume.gui.CatGuiManager;
+import mizukichou.nekonyume.skill.CatSkillManager;
 import mizukichou.nekonyume.skill.SkillGuiHolder;
+import mizukichou.nekonyume.skill.SkillGuiManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
@@ -14,21 +19,44 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
 
 public class CatGuiListener implements Listener {
 
-    private final NekoNYume plugin;
+    /*
+     * plugin 仅用于调度器（延迟重开面板）。
+     */
+    private final JavaPlugin plugin;
+
+    private final CatEntityService entityService;
+    private final CatGuiManager guiManager;
+    private final SkillGuiManager skillGuiManager;
+    private final CatCache cache;
+    private final CatProgressionService progression;
+    private final CatSkillManager skillManager;
 
     private final MiniMessage mm =
             MiniMessage.miniMessage();
 
     public CatGuiListener(
-            NekoNYume plugin
+            JavaPlugin plugin,
+            CatEntityService entityService,
+            CatGuiManager guiManager,
+            SkillGuiManager skillGuiManager,
+            CatCache cache,
+            CatProgressionService progression,
+            CatSkillManager skillManager
     ) {
 
         this.plugin = plugin;
+        this.entityService = entityService;
+        this.guiManager = guiManager;
+        this.skillGuiManager = skillGuiManager;
+        this.cache = cache;
+        this.progression = progression;
+        this.skillManager = skillManager;
     }
 
     @EventHandler
@@ -119,19 +147,17 @@ public class CatGuiListener implements Listener {
         /*
          * 切换模式并刷新面板。
          */
-        plugin.getCatManager()
-                .setCatBehaviorMode(
-                        player,
-                        mode
-                );
+        entityService.setCatBehaviorMode(
+                player,
+                mode
+        );
 
         Bukkit.getScheduler()
                 .runTask(
                         plugin,
-                        () -> plugin.getCatGuiManager()
-                                .open(
-                                        player
-                                )
+                        () -> guiManager.open(
+                                player
+                        )
                 );
     }
 
@@ -194,11 +220,10 @@ public class CatGuiListener implements Listener {
         if (event.getClick()
                 .isRightClick()) {
 
-            plugin.getCatManager()
-                    .refreshSkillSlot(
-                            player,
-                            index
-                    );
+            progression.refreshSkillSlot(
+                    player,
+                    index
+            );
 
             reopenSkillGui(
                     player
@@ -211,10 +236,9 @@ public class CatGuiListener implements Listener {
          * 左键：施放主动技能。
          */
         Cat cat =
-                plugin.getCatManager()
-                        .loadCat(
-                                player
-                        );
+                cache.loadCat(
+                        player
+                );
 
         if (cat == null) {
             return;
@@ -232,11 +256,10 @@ public class CatGuiListener implements Listener {
 
         if (skill.isActive()) {
 
-            plugin.getCatSkillManager()
-                    .activateSkill(
-                            player,
-                            skill
-                    );
+            skillManager.activateSkill(
+                    player,
+                    skill
+            );
 
             reopenSkillGui(
                     player
@@ -267,10 +290,9 @@ public class CatGuiListener implements Listener {
         Bukkit.getScheduler()
                 .runTask(
                         plugin,
-                        () -> plugin.getSkillGuiManager()
-                                .open(
-                                        player
-                                )
+                        () -> skillGuiManager.open(
+                                player
+                        )
                 );
     }
 }

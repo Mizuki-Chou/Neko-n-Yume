@@ -14,8 +14,11 @@ Sora 2026-今 - 不懂事的猫咪，只能笼养呜呜
 向自然致敬。
  */
 
+import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.CatManager;
+import mizukichou.nekonyume.cat.CatProgressionService;
 import mizukichou.nekonyume.command.NekoYumeAdminCommand;
 import mizukichou.nekonyume.command.NekoYumeCommand;
 import mizukichou.nekonyume.config.PluginConfig;
@@ -31,21 +34,68 @@ import mizukichou.nekonyume.listener.PlayerQuitListener;
 import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.skill.CatSkillManager;
 import mizukichou.nekonyume.skill.SkillGuiManager;
+import mizukichou.nekonyume.storage.CatStore;
+import mizukichou.nekonyume.storage.PluginCatStoreEnv;
+import mizukichou.nekonyume.storage.YamlCatStore;
 import mizukichou.nekonyume.task.CatAuraTask;
 import mizukichou.nekonyume.task.CatBattleTask;
 import mizukichou.nekonyume.task.CatBehaviorTask;
 import mizukichou.nekonyume.task.CatHungerTask;
 import mizukichou.nekonyume.task.CatPositionTask;
+import org.bukkit.NamespacedKey;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
+/**
+ * Neko n' Yume 主类（组合根）。
+ *
+ * <p>
+ * 架构（Step 3 ~ Step 5B）：
+ * 本类只负责装配：创建全部组件并构造注入，
+ * 不再被内部组件当作 Service Locator 使用。
+ * </p>
+ *
+ * <p>
+ * 装配顺序（依赖链，无环）：
+ * CatStore → CatCache → CatSkillManager
+ * → CatProgressionService → CatEntityService
+ * → CatManager（门面，对外 API）
+ * → CatFoodManager → CatGuiManager → GiftManager
+ * → CatBattleState → SkillGuiManager
+ * → 命令 → 监听器 → 任务
+ * </p>
+ *
+ * <p>
+ * 公开 getter 仅保留为外部扩展 API；
+ * 插件内部组件一律构造注入，不使用这些 getter。
+ * </p>
+ */
 public final class NekoNYume extends JavaPlugin {
 
     private PluginConfig pluginConfig;
     private PlayerDataManager dataManager;
+    /*
+     * Step 3：存储抽象层。
+     * YamlCatStore 是磁盘实现；PlayerDataManager 是其适配器。
+     */
+    private CatStore catStore;
+
+    /*
+     * Step 5A：组合根构建的领域服务（构造注入）。
+     */
+    private CatCache catCache;
+    private CatProgressionService catProgressionService;
+    private CatEntityService catEntityService;
+
+    /*
+     * PDC Keys（组合根创建，注入 CatEntityService / 监听器 / 任务）。
+     */
+    private NamespacedKey catKey;
+    private NamespacedKey ownerKey;
+
     private CatManager catManager;
     private CatFoodManager catFoodManager;
     private CatGuiManager catGuiManager;
@@ -73,6 +123,17 @@ public final class NekoNYume extends JavaPlugin {
         return dataManager;
     }
 
+    /*
+     * Step 3：存储抽象层入口。
+     */
+    public CatStore getCatStore() {
+        return catStore;
+    }
+
+    /*
+     * 以下 getter 保留为对外 API（外部扩展使用）。
+     * 插件内部组件一律构造注入，不使用这些 getter。
+     */
     public CatManager getCatManager() {
         return catManager;
     }
@@ -156,22 +217,90 @@ public final class NekoNYume extends JavaPlugin {
          * ========================================================
          * 玩家数据系统
          * ========================================================
+         *
+         * Step 3：
+         * catStore 是存储抽象层（磁盘实现 YamlCatStore），
+         * dataManager 是保留历史签名的薄适配器。
          */
+
+        catStore =
+                new YamlCatStore(
+                        new PluginCatStoreEnv(
+                                this
+                        )
+                );
 
         dataManager =
                 new PlayerDataManager(
-                        this
+                        catStore
                 );
 
         /*
          * ========================================================
-         * 猫咪系统
+         * PDC Keys（CatEntityService / 监听器 / 任务共用）
          * ========================================================
          */
 
+        catKey =
+                new NamespacedKey(
+                        this,
+                        "nekonyume_cat"
+                );
+
+        ownerKey =
+                new NamespacedKey(
+                        this,
+                        "owner_uuid"
+                );
+
+        /*
+         * ========================================================
+         * 领域服务装配（Step 5A：构造注入，顺序有依赖）
+         * ========================================================
+         *
+         * CatStore → CatCache → CatSkillManager
+         * → CatProgressionService → CatEntityService
+         * → CatManager（门面，纯委托）
+         */
+
+        catCache =
+                new CatCache(
+                        catStore,
+                        getLogger()
+                );
+
+        catSkillManager =
+                new CatSkillManager(
+                        getLogger(),
+                        catStore,
+                        catCache,
+                        pluginConfig
+                );
+
+        catProgressionService =
+                new CatProgressionService(
+                        catStore,
+                        catCache,
+                        pluginConfig,
+                        catSkillManager
+                );
+
+        catEntityService =
+                new CatEntityService(
+                        this,
+                        getLogger(),
+                        catStore,
+                        catCache,
+                        catProgressionService,
+                        catKey,
+                        ownerKey
+                );
+
         catManager =
                 new CatManager(
-                        this
+                        catCache,
+                        catEntityService,
+                        catProgressionService
                 );
 
         /*
@@ -182,7 +311,11 @@ public final class NekoNYume extends JavaPlugin {
 
         catFoodManager =
                 new CatFoodManager(
-                        this
+                        this,
+                        catStore,
+                        catCache,
+                        pluginConfig,
+                        catProgressionService
                 );
 
         /*
@@ -193,7 +326,9 @@ public final class NekoNYume extends JavaPlugin {
 
         catGuiManager =
                 new CatGuiManager(
-                        this
+                        catStore,
+                        catCache,
+                        pluginConfig
                 );
 
         /*
@@ -204,7 +339,10 @@ public final class NekoNYume extends JavaPlugin {
 
         giftManager =
                 new GiftManager(
-                        this
+                        catStore,
+                        catCache,
+                        pluginConfig,
+                        catFoodManager
                 );
 
         /*
@@ -216,14 +354,17 @@ public final class NekoNYume extends JavaPlugin {
         battleState =
                 new CatBattleState();
 
-        catSkillManager =
-                new CatSkillManager(
-                        this
-                );
+        /*
+         * catSkillManager 已在上方提前构建
+         * （CatProgressionService 依赖它），此处不再创建。
+         */
 
         skillGuiManager =
                 new SkillGuiManager(
-                        this
+                        catStore,
+                        catCache,
+                        catSkillManager,
+                        pluginConfig
                 );
 
         /*
@@ -238,8 +379,14 @@ public final class NekoNYume extends JavaPlugin {
         if (!registerCommand(
                 "nekoyume",
                 new NekoYumeCommand(
-                        this
+                        catStore,
+                        catCache,
+                        pluginConfig,
+                        catEntityService,
+                        catGuiManager,
+                        skillGuiManager
                 )
+
         )) {
 
             return;
@@ -248,7 +395,12 @@ public final class NekoNYume extends JavaPlugin {
         if (!registerCommand(
                 "nekoyumeadmin",
                 new NekoYumeAdminCommand(
-                        this
+                        this::reloadSettings,
+                        getLogger(),
+                        catStore,
+                        catEntityService,
+                        catProgressionService,
+                        catFoodManager
                 )
         )) {
 
@@ -263,16 +415,54 @@ public final class NekoNYume extends JavaPlugin {
 
         playerJoinListener =
                 new PlayerJoinListener(
-                        this
+                        this,
+                        getLogger(),
+                        catStore,
+                        catCache,
+                        catEntityService,
+                        giftManager
                 );
 
         registerListeners(
                 playerJoinListener,
-                new PlayerQuitListener(this),
-                new CatFoodListener(this),
-                new CatEntityListener(this),
-                new CatInteractionListener(this),
-                new CatGuiListener(this)
+                new PlayerQuitListener(
+                        catCache,
+                        catStore,
+                        catEntityService
+                ),
+                new CatFoodListener(
+                        catFoodManager,
+                        catKey,
+                        ownerKey
+                ),
+                new CatEntityListener(
+                        this,
+                        getLogger(),
+                        catStore,
+                        catCache,
+                        catEntityService,
+                        pluginConfig,
+                        battleState,
+                        catKey,
+                        ownerKey
+                ),
+                new CatInteractionListener(
+                        catCache,
+                        catProgressionService,
+                        catStore,
+                        pluginConfig,
+                        catKey,
+                        ownerKey
+                ),
+                new CatGuiListener(
+                        this,
+                        catEntityService,
+                        catGuiManager,
+                        skillGuiManager,
+                        catCache,
+                        catProgressionService,
+                        catSkillManager
+                )
         );
 
         /*
@@ -288,7 +478,11 @@ public final class NekoNYume extends JavaPlugin {
                         .getScheduler()
                         .runTaskTimer(
                                 this,
-                                new CatHungerTask(this),
+                                new CatHungerTask(
+                                        pluginConfig,
+                                        catStore,
+                                        catCache
+                                ),
                                 20L * 60L,
                                 20L * 60L
                         );
@@ -306,7 +500,11 @@ public final class NekoNYume extends JavaPlugin {
                         .getScheduler()
                         .runTaskTimer(
                                 this,
-                                new CatPositionTask(this),
+                                new CatPositionTask(
+                                        catCache,
+                                        catEntityService,
+                                        ownerKey
+                                ),
                                 20L * 30L,
                                 20L * 30L
                         );
@@ -324,7 +522,9 @@ public final class NekoNYume extends JavaPlugin {
                         .getScheduler()
                         .runTaskTimer(
                                 this,
-                                new CatBehaviorTask(this),
+                                new CatBehaviorTask(
+                                        catCache
+                                ),
                                 20L,
                                 20L
                         );
@@ -342,7 +542,11 @@ public final class NekoNYume extends JavaPlugin {
                         .getScheduler()
                         .runTaskTimer(
                                 this,
-                                new CatBattleTask(this),
+                                new CatBattleTask(
+                                        pluginConfig,
+                                        catCache,
+                                        battleState
+                                ),
                                 10L,
                                 10L
                         );
@@ -360,7 +564,10 @@ public final class NekoNYume extends JavaPlugin {
                         .getScheduler()
                         .runTaskTimer(
                                 this,
-                                new CatAuraTask(this),
+                                new CatAuraTask(
+                                        pluginConfig,
+                                        catCache
+                                ),
                                 40L,
                                 40L
                         );

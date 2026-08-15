@@ -1,7 +1,8 @@
 package mizukichou.nekonyume.cat;
 
-import mizukichou.nekonyume.NekoNYume;
+import mizukichou.nekonyume.config.PluginConfig;
 import mizukichou.nekonyume.event.CatFedEvent;
+import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
@@ -13,6 +14,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -22,6 +24,16 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 
+/**
+ * 猫咪食物与喵丹管理。
+ *
+ * <p>
+ * Step 5A-2：构造注入。
+ * plugin 仅用于 NamespacedKey 与原始 config 读取；
+ * 数据读写走 CatStore，猫加载走 CatCache，
+ * 数值走 PluginConfig，成长走 CatProgressionService。
+ * </p>
+ */
 public class CatFoodManager {
 
     private static final int MAX_HUNGER = 100;
@@ -65,7 +77,14 @@ public class CatFoodManager {
     private final Map<Material, Integer> foodValues =
             new EnumMap<>(Material.class);
 
-    private final NekoNYume plugin;
+    /*
+     * 注入依赖。
+     */
+    private final JavaPlugin plugin;
+    private final CatStore store;
+    private final CatCache cache;
+    private final PluginConfig config;
+    private final CatProgressionService progression;
 
     /*
      * 喵丹 PDC 标记。
@@ -74,10 +93,18 @@ public class CatFoodManager {
     private final NamespacedKey meowDanKey;
 
     public CatFoodManager(
-            NekoNYume plugin
+            JavaPlugin plugin,
+            CatStore store,
+            CatCache cache,
+            PluginConfig config,
+            CatProgressionService progression
     ) {
 
         this.plugin = plugin;
+        this.store = store;
+        this.cache = cache;
+        this.config = config;
+        this.progression = progression;
 
         this.meowDanKey =
                 new NamespacedKey(
@@ -97,8 +124,7 @@ public class CatFoodManager {
     private void registerFoods() {
 
         foodValues.putAll(
-                plugin.getPluginConfig()
-                        .getFoodValues()
+                config.getFoodValues()
         );
     }
 
@@ -383,19 +409,12 @@ public class CatFoodManager {
         /*
          * 玩家必须拥有猫。
          */
-        if (!plugin.getDataManager()
-                .hasCat(
-                        playerUUID
-                )) {
-
+        if (!store.hasCat(playerUUID)) {
             return false;
         }
 
         Cat cat =
-                plugin.getCatManager()
-                        .loadCat(
-                                player
-                        );
+                cache.loadCat(player);
 
         if (cat == null) {
             return false;
@@ -415,31 +434,28 @@ public class CatFoodManager {
                 cat.getAffection()
                         - oldAffection;
 
-        plugin.getDataManager()
-                .setCatAffection(
-                        playerUUID,
-                        cat.getAffection()
-                );
+        store.setCatAffection(
+                playerUUID,
+                cat.getAffection()
+        );
 
         /*
          * 经验（统一入口，含升级反馈）。
          */
-        plugin.getCatManager()
-                .gainExperience(
-                        player,
-                        cat,
-                        quality.getXpGain()
-                );
+        progression.gainExperience(
+                player,
+                cat,
+                quality.getXpGain()
+        );
 
         /*
          * 喵力（统一入口，含喵光一闪与升阶反馈）。
          */
-        plugin.getCatManager()
-                .grantMeowPower(
-                        player,
-                        cat,
-                        quality.getMeowPowerGain()
-                );
+        progression.grantMeowPower(
+                player,
+                cat,
+                quality.getMeowPowerGain()
+        );
 
         /*
          * 消耗喵丹。
@@ -549,11 +565,7 @@ public class CatFoodManager {
         /*
          * 玩家必须拥有猫。
          */
-        if (!plugin.getDataManager()
-                .hasCat(
-                        playerUUID
-                )) {
-
+        if (!store.hasCat(playerUUID)) {
             return false;
         }
 
@@ -564,10 +576,7 @@ public class CatFoodManager {
          */
 
         Cat cat =
-                plugin.getCatManager()
-                        .loadCat(
-                                player
-                        );
+                cache.loadCat(player);
 
         if (cat == null) {
             return false;
@@ -682,8 +691,7 @@ public class CatFoodManager {
                 cat.getAffection();
 
         cat.addAffection(
-                plugin.getPluginConfig()
-                        .getFeedAffectionBase()
+                config.getFeedAffectionBase()
                         + personality
                         .getFeedAffectionBonus()
         );
@@ -703,11 +711,10 @@ public class CatFoodManager {
          * ========================================================
          */
 
-        plugin.getDataManager()
-                .setCatHungerLastUpdate(
-                        playerUUID,
-                        System.currentTimeMillis()
-                );
+        store.setCatHungerLastUpdate(
+                playerUUID,
+                System.currentTimeMillis()
+        );
 
         /*
          * ========================================================
@@ -715,23 +722,20 @@ public class CatFoodManager {
          * ========================================================
          */
 
-        plugin.getDataManager()
-                .setCatHunger(
-                        playerUUID,
-                        cat.getHunger()
-                );
+        store.setCatHunger(
+                playerUUID,
+                cat.getHunger()
+        );
 
-        plugin.getDataManager()
-                .setCatAffection(
-                        playerUUID,
-                        cat.getAffection()
-                );
+        store.setCatAffection(
+                playerUUID,
+                cat.getAffection()
+        );
 
-        plugin.getDataManager()
-                .setCatLastFedAt(
-                        playerUUID,
-                        cat.getLastFedAt()
-                );
+        store.setCatLastFedAt(
+                playerUUID,
+                cat.getLastFedAt()
+        );
 
         /*
          * ========================================================
@@ -761,18 +765,17 @@ public class CatFoodManager {
          * ========================================================
          *
          * 喂食经验 = 实际食物价值。
-         * 统一走 CatManager.gainExperience()。
+         * 统一走 CatProgressionService.gainExperience()。
          */
 
         int xpGain =
                 effectiveFoodValue;
 
-        plugin.getCatManager()
-                .gainExperience(
-                        player,
-                        cat,
-                        xpGain
-                );
+        progression.gainExperience(
+                player,
+                cat,
+                xpGain
+        );
 
         /*
          * ========================================================
@@ -789,18 +792,15 @@ public class CatFoodManager {
         int meowGain = 0;
 
         int feedCount =
-                plugin.getDataManager()
-                        .getCatFeedCount(
-                                playerUUID
-                        );
+                store.getCatFeedCount(
+                        playerUUID
+                );
 
         if (feedCount <
-                plugin.getPluginConfig()
-                        .getFeedMeowChanceLimit()) {
+                config.getFeedMeowChanceLimit()) {
 
             int chance =
-                    plugin.getPluginConfig()
-                            .getFeedMeowChance()
+                    config.getFeedMeowChance()
                             + personality
                             .getFeedMeowChanceBonus();
 
@@ -809,12 +809,11 @@ public class CatFoodManager {
 
                 meowGain = 1;
 
-                plugin.getCatManager()
-                        .grantMeowPower(
-                                player,
-                                cat,
-                                1
-                        );
+                progression.grantMeowPower(
+                        player,
+                        cat,
+                        1
+                );
             }
         }
 
@@ -822,10 +821,9 @@ public class CatFoodManager {
          * 成功喂食计数 +1。
          * （无论是否获得喵力）
          */
-        plugin.getDataManager()
-                .addCatFeedCount(
-                        playerUUID
-                );
+        store.addCatFeedCount(
+                playerUUID
+        );
 
         /*
          * ========================================================

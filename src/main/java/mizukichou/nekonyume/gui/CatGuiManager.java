@@ -1,8 +1,11 @@
 package mizukichou.nekonyume.gui;
 
-import mizukichou.nekonyume.NekoNYume;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
+import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.GrowthMath;
+import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -18,6 +21,11 @@ import java.util.UUID;
  *
  * <p>
  * 9×3 只读面板 + 三个行为模式按钮 + 关闭按钮。
+ * </p>
+ *
+ * <p>
+ * 构造注入（CatStore / CatCache / PluginConfig）；
+ * 进度显示统一走 GrowthMath，与配置曲线一致。
  * </p>
  */
 public class CatGuiManager {
@@ -39,13 +47,19 @@ public class CatGuiManager {
     private static final int SLOT_MODE_FREE = 20;
     private static final int SLOT_CLOSE = 26;
 
-    private final NekoNYume plugin;
+    private final CatStore store;
+    private final CatCache cache;
+    private final PluginConfig config;
 
     public CatGuiManager(
-            NekoNYume plugin
+            CatStore store,
+            CatCache cache,
+            PluginConfig config
     ) {
 
-        this.plugin = plugin;
+        this.store = store;
+        this.cache = cache;
+        this.config = config;
     }
 
     /*
@@ -65,17 +79,12 @@ public class CatGuiManager {
         UUID playerUUID =
                 player.getUniqueId();
 
-        if (!plugin.getDataManager()
-                .hasCat(playerUUID)) {
-
+        if (!store.hasCat(playerUUID)) {
             return;
         }
 
         Cat cat =
-                plugin.getCatManager()
-                        .loadCat(
-                                player
-                        );
+                cache.loadCat(player);
 
         if (cat == null) {
             return;
@@ -133,7 +142,6 @@ public class CatGuiManager {
                 )
         );
 
-
         /*
          * 等级。
          */
@@ -141,9 +149,10 @@ public class CatGuiManager {
                 cat.getLevel();
 
         long nextLevelXp =
-                50L
-                        * (level + 1L)
-                        * level;
+                GrowthMath.xpRequiredForLevel(
+                        level + 1,
+                        config.getLevelCurveBase()
+                );
 
         inventory.setItem(
                 SLOT_LEVEL,
@@ -166,9 +175,10 @@ public class CatGuiManager {
                 cat.getMeowRank();
 
         long nextRankPower =
-                (long) (meowRank + 1)
-                        * (meowRank + 1 + 19)
-                        / 2;
+                GrowthMath.meowRequiredForRank(
+                        meowRank + 1,
+                        config.getMeowRankCurveOffset()
+                );
 
         inventory.setItem(
                 SLOT_MEOW,

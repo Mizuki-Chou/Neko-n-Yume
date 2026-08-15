@@ -1,9 +1,14 @@
 package mizukichou.nekonyume.listener;
 
 import com.destroystokyo.paper.event.entity.EntityAddToWorldEvent;
-import mizukichou.nekonyume.NekoNYume;
+import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.CatSkill;
+import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.skill.CatBattleState;
+import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Entity;
@@ -14,17 +19,50 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
 import java.util.UUID;
+import java.util.logging.Logger;
 
 public class CatEntityListener implements Listener {
 
-    private final NekoNYume plugin;
+    /*
+     * plugin 仅用于调度器（延迟 PDC 检查）。
+     */
+    private final JavaPlugin plugin;
+    private final Logger logger;
+    private final CatStore store;
+    private final CatCache cache;
+    private final CatEntityService entityService;
+    private final PluginConfig config;
+    private final CatBattleState battleState;
 
-    public CatEntityListener(NekoNYume plugin) {
+    private final NamespacedKey catKey;
+    private final NamespacedKey ownerKey;
+
+    public CatEntityListener(
+            JavaPlugin plugin,
+            Logger logger,
+            CatStore store,
+            CatCache cache,
+            CatEntityService entityService,
+            PluginConfig config,
+            CatBattleState battleState,
+            NamespacedKey catKey,
+            NamespacedKey ownerKey
+    ) {
+
         this.plugin = plugin;
+        this.logger = logger;
+        this.store = store;
+        this.cache = cache;
+        this.entityService = entityService;
+        this.config = config;
+        this.battleState = battleState;
+        this.catKey = catKey;
+        this.ownerKey = ownerKey;
     }
 
     /*
@@ -69,8 +107,7 @@ public class CatEntityListener implements Listener {
                              */
                             if (!cat.getPersistentDataContainer()
                                     .has(
-                                            plugin.getCatManager()
-                                                    .getCatKey(),
+                                            catKey,
                                             PersistentDataType.BYTE
                                     )) {
 
@@ -80,8 +117,7 @@ public class CatEntityListener implements Listener {
                             String ownerUUID =
                                     cat.getPersistentDataContainer()
                                             .get(
-                                                    plugin.getCatManager()
-                                                            .getOwnerKey(),
+                                                    ownerKey,
                                                     PersistentDataType.STRING
                                             );
 
@@ -106,17 +142,14 @@ public class CatEntityListener implements Listener {
                             /*
                              * 玩家已经没有宠物数据
                              */
-                            if (!plugin.getDataManager()
-                                    .hasCat(playerUUID)) {
-
+                            if (!store.hasCat(playerUUID)) {
                                 return;
                             }
 
                             UUID currentUUID =
-                                    plugin.getDataManager()
-                                            .getCatEntityUUID(
-                                                    playerUUID
-                                            );
+                                    store.getCatEntityUUID(
+                                            playerUUID
+                                    );
 
                             /*
                              * 当前没有正式实体。
@@ -124,20 +157,18 @@ public class CatEntityListener implements Listener {
                              */
                             if (currentUUID == null) {
 
-                                plugin.getDataManager()
-                                        .setCatEntityUUID(
-                                                playerUUID,
-                                                cat.getUniqueId()
-                                        );
+                                store.setCatEntityUUID(
+                                        playerUUID,
+                                        cat.getUniqueId()
+                                );
 
                                 /*
                                  * 同步运行时缓存。
                                  */
                                 mizukichou.nekonyume.cat.Cat logicalCat =
-                                        plugin.getCatManager()
-                                                .getCat(
-                                                        playerUUID
-                                                );
+                                        cache.getCat(
+                                                playerUUID
+                                        );
 
                                 if (logicalCat != null) {
 
@@ -199,8 +230,7 @@ public class CatEntityListener implements Listener {
          */
         if (!cat.getPersistentDataContainer()
                 .has(
-                        plugin.getCatManager()
-                                .getCatKey(),
+                        catKey,
                         PersistentDataType.BYTE
                 )) {
 
@@ -210,8 +240,7 @@ public class CatEntityListener implements Listener {
         /*
          * 战斗关闭：猫恢复无敌。
          */
-        if (!plugin.getPluginConfig()
-                .isBattleEnabled()) {
+        if (!config.isBattleEnabled()) {
 
             event.setCancelled(
                     true
@@ -288,10 +317,9 @@ public class CatEntityListener implements Listener {
     ) {
 
         mizukichou.nekonyume.cat.Cat logicalCat =
-                plugin.getCatManager()
-                        .getCatByEntity(
-                                cat.getUniqueId()
-                        );
+                cache.getCatByEntity(
+                        cat.getUniqueId()
+                );
 
         if (logicalCat != null) {
             return logicalCat;
@@ -300,8 +328,7 @@ public class CatEntityListener implements Listener {
         String ownerUUID =
                 cat.getPersistentDataContainer()
                         .get(
-                                plugin.getCatManager()
-                                        .getOwnerKey(),
+                                ownerKey,
                                 PersistentDataType.STRING
                         );
 
@@ -316,10 +343,9 @@ public class CatEntityListener implements Listener {
                             ownerUUID
                     );
 
-            return plugin.getCatManager()
-                    .loadCat(
-                            playerUUID
-                    );
+            return cache.loadCat(
+                    playerUUID
+            );
 
         } catch (IllegalArgumentException e) {
 
@@ -350,15 +376,13 @@ public class CatEntityListener implements Listener {
         if (hasEternity) {
 
             long cooldownMs =
-                    plugin.getPluginConfig()
-                            .getBattleEternityRebirthSeconds()
+                    config.getBattleEternityRebirthSeconds()
                             * 1000L;
 
-            if (plugin.getBattleState()
-                    .tryRebirth(
-                            cat.getUniqueId(),
-                            cooldownMs
-                    )) {
+            if (battleState.tryRebirth(
+                    cat.getUniqueId(),
+                    cooldownMs
+            )) {
 
                 double max =
                         cat.getMaxHealth();
@@ -403,10 +427,9 @@ public class CatEntityListener implements Listener {
             );
         }
 
-        plugin.getBattleState()
-                .markProtected(
-                        cat.getUniqueId()
-                );
+        battleState.markProtected(
+                cat.getUniqueId()
+        );
 
         cat.getWorld()
                 .spawnParticle(
@@ -461,10 +484,9 @@ public class CatEntityListener implements Listener {
             WorldLoadEvent event
     ) {
 
-        plugin.getCatManager()
-                .retryPendingWorldRestores(
-                        event.getWorld()
-                );
+        entityService.retryPendingWorldRestores(
+                event.getWorld()
+        );
     }
 
     /*
@@ -494,8 +516,7 @@ public class CatEntityListener implements Listener {
         String ownerUUIDString =
                 cat.getPersistentDataContainer()
                         .get(
-                                plugin.getCatManager()
-                                        .getOwnerKey(),
+                                ownerKey,
                                 PersistentDataType.STRING
                         );
 
@@ -521,10 +542,9 @@ public class CatEntityListener implements Listener {
          * 确认这就是当前绑定的实体。
          */
         UUID currentUUID =
-                plugin.getDataManager()
-                        .getCatEntityUUID(
-                                playerUUID
-                        );
+                store.getCatEntityUUID(
+                        playerUUID
+                );
 
         if (currentUUID == null ||
                 !currentUUID.equals(
@@ -538,12 +558,11 @@ public class CatEntityListener implements Listener {
          * 只清绑定。
          * 逻辑猫与全部状态保留。
          */
-        plugin.getCatManager()
-                .clearEntityBinding(
-                        playerUUID
-                );
+        entityService.clearEntityBinding(
+                playerUUID
+        );
 
-        plugin.getLogger().info(
+        logger.info(
                 "Cat entity "
                         + cat.getUniqueId()
                         + " lost for player "

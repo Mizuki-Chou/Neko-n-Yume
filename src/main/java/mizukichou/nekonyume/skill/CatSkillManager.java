@@ -1,9 +1,11 @@
 package mizukichou.nekonyume.skill;
 
-import mizukichou.nekonyume.NekoNYume;
 import mizukichou.nekonyume.cat.Cat;
+import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatSkill;
+import mizukichou.nekonyume.config.PluginConfig;
 import mizukichou.nekonyume.event.CatSkillActivatedEvent;
+import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Particle;
@@ -17,6 +19,7 @@ import org.bukkit.potion.PotionEffectType;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 /**
  * 技能管理。
@@ -29,12 +32,16 @@ import java.util.UUID;
  *
  * <p>
  * 技能槽的解锁 / 抽取 / 刷新
- * 由 CatManager 负责（涉及持久化）。
+ * 由 CatProgressionService 负责（涉及持久化）。
  * </p>
  */
 public class CatSkillManager {
 
-    private final NekoNYume plugin;
+    private final Logger logger;
+    private final CatStore store;
+    private final CatCache cache;
+    private final PluginConfig config;
+
     private final MiniMessage mm = MiniMessage.miniMessage();
 
     /*
@@ -48,10 +55,16 @@ public class CatSkillManager {
     private SkillRefreshCostProvider refreshCostProvider;
 
     public CatSkillManager(
-            NekoNYume plugin
+            Logger logger,
+            CatStore store,
+            CatCache cache,
+            PluginConfig config
     ) {
 
-        this.plugin = plugin;
+        this.logger = logger;
+        this.store = store;
+        this.cache = cache;
+        this.config = config;
 
         loadRefreshCostProvider();
     }
@@ -65,17 +78,13 @@ public class CatSkillManager {
     public void loadRefreshCostProvider() {
 
         String type =
-                plugin.getPluginConfig()
-                        .getSkillRefreshCostType();
+                config.getSkillRefreshCostType();
 
-        if ("player-points".equalsIgnoreCase(
-                type
-        )) {
+        if ("player-points".equalsIgnoreCase(type)) {
 
             ReflectivePlayerPointsCostProvider provider =
                     new ReflectivePlayerPointsCostProvider(
-                            plugin.getServer()
-                                    .getPluginManager()
+                            Bukkit.getPluginManager()
                                     .getPlugin("PlayerPoints")
                     );
 
@@ -83,21 +92,22 @@ public class CatSkillManager {
 
                 refreshCostProvider = provider;
 
-                plugin.getLogger().info(
+                logger.info(
                         "Skill refresh cost provider: PlayerPoints"
                 );
 
                 return;
             }
 
-            plugin.getLogger().warning(
+            logger.warning(
                     "PlayerPoints is not available, falling back to meow-power."
             );
         }
 
         refreshCostProvider =
                 new MeowPowerCostProvider(
-                        plugin
+                        cache,
+                        store
                 );
     }
 
@@ -110,14 +120,12 @@ public class CatSkillManager {
     ) {
 
         int base =
-                plugin.getPluginConfig()
-                        .getSkillRefreshCost();
+                config.getSkillRefreshCost();
 
         if (dreamSlot) {
 
             return base
-                    * plugin.getPluginConfig()
-                    .getDreamSlotCostMultiplier();
+                    * config.getDreamSlotCostMultiplier();
         }
 
         return base;
@@ -127,9 +135,7 @@ public class CatSkillManager {
             boolean dreamSlot
     ) {
 
-        return getRefreshCost(
-                dreamSlot
-        )
+        return getRefreshCost(dreamSlot)
                 + " "
                 + refreshCostProvider.getDisplayName();
     }
@@ -208,13 +214,11 @@ public class CatSkillManager {
             CatSkill skill
     ) {
 
-        return plugin.getPluginConfig()
-                .getSkillValue(
-                        skill,
-                        "cooldown",
-                        defaultCooldown(skill)
-                )
-                * 1000L;
+        return config.getSkillValue(
+                skill,
+                "cooldown",
+                defaultCooldown(skill)
+        ) * 1000L;
     }
 
     private int defaultCooldown(
@@ -256,14 +260,12 @@ public class CatSkillManager {
         }
 
         Cat cat =
-                plugin.getCatManager()
-                        .getCat(player);
+                cache.getCat(player);
 
         if (cat == null) {
 
             cat =
-                    plugin.getCatManager()
-                            .loadCat(player);
+                    cache.loadCat(player);
         }
 
         if (cat == null) {
@@ -362,12 +364,11 @@ public class CatSkillManager {
             case HEALING_PURR -> {
 
                 int power =
-                        plugin.getPluginConfig()
-                                .getSkillValue(
-                                        skill,
-                                        "power",
-                                        6
-                                );
+                        config.getSkillValue(
+                                skill,
+                                "power",
+                                6
+                        );
 
                 double max =
                         player.getMaxHealth();
@@ -392,12 +393,11 @@ public class CatSkillManager {
             case SWIFT_PAWS -> {
 
                 int duration =
-                        plugin.getPluginConfig()
-                                .getSkillValue(
-                                        skill,
-                                        "duration",
-                                        20
-                                );
+                        config.getSkillValue(
+                                skill,
+                                "duration",
+                                20
+                        );
 
                 player.addPotionEffect(
                         new PotionEffect(
@@ -417,12 +417,11 @@ public class CatSkillManager {
             case HUNTING_INSTINCT -> {
 
                 int duration =
-                        plugin.getPluginConfig()
-                                .getSkillValue(
-                                        skill,
-                                        "duration",
-                                        30
-                                );
+                        config.getSkillValue(
+                                skill,
+                                "duration",
+                                30
+                        );
 
                 player.addPotionEffect(
                         new PotionEffect(
@@ -442,12 +441,11 @@ public class CatSkillManager {
             case MEOW_GUARD -> {
 
                 int duration =
-                        plugin.getPluginConfig()
-                                .getSkillValue(
-                                        skill,
-                                        "duration",
-                                        10
-                                );
+                        config.getSkillValue(
+                                skill,
+                                "duration",
+                                10
+                        );
 
                 player.addPotionEffect(
                         new PotionEffect(
@@ -467,28 +465,25 @@ public class CatSkillManager {
             case DREAM_AWAKEN -> {
 
                 int power =
-                        plugin.getPluginConfig()
-                                .getSkillValue(
-                                        skill,
-                                        "power",
-                                        20
-                                );
+                        config.getSkillValue(
+                                skill,
+                                "power",
+                                20
+                        );
 
                 int radius =
-                        plugin.getPluginConfig()
-                                .getSkillValue(
-                                        skill,
-                                        "radius",
-                                        12
-                                );
+                        config.getSkillValue(
+                                skill,
+                                "radius",
+                                12
+                        );
 
                 int slowSeconds =
-                        plugin.getPluginConfig()
-                                .getSkillValue(
-                                        skill,
-                                        "duration",
-                                        5
-                                );
+                        config.getSkillValue(
+                                skill,
+                                "duration",
+                                5
+                        );
 
                 applyAoe(
                         player,
@@ -526,20 +521,18 @@ public class CatSkillManager {
             case STARFALL -> {
 
                 int power =
-                        plugin.getPluginConfig()
-                                .getSkillValue(
-                                        skill,
-                                        "power",
-                                        40
-                                );
+                        config.getSkillValue(
+                                skill,
+                                "power",
+                                40
+                        );
 
                 int radius =
-                        plugin.getPluginConfig()
-                                .getSkillValue(
-                                        skill,
-                                        "radius",
-                                        12
-                                );
+                        config.getSkillValue(
+                                skill,
+                                "radius",
+                                12
+                        );
 
                 applyAoe(
                         player,
@@ -585,12 +578,11 @@ public class CatSkillManager {
             case TIME_ECHO -> {
 
                 int duration =
-                        plugin.getPluginConfig()
-                                .getSkillValue(
-                                        skill,
-                                        "duration",
-                                        8
-                                );
+                        config.getSkillValue(
+                                skill,
+                                "duration",
+                                8
+                        );
 
                 player.addPotionEffect(
                         new PotionEffect(

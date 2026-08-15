@@ -1,11 +1,14 @@
 package mizukichou.nekonyume.task;
 
-import mizukichou.nekonyume.NekoNYume;
+import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatEntityService;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Entity;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.UUID;
 
@@ -34,13 +37,20 @@ public class CatPositionTask implements Runnable {
     private static final long POSITION_INTERVAL =
             30L * 1000L;
 
-    private final NekoNYume plugin;
+    private final CatCache cache;
+    private final CatEntityService entityService;
+
+    private final NamespacedKey ownerKey;
 
     public CatPositionTask(
-            NekoNYume plugin
+            CatCache cache,
+            CatEntityService entityService,
+            NamespacedKey ownerKey
     ) {
 
-        this.plugin = plugin;
+        this.cache = cache;
+        this.entityService = entityService;
+        this.ownerKey = ownerKey;
     }
 
     @Override
@@ -60,7 +70,7 @@ public class CatPositionTask implements Runnable {
          */
 
         for (mizukichou.nekonyume.cat.Cat logicalCat :
-                plugin.getCatManager().getCats()) {
+                cache.getCats()) {
 
             /*
              * 获取当前 Bukkit Entity UUID。
@@ -86,7 +96,7 @@ public class CatPositionTask implements Runnable {
              * 注意：
              * 这里绝对不会自动生成新猫。
              *
-             * 实体恢复属于 CatManager 的职责。
+             * 实体恢复属于 CatEntityService 的职责。
              */
             if (!(entity instanceof Cat cat)) {
                 continue;
@@ -112,9 +122,8 @@ public class CatPositionTask implements Runnable {
             String ownerUUID =
                     cat.getPersistentDataContainer()
                             .get(
-                                    plugin.getCatManager()
-                                            .getOwnerKey(),
-                                    org.bukkit.persistence.PersistentDataType.STRING
+                                    ownerKey,
+                                    PersistentDataType.STRING
                             );
 
             if (ownerUUID == null) {
@@ -188,11 +197,10 @@ public class CatPositionTask implements Runnable {
              *
              * 每 30 秒顺带刷新一次心情符号。
              */
-            plugin.getCatManager()
-                    .refreshCustomName(
-                            cat,
-                            logicalCat
-                    );
+            entityService.refreshCustomName(
+                    cat,
+                    logicalCat
+            );
         }
     }
 }

@@ -1,9 +1,11 @@
 package mizukichou.nekonyume.skill;
 
-import mizukichou.nekonyume.NekoNYume;
 import mizukichou.nekonyume.cat.Cat;
+import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.CatTier;
+import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -23,6 +25,11 @@ import java.util.UUID;
  * 顶部信息行（底蕴 / 成长 / 槽位进度 / 操作说明 / 猫头 / 关闭）
  * 槽位区（第 18 格起，最多 10 个槽）
  * </p>
+ *
+ * <p>
+ * Step 5A-2：构造注入（CatStore / CatCache / CatSkillManager / PluginConfig）。
+ * 槽位 → 拐点映射保持纯静态函数，供单元测试。
+ * </p>
  */
 public class SkillGuiManager {
 
@@ -39,13 +46,22 @@ public class SkillGuiManager {
 
     private static final int MAX_SKILL_SLOTS = 10;
 
-    private final NekoNYume plugin;
+    private final CatStore store;
+    private final CatCache cache;
+    private final CatSkillManager skillManager;
+    private final PluginConfig config;
 
     public SkillGuiManager(
-            NekoNYume plugin
+            CatStore store,
+            CatCache cache,
+            CatSkillManager skillManager,
+            PluginConfig config
     ) {
 
-        this.plugin = plugin;
+        this.store = store;
+        this.cache = cache;
+        this.skillManager = skillManager;
+        this.config = config;
     }
 
     public void open(
@@ -59,17 +75,12 @@ public class SkillGuiManager {
         UUID playerUUID =
                 player.getUniqueId();
 
-        if (!plugin.getDataManager()
-                .hasCat(playerUUID)) {
-
+        if (!store.hasCat(playerUUID)) {
             return;
         }
 
         Cat cat =
-                plugin.getCatManager()
-                        .loadCat(
-                                player
-                        );
+                cache.loadCat(player);
 
         if (cat == null) {
             return;
@@ -317,13 +328,13 @@ public class SkillGuiManager {
                 "§6操作说明",
                 "§7左键: 施放主动技能",
                 "§7右键: 刷新技能（花费 "
-                        + plugin.getCatSkillManager()
+                        + skillManager
                         .getRefreshCostDisplay(
                                 false
                         )
                         + "）",
                 "§7梦槽刷新消耗 ×"
-                        + plugin.getPluginConfig()
+                        + config
                         .getDreamSlotCostMultiplier()
         );
     }
@@ -396,7 +407,7 @@ public class SkillGuiManager {
         if (skill.isActive()) {
 
             long remainingSec =
-                    plugin.getCatSkillManager()
+                    skillManager
                             .getRemainingCooldownSeconds(
                                     player,
                                     skill
@@ -430,7 +441,7 @@ public class SkillGuiManager {
         );
 
         String refreshCost =
-                plugin.getCatSkillManager()
+                skillManager
                         .getRefreshCostDisplay(
                                 dreamSlot
                         );
@@ -466,6 +477,33 @@ public class SkillGuiManager {
             Cat cat,
             int index
     ) {
+
+        /*
+         * 补丁 3：已达上限判定。
+         *
+         * 该底蕴下可拥有的最大槽数 = slotCount(3)
+         * （全部拐点达成后的槽数）：
+         * 普通 1 / 稀有 3 / 独特 6 / 梦幻 10。
+         *
+         * 索引超出上限时再展示"解锁条件"属于误导，
+         * 因为这只猫永远无法再解锁任何槽位。
+         */
+        int maxSlots =
+                cat.getTier().slotCount(3);
+
+        if (index >= maxSlots) {
+
+            return item(
+                    Material.RED_STAINED_GLASS_PANE,
+                    "§c已达上限",
+                    "§7"
+                            + cat.getTier().getDisplayName()
+                            + "底蕴的猫咪",
+                    "§7最多拥有 "
+                            + maxSlots
+                            + " 个技能槽"
+            );
+        }
 
         int checkpoint =
                 checkpointForSlot(

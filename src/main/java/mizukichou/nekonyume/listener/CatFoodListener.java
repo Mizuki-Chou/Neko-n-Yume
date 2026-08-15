@@ -1,7 +1,8 @@
 package mizukichou.nekonyume.listener;
 
-import mizukichou.nekonyume.NekoNYume;
+import mizukichou.nekonyume.cat.CatFoodManager;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Player;
@@ -14,16 +15,23 @@ import org.bukkit.persistence.PersistentDataType;
 
 public class CatFoodListener implements Listener {
 
-    private final NekoNYume plugin;
+    private final CatFoodManager foodManager;
+
+    private final NamespacedKey catKey;
+    private final NamespacedKey ownerKey;
 
     private final MiniMessage mm =
             MiniMessage.miniMessage();
 
     public CatFoodListener(
-            NekoNYume plugin
+            CatFoodManager foodManager,
+            NamespacedKey catKey,
+            NamespacedKey ownerKey
     ) {
 
-        this.plugin = plugin;
+        this.foodManager = foodManager;
+        this.catKey = catKey;
+        this.ownerKey = ownerKey;
     }
 
     @EventHandler
@@ -54,8 +62,7 @@ public class CatFoodListener implements Listener {
 
         if (!cat.getPersistentDataContainer()
                 .has(
-                        plugin.getCatManager()
-                                .getCatKey(),
+                        catKey,
                         PersistentDataType.BYTE
                 )) {
 
@@ -79,8 +86,7 @@ public class CatFoodListener implements Listener {
         String ownerUUID =
                 cat.getPersistentDataContainer()
                         .get(
-                                plugin.getCatManager()
-                                        .getOwnerKey(),
+                                ownerKey,
                                 PersistentDataType.STRING
                         );
 
@@ -143,8 +149,7 @@ public class CatFoodListener implements Listener {
          * 走独立的使用逻辑。
          */
 
-        if (plugin.getCatFoodManager()
-                .isMeowDan(item)) {
+        if (foodManager.isMeowDan(item)) {
 
             /*
              * 阻止原版右键默认行为。
@@ -152,11 +157,10 @@ public class CatFoodListener implements Listener {
             event.setCancelled(true);
 
             boolean used =
-                    plugin.getCatFoodManager()
-                            .feedMeowDan(
-                                    player,
-                                    item
-                            );
+                    foodManager.feedMeowDan(
+                            player,
+                            item
+                    );
 
             if (used) {
 
@@ -180,8 +184,7 @@ public class CatFoodListener implements Listener {
          * 不再在 Listener 里自己操作 hunger / affection。
          */
 
-        if (!plugin.getCatFoodManager()
-                .isFood(item)) {
+        if (!foodManager.isFood(item)) {
 
             /*
              * 非食物：
@@ -203,11 +206,10 @@ public class CatFoodListener implements Listener {
         event.setCancelled(true);
 
         boolean success =
-                plugin.getCatFoodManager()
-                        .feedCat(
-                                player,
-                                item
-                        );
+                foodManager.feedCat(
+                        player,
+                        item
+                );
 
         /*
          * ============================================================

@@ -1,8 +1,8 @@
 package mizukichou.nekonyume.task;
 
-import mizukichou.nekonyume.NekoNYume;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
+import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatMood;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -31,21 +31,20 @@ public class CatBehaviorTask implements Runnable {
 
     private static final double LOW_FOLLOW_DISTANCE = 16.0;
 
-    private final NekoNYume plugin;
+    private final CatCache cache;
 
     public CatBehaviorTask(
-            NekoNYume plugin
+            CatCache cache
     ) {
 
-        this.plugin = plugin;
+        this.cache = cache;
     }
 
     @Override
     public void run() {
 
         for (Cat logicalCat :
-                plugin.getCatManager()
-                        .getCats()) {
+                cache.getCats()) {
 
             /*
              * 只处理在线主人的猫。

@@ -1,8 +1,10 @@
 package mizukichou.nekonyume.task;
 
-import mizukichou.nekonyume.NekoNYume;
 import mizukichou.nekonyume.cat.Cat;
+import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatPersonality;
+import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -44,13 +46,19 @@ public class CatHungerTask implements Runnable {
     private static final int MAX_HUNGER_DECREASE =
             100;
 
-    private final NekoNYume plugin;
+    private final PluginConfig config;
+    private final CatStore store;
+    private final CatCache cache;
 
     public CatHungerTask(
-            NekoNYume plugin
+            PluginConfig config,
+            CatStore store,
+            CatCache cache
     ) {
 
-        this.plugin = plugin;
+        this.config = config;
+        this.store = store;
+        this.cache = cache;
     }
 
     @Override
@@ -60,8 +68,7 @@ public class CatHungerTask implements Runnable {
                 System.currentTimeMillis();
 
         long baseInterval =
-                plugin.getPluginConfig()
-                        .getHungerIntervalMillis();
+                config.getHungerIntervalMillis();
 
         /*
          * ========================================================
@@ -69,8 +76,7 @@ public class CatHungerTask implements Runnable {
          * ========================================================
          */
         for (UUID playerUUID :
-                plugin.getDataManager()
-                        .getCatPlayers()) {
+                store.getCatPlayers()) {
 
             /*
              * ====================================================
@@ -78,21 +84,19 @@ public class CatHungerTask implements Runnable {
              * ====================================================
              */
             long lastUpdate =
-                    plugin.getDataManager()
-                            .getCatHungerLastUpdate(
-                                    playerUUID
-                            );
+                    store.getCatHungerLastUpdate(
+                            playerUUID
+                    );
 
             /*
              * 防止系统时间异常倒退。
              */
             if (lastUpdate > now) {
 
-                plugin.getDataManager()
-                        .setCatHungerLastUpdate(
-                                playerUUID,
-                                now
-                        );
+                store.setCatHungerLastUpdate(
+                        playerUUID,
+                        now
+                );
 
                 continue;
             }
@@ -141,10 +145,9 @@ public class CatHungerTask implements Runnable {
     ) {
 
         Cat cat =
-                plugin.getCatManager()
-                        .loadCat(
-                                playerUUID
-                        );
+                cache.loadCat(
+                        playerUUID
+                );
 
         if (cat == null) {
             return;
@@ -199,28 +202,25 @@ public class CatHungerTask implements Runnable {
         /*
          * 持久化。
          */
-        plugin.getDataManager()
-                .setCatHunger(
-                        playerUUID,
-                        cat.getHunger()
-                );
+        store.setCatHunger(
+                playerUUID,
+                cat.getHunger()
+        );
 
-        plugin.getDataManager()
-                .setCatAffection(
-                        playerUUID,
-                        cat.getAffection()
-                );
+        store.setCatAffection(
+                playerUUID,
+                cat.getAffection()
+        );
 
         /*
          * 更新时间（保留未结算的余数）。
          */
-        plugin.getDataManager()
-                .setCatHungerLastUpdate(
-                        playerUUID,
-                        lastUpdate
-                                + decrease
-                                * effectiveInterval
-                );
+        store.setCatHungerLastUpdate(
+                playerUUID,
+                lastUpdate
+                        + decrease
+                        * effectiveInterval
+        );
     }
 
     /*
@@ -245,10 +245,9 @@ public class CatHungerTask implements Runnable {
     ) {
 
         UUID catId =
-                plugin.getDataManager()
-                        .getCatUUID(
-                                playerUUID
-                        );
+                store.getCatUUID(
+                        playerUUID
+                );
 
         if (catId == null) {
             return;
@@ -283,10 +282,9 @@ public class CatHungerTask implements Runnable {
                 );
 
         int hunger =
-                plugin.getDataManager()
-                        .getCatHunger(
-                                playerUUID
-                        );
+                store.getCatHunger(
+                        playerUUID
+                );
 
         int newHunger =
                 Math.max(
@@ -294,11 +292,10 @@ public class CatHungerTask implements Runnable {
                         hunger - decreaseAmount
                 );
 
-        plugin.getDataManager()
-                .setCatHunger(
-                        playerUUID,
-                        newHunger
-                );
+        store.setCatHunger(
+                playerUUID,
+                newHunger
+        );
 
         int affectionLoss =
                 affectionLoss(
@@ -307,27 +304,24 @@ public class CatHungerTask implements Runnable {
 
         if (affectionLoss > 0) {
 
-            plugin.getDataManager()
-                    .setCatAffection(
-                            playerUUID,
-                            plugin.getDataManager()
-                                    .getCatAffection(
-                                            playerUUID
-                                    )
-                                    - affectionLoss
-                    );
+            store.setCatAffection(
+                    playerUUID,
+                    store.getCatAffection(
+                            playerUUID
+                    )
+                            - affectionLoss
+            );
         }
 
         /*
          * 更新时间（保留未结算的余数）。
          */
-        plugin.getDataManager()
-                .setCatHungerLastUpdate(
-                        playerUUID,
-                        lastUpdate
-                                + decrease
-                                * effectiveInterval
-                );
+        store.setCatHungerLastUpdate(
+                playerUUID,
+                lastUpdate
+                        + decrease
+                        * effectiveInterval
+        );
     }
 
     /*

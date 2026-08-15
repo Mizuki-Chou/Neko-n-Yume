@@ -1,9 +1,11 @@
 package mizukichou.nekonyume.task;
 
-import mizukichou.nekonyume.NekoNYume;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
+import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatSkill;
+import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.skill.CatBattleState;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Particle;
@@ -12,6 +14,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 
+import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -41,27 +44,36 @@ public class CatBattleTask implements Runnable {
     private static final long RANGED_ATTACK_INTERVAL_MS =
             3000L;
 
-    private final NekoNYume plugin;
+    private final PluginConfig config;
+    private final CatCache cache;
+    private final CatBattleState battleState;
+
+    /*
+     * 任务内统一随机源（不用 Math.random）。
+     */
+    private final Random random =
+            new Random();
 
     public CatBattleTask(
-            NekoNYume plugin
+            PluginConfig config,
+            CatCache cache,
+            CatBattleState battleState
     ) {
 
-        this.plugin = plugin;
+        this.config = config;
+        this.cache = cache;
+        this.battleState = battleState;
     }
 
     @Override
     public void run() {
 
-        if (!plugin.getPluginConfig()
-                .isBattleEnabled()) {
-
+        if (!config.isBattleEnabled()) {
             return;
         }
 
         for (Cat logicalCat :
-                plugin.getCatManager()
-                        .getCats()) {
+                cache.getCats()) {
 
             /*
              * 只在跟随模式战斗。
@@ -120,8 +132,7 @@ public class CatBattleTask implements Runnable {
              * 避免在野外乱引怪。
              */
             int aggroRadius =
-                    plugin.getPluginConfig()
-                            .getBattleAggroRadius();
+                    config.getBattleAggroRadius();
 
             if (cat.getLocation()
                     .distanceSquared(
@@ -141,15 +152,13 @@ public class CatBattleTask implements Runnable {
                             CatSkill.NINE_LIVES
                     )
                             ? 3L
-                            : plugin.getPluginConfig()
-                            .getBattleWeaknessSeconds())
+                            : config.getBattleWeaknessSeconds())
                             * 1000L;
 
-            if (plugin.getBattleState()
-                    .isWeakened(
-                            entityUuid,
-                            weaknessMs
-                    )) {
+            if (battleState.isWeakened(
+                    entityUuid,
+                    weaknessMs
+            )) {
 
                 continue;
             }
@@ -198,8 +207,7 @@ public class CatBattleTask implements Runnable {
             }
 
             long intervalTicks =
-                    plugin.getPluginConfig()
-                            .getBattleAttackIntervalTicks();
+                    config.getBattleAttackIntervalTicks();
 
             /*
              * 灵步：攻击间隔 -20%。
@@ -215,19 +223,17 @@ public class CatBattleTask implements Runnable {
             long intervalMs =
                     intervalTicks * 50L;
 
-            if (!plugin.getBattleState()
-                    .canAttack(
-                            entityUuid,
-                            intervalMs
-                    )) {
+            if (!battleState.canAttack(
+                    entityUuid,
+                    intervalMs
+            )) {
 
                 continue;
             }
 
-            plugin.getBattleState()
-                    .markAttack(
-                            entityUuid
-                    );
+            battleState.markAttack(
+                    entityUuid
+            );
 
             /*
              * 伤害计算。
@@ -246,10 +252,9 @@ public class CatBattleTask implements Runnable {
             )) {
 
                 int count =
-                        plugin.getBattleState()
-                                .nextAttackCount(
-                                        entityUuid
-                                );
+                        battleState.nextAttackCount(
+                                entityUuid
+                        );
 
                 if (count % 5 == 0) {
                     damage *= 3;
@@ -280,7 +285,7 @@ public class CatBattleTask implements Runnable {
             if (logicalCat.hasSkill(
                     CatSkill.STAR_DUST
             ) &&
-                    Math.random() < 0.2) {
+                    random.nextDouble() < 0.2) {
 
                 applySplash(
                         cat,
@@ -305,12 +310,10 @@ public class CatBattleTask implements Runnable {
     ) {
 
         int base =
-                plugin.getPluginConfig()
-                        .getBattleBaseDamage();
+                config.getBattleBaseDamage();
 
         int perRank =
-                plugin.getPluginConfig()
-                        .getBattlePerRankDamage();
+                config.getBattlePerRankDamage();
 
         int damage =
                 base
@@ -322,12 +325,11 @@ public class CatBattleTask implements Runnable {
         )) {
 
             damage +=
-                    plugin.getPluginConfig()
-                            .getSkillValue(
-                                    CatSkill.SHARP_CLAW,
-                                    "power",
-                                    2
-                            );
+                    config.getSkillValue(
+                            CatSkill.SHARP_CLAW,
+                            "power",
+                            2
+                    );
         }
 
         if (logicalCat.hasSkill(
@@ -335,12 +337,11 @@ public class CatBattleTask implements Runnable {
         )) {
 
             damage +=
-                    plugin.getPluginConfig()
-                            .getSkillValue(
-                                    CatSkill.RESONANCE,
-                                    "power",
-                                    5
-                            );
+                    config.getSkillValue(
+                            CatSkill.RESONANCE,
+                            "power",
+                            5
+                    );
         }
 
         /*
@@ -424,19 +425,17 @@ public class CatBattleTask implements Runnable {
             return;
         }
 
-        if (!plugin.getBattleState()
-                .canAttack(
-                        entityUuid,
-                        RANGED_ATTACK_INTERVAL_MS
-                )) {
+        if (!battleState.canAttack(
+                entityUuid,
+                RANGED_ATTACK_INTERVAL_MS
+        )) {
 
             return;
         }
 
-        plugin.getBattleState()
-                .markAttack(
-                        entityUuid
-                );
+        battleState.markAttack(
+                entityUuid
+        );
 
         int damage =
                 (int) (computeDamage(

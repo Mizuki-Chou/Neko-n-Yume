@@ -1,8 +1,11 @@
 package mizukichou.nekonyume.command;
 
-import mizukichou.nekonyume.NekoNYume;
+import mizukichou.nekonyume.cat.CatEntityService;
+import mizukichou.nekonyume.cat.CatFoodManager;
+import mizukichou.nekonyume.cat.CatProgressionService;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.MeowDanQuality;
+import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
@@ -14,14 +17,38 @@ import org.bukkit.inventory.ItemStack;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 public class NekoYumeAdminCommand implements CommandExecutor {
 
-    private final NekoNYume plugin;
+    /*
+     * reloadAction：由装配根注入的"重载配置"动作
+     * （NekoNYume::reloadSettings）。
+     */
+    private final Runnable reloadAction;
+    private final Logger logger;
+    private final CatStore store;
+    private final CatEntityService entityService;
+    private final CatProgressionService progression;
+    private final CatFoodManager foodManager;
+
     private final MiniMessage mm = MiniMessage.miniMessage();
 
-    public NekoYumeAdminCommand(NekoNYume plugin) {
-        this.plugin = plugin;
+    public NekoYumeAdminCommand(
+            Runnable reloadAction,
+            Logger logger,
+            CatStore store,
+            CatEntityService entityService,
+            CatProgressionService progression,
+            CatFoodManager foodManager
+    ) {
+
+        this.reloadAction = reloadAction;
+        this.logger = logger;
+        this.store = store;
+        this.entityService = entityService;
+        this.progression = progression;
+        this.foodManager = foodManager;
     }
 
     @Override
@@ -97,7 +124,7 @@ public class NekoYumeAdminCommand implements CommandExecutor {
          */
         if (args[0].equalsIgnoreCase("reload")) {
 
-            plugin.reloadSettings();
+            reloadAction.run();
 
             sender.sendMessage(
                     mm.deserialize(
@@ -254,11 +281,10 @@ public class NekoYumeAdminCommand implements CommandExecutor {
                     );
 
             ItemStack stack =
-                    plugin.getCatFoodManager()
-                            .createMeowDan(
-                                    quality,
-                                    stackSize
-                            );
+                    foodManager.createMeowDan(
+                            quality,
+                            stackSize
+                    );
 
             Map<Integer, ItemStack> leftover =
                     target.getInventory()
@@ -364,10 +390,9 @@ public class NekoYumeAdminCommand implements CommandExecutor {
             return true;
         }
 
-        if (!plugin.getDataManager()
-                .hasCat(
-                        playerUUID
-                )) {
+        if (!store.hasCat(
+                playerUUID
+        )) {
 
             sender.sendMessage(
                     mm.deserialize(
@@ -402,10 +427,9 @@ public class NekoYumeAdminCommand implements CommandExecutor {
         }
 
         boolean removed =
-                plugin.getCatManager()
-                        .removePlayerCat(
-                                playerUUID
-                        );
+                entityService.removePlayerCat(
+                        playerUUID
+                );
 
         if (removed) {
 
@@ -415,7 +439,7 @@ public class NekoYumeAdminCommand implements CommandExecutor {
                     )
             );
 
-            plugin.getLogger().info(
+            logger.info(
                     "Admin "
                             + sender.getName()
                             + " removed cat for "
@@ -503,11 +527,10 @@ public class NekoYumeAdminCommand implements CommandExecutor {
         }
 
         boolean granted =
-                plugin.getCatManager()
-                        .grantSkill(
-                                target,
-                                skill
-                        );
+                progression.grantSkill(
+                        target,
+                        skill
+                );
 
         if (granted) {
 

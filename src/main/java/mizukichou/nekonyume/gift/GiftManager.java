@@ -1,10 +1,12 @@
 package mizukichou.nekonyume.gift;
 
-import mizukichou.nekonyume.NekoNYume;
 import mizukichou.nekonyume.cat.Cat;
+import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.CatMood;
 import mizukichou.nekonyume.config.PluginConfig;
 import mizukichou.nekonyume.event.CatGiftEvent;
+import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
@@ -25,10 +27,17 @@ import java.util.UUID;
  * 每天登录后判定一次（由 PlayerJoinListener 延迟调用）。
  * 所有数值与礼物池来自 config.yml 的 gift 节。
  * </p>
+ *
+ * <p>
+ * Step 5A-2：构造注入（CatStore / CatCache / PluginConfig / CatFoodManager）。
+ * </p>
  */
 public class GiftManager {
 
-    private final NekoNYume plugin;
+    private final CatStore store;
+    private final CatCache cache;
+    private final PluginConfig config;
+    private final CatFoodManager foodManager;
 
     private final MiniMessage mm =
             MiniMessage.miniMessage();
@@ -37,10 +46,16 @@ public class GiftManager {
             new Random();
 
     public GiftManager(
-            NekoNYume plugin
+            CatStore store,
+            CatCache cache,
+            PluginConfig config,
+            CatFoodManager foodManager
     ) {
 
-        this.plugin = plugin;
+        this.store = store;
+        this.cache = cache;
+        this.config = config;
+        this.foodManager = foodManager;
     }
 
     /*
@@ -59,35 +74,26 @@ public class GiftManager {
             return;
         }
 
-        if (!plugin.getPluginConfig()
-                .isGiftEnabled()) {
-
+        if (!config.isGiftEnabled()) {
             return;
         }
 
         UUID playerUUID =
                 player.getUniqueId();
 
-        if (!plugin.getDataManager()
-                .hasCat(playerUUID)) {
-
+        if (!store.hasCat(playerUUID)) {
             return;
         }
 
         /*
          * 今天已经判定过了。
          */
-        if (plugin.getDataManager()
-                .isGiftCheckedToday(playerUUID)) {
-
+        if (store.isGiftCheckedToday(playerUUID)) {
             return;
         }
 
         Cat cat =
-                plugin.getCatManager()
-                        .loadCat(
-                                player
-                        );
+                cache.loadCat(player);
 
         if (cat == null) {
             return;
@@ -102,14 +108,12 @@ public class GiftManager {
                 cat.getMood();
 
         if (mood.ordinal() >
-                plugin.getPluginConfig()
-                        .getGiftMoodMin()
+                config.getGiftMoodMin()
                         .ordinal()) {
 
-            plugin.getDataManager()
-                    .markGiftChecked(
-                            playerUUID
-                    );
+            store.markGiftChecked(
+                    playerUUID
+            );
 
             return;
         }
@@ -119,27 +123,23 @@ public class GiftManager {
          * base + per-rank × 喵阶，封顶 max。
          */
         int chance =
-                plugin.getPluginConfig()
-                        .getGiftBaseChance()
-                        + plugin.getPluginConfig()
-                        .getGiftChancePerRank()
+                config.getGiftBaseChance()
+                        + config.getGiftChancePerRank()
                         * cat.getMeowRank();
 
         chance =
                 Math.min(
                         chance,
-                        plugin.getPluginConfig()
-                                .getGiftMaxChance()
+                        config.getGiftMaxChance()
                 );
 
         /*
          * 无论是否命中，
          * 今天的判定都已经完成。
          */
-        plugin.getDataManager()
-                .markGiftChecked(
-                        playerUUID
-                );
+        store.markGiftChecked(
+                playerUUID
+        );
 
         if (chance <= 0 ||
                 random.nextInt(100) >= chance) {
@@ -259,18 +259,16 @@ public class GiftManager {
     ) {
 
         int tier =
-                plugin.getPluginConfig()
-                        .giftTierForRank(
-                                meowRank
-                        );
+                config.giftTierForRank(
+                        meowRank
+                );
 
         while (tier >= 1) {
 
             List<PluginConfig.GiftItemEntry> entries =
-                    plugin.getPluginConfig()
-                            .getGiftTierExact(
-                                    tier
-                            );
+                    config.getGiftTierExact(
+                            tier
+                    );
 
             if (!entries.isEmpty()) {
 
@@ -348,11 +346,10 @@ public class GiftManager {
 
         if (entry.isMeowDan()) {
 
-            return plugin.getCatFoodManager()
-                    .createMeowDan(
-                            entry.getMeowDanQuality(),
-                            amount
-                    );
+            return foodManager.createMeowDan(
+                    entry.getMeowDanQuality(),
+                    amount
+            );
         }
 
         return new ItemStack(

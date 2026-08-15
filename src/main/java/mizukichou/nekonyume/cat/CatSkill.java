@@ -355,4 +355,38 @@ public enum CatSkill {
 
         return pool;
     }
+
+    /*
+     * ============================================================
+     * 精确品质抽取池
+     * ============================================================
+     *
+     * 返回品质恰好等于 tier 的全部技能。
+     *
+     * 梦槽抽取专用：
+     * 梦幻猫的梦槽只允许出现梦幻级技能，
+     * 因此必须使用精确池而非"不超过上限"的全池。
+     */
+    public static List<CatSkill> poolOfTierExact(
+            CatTier tier
+    ) {
+
+        List<CatSkill> pool =
+                new ArrayList<>();
+
+        if (tier == null) {
+            return pool;
+        }
+
+        for (CatSkill skill :
+                values()) {
+
+            if (skill.tier == tier) {
+                pool.add(skill);
+            }
+        }
+
+        return pool;
+    }
+
 }

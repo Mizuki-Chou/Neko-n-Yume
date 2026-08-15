@@ -1,9 +1,10 @@
 package mizukichou.nekonyume.task;
 
-import mizukichou.nekonyume.NekoNYume;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
+import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatSkill;
+import mizukichou.nekonyume.config.PluginConfig;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
@@ -30,27 +31,27 @@ public class CatAuraTask implements Runnable {
      */
     private static final int AURA_DURATION_SECONDS = 8;
 
-    private final NekoNYume plugin;
+    private final PluginConfig config;
+    private final CatCache cache;
 
     public CatAuraTask(
-            NekoNYume plugin
+            PluginConfig config,
+            CatCache cache
     ) {
 
-        this.plugin = plugin;
+        this.config = config;
+        this.cache = cache;
     }
 
     @Override
     public void run() {
 
-        if (!plugin.getPluginConfig()
-                .isAuraEnabled()) {
-
+        if (!config.isAuraEnabled()) {
             return;
         }
 
         for (Cat logicalCat :
-                plugin.getCatManager()
-                        .getCats()) {
+                cache.getCats()) {
 
             if (logicalCat.getBehaviorMode()
                     != CatBehaviorMode.FOLLOW) {
@@ -104,8 +105,7 @@ public class CatAuraTask implements Runnable {
              * 基础 10，警觉 12，狩猎直觉 15。
              */
             int radius =
-                    plugin.getPluginConfig()
-                            .getAuraBaseRadius();
+                    config.getAuraBaseRadius();
 
             if (logicalCat.hasSkill(
                     CatSkill.ALERT
@@ -143,8 +143,7 @@ public class CatAuraTask implements Runnable {
             int speedAmp = 0;
 
             if (logicalCat.getLevel() >=
-                    plugin.getPluginConfig()
-                            .getAuraSpeedUnlockLevel()) {
+                    config.getAuraSpeedUnlockLevel()) {
 
                 speedAmp++;
             }
@@ -171,8 +170,7 @@ public class CatAuraTask implements Runnable {
              * 力量光环：喵阶达标。
              */
             if (logicalCat.getMeowRank() >=
-                    plugin.getPluginConfig()
-                            .getAuraStrengthUnlockMeowRank()) {
+                    config.getAuraStrengthUnlockMeowRank()) {
 
                 owner.addPotionEffect(
                         new PotionEffect(
@@ -187,11 +185,9 @@ public class CatAuraTask implements Runnable {
              * 再生光环：等级 + 好感达标。
              */
             if (logicalCat.getLevel() >=
-                    plugin.getPluginConfig()
-                            .getAuraRegenUnlockLevel() &&
+                    config.getAuraRegenUnlockLevel() &&
                     logicalCat.getAffection() >=
-                            plugin.getPluginConfig()
-                                    .getAuraRegenAffection()) {
+                            config.getAuraRegenAffection()) {
 
                 owner.addPotionEffect(
                         new PotionEffect(

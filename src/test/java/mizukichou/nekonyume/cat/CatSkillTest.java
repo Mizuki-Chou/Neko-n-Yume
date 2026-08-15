@@ -3,6 +3,7 @@ package mizukichou.nekonyume.cat;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -159,4 +160,54 @@ class CatSkillTest {
                 )
         );
     }
+
+    @Test
+    void poolOfTierExactReturnsOnlySkillsOfThatTier() {
+
+        for (CatTier tier : CatTier.values()) {
+
+            List<CatSkill> pool =
+                    CatSkill.poolOfTierExact(tier);
+
+            assertFalse(
+                    pool.isEmpty(),
+                    tier + " exact pool should not be empty"
+            );
+
+            for (CatSkill skill : pool) {
+
+                assertEquals(
+                        tier,
+                        skill.getTier(),
+                        skill + " should belong to " + tier
+                );
+            }
+        }
+    }
+
+    @Test
+    void poolOfTierExactCoversAllSkillsAndHandlesNull() {
+
+        List<CatSkill> all =
+                new ArrayList<>();
+
+        for (CatTier tier : CatTier.values()) {
+
+            all.addAll(
+                    CatSkill.poolOfTierExact(tier)
+            );
+        }
+
+        assertEquals(
+                27,
+                all.size(),
+                "exact pools should cover all 27 skills"
+        );
+
+        assertTrue(
+                CatSkill.poolOfTierExact(null)
+                        .isEmpty()
+        );
+    }
+
 }
