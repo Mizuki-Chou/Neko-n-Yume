@@ -138,7 +138,8 @@ public class CatGuiManager {
                                 + cat.getCompanionDays(
                                 System.currentTimeMillis()
                         )
-                                + " 天"
+                                + " 天",
+                        "§9✦ 点此进入技能界面"
                 )
         );
 

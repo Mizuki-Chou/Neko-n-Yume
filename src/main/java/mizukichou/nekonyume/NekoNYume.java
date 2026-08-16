@@ -19,6 +19,7 @@ import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.CatManager;
 import mizukichou.nekonyume.cat.CatProgressionService;
+import mizukichou.nekonyume.cat.CatVariantService;
 import mizukichou.nekonyume.command.NekoYumeAdminCommand;
 import mizukichou.nekonyume.command.NekoYumeCommand;
 import mizukichou.nekonyume.config.PluginConfig;
@@ -51,6 +52,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.util.logging.Level;
+
 /**
  * Neko n' Yume 主类（组合根）。
  *
@@ -62,8 +65,8 @@ import org.bukkit.scheduler.BukkitTask;
  *
  * <p>
  * 装配顺序（依赖链，无环）：
- * CatStore → CatCache → CatBattleState → CatSkillManager
- * → CatProgressionService → CatEntityService
+ * CatStore → CatCache → CatBattleState → CatVariantService
+ * → CatSkillManager → CatProgressionService → CatEntityService
  * → CatManager（门面，对外 API）
  * → CatFoodManager → CatGuiManager → GiftManager
  * → SkillGuiManager → 命令 → 监听器 → 任务
@@ -90,6 +93,7 @@ public final class NekoNYume extends JavaPlugin {
     private CatCache catCache;
     private CatProgressionService catProgressionService;
     private CatEntityService catEntityService;
+    private CatVariantService catVariantService;
 
     /*
      * PDC Keys（组合根创建，注入 CatEntityService / 监听器 / 任务）。
@@ -267,22 +271,27 @@ public final class NekoNYume extends JavaPlugin {
 
         /*
          * ========================================================
-         * 战斗状态（无依赖，提前创建：
-         * CatSkillManager / CatEntityService / 任务都需要它）
+         * 战斗状态与花色服务（无依赖，提前创建：
+         * CatSkillManager / CatEntityService / 任务都需要它们）
          * ========================================================
          */
 
         battleState =
                 new CatBattleState();
 
+        catVariantService =
+                new CatVariantService(
+                        catStore
+                );
+
         /*
          * ========================================================
          * 领域服务装配（Step 5A：构造注入，顺序有依赖）
          * ========================================================
          *
-         * CatStore → CatCache → CatBattleState → CatSkillManager
-         * → CatProgressionService → CatEntityService
-         * → CatManager（门面，纯委托）
+         * CatStore → CatCache → CatBattleState / CatVariantService
+         * → CatSkillManager → CatProgressionService
+         * → CatEntityService → CatManager（门面，纯委托）
          */
 
         catCache =
@@ -315,6 +324,7 @@ public final class NekoNYume extends JavaPlugin {
                         catStore,
                         catCache,
                         catProgressionService,
+                        catVariantService,
                         catKey,
                         ownerKey,
                         battleState
@@ -374,8 +384,8 @@ public final class NekoNYume extends JavaPlugin {
          * 技能与战斗
          * ========================================================
          *
-         * battleState 与 catSkillManager 均已在上方提前构建，
-         * 此处不再创建。
+         * battleState / catVariantService / catSkillManager
+         * 均已在上方提前构建，此处不再创建。
          */
 
         skillGuiManager =
@@ -484,6 +494,8 @@ public final class NekoNYume extends JavaPlugin {
                 ),
                 new CatToolListener(
                         catGuiManager,
+                        catStore,
+                        catEntityService,
                         toolKey
                 )
         );
@@ -630,11 +642,11 @@ public final class NekoNYume extends JavaPlugin {
 
                                     } catch (Exception exception) {
 
-                                        getLogger().severe(
-                                                "Failed to autosave Neko n' Yume data."
+                                        getLogger().log(
+                                                Level.SEVERE,
+                                                "Failed to autosave Neko n' Yume data.",
+                                                exception
                                         );
-
-                                        exception.printStackTrace();
                                     }
                                 },
                                 20L * 60L,
@@ -704,11 +716,11 @@ public final class NekoNYume extends JavaPlugin {
 
         } catch (Exception exception) {
 
-            getLogger().severe(
-                    "Failed to save Neko n' Yume data during shutdown."
+            getLogger().log(
+                    Level.SEVERE,
+                    "Failed to save Neko n' Yume data during shutdown.",
+                    exception
             );
-
-            exception.printStackTrace();
         }
 
         /*

@@ -1,15 +1,12 @@
 package mizukichou.nekonyume.cat;
 
-import io.papermc.paper.registry.RegistryKey;
 import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.storage.CatStore;
-import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
-import org.bukkit.Registry;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -17,11 +14,11 @@ import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -31,14 +28,16 @@ import java.util.logging.Logger;
  * 职责：
  * 1. 实体恢复（登录 / 世界加载 / 召唤）；
  * 2. 实体绑定与逻辑猫关系（bindLogicalCat，含出生梦槽同步）；
- * 3. 花色 / 名称 / 行为模式 / 头顶名称；
+ * 3. 名称 / 行为模式 / 头顶名称；
  * 4. PDC Keys（catKey / ownerKey，由组合根注入）。
  * </p>
  *
  * <p>
  * 构造注入：plugin 仅用于调度器与 isEnabled()，
  * 数据读写走 CatStore，成长走 CatProgressionService，
- * 受伤恢复状态走 CatBattleState。
+ * 受伤恢复状态走 CatBattleState，
+ * 花色逻辑移交 CatVariantService，
+ * 待恢复队列移交 PendingWorldRestores（可单元测试）。
  * </p>
  */
 public class CatEntityService {
@@ -48,6 +47,7 @@ public class CatEntityService {
     private final CatStore store;
     private final CatCache cache;
     private final CatProgressionService progression;
+    private final CatVariantService variantService;
     private final CatBattleState battleState;
 
     private final NamespacedKey catKey;
@@ -56,9 +56,6 @@ public class CatEntityService {
     private final MiniMessage mm =
             MiniMessage.miniMessage();
 
-    private final Random random =
-            new Random();
-
     /*
      * 防止同一个玩家同时执行多个 summon。
      */
@@ -66,12 +63,11 @@ public class CatEntityService {
             ConcurrentHashMap.newKeySet();
 
     /*
-     * 等待世界加载的实体恢复队列。
-     * key = World UUID，value = 等待恢复的玩家 UUID。
+     * 等待世界加载的实体恢复队列
+     * （纯逻辑类，退出/世界加载竞态语义由单元测试覆盖）。
      */
-    private final ConcurrentHashMap<UUID, Set<UUID>>
-            pendingWorldRestores =
-            new ConcurrentHashMap<>();
+    private final PendingWorldRestores pendingWorldRestores =
+            new PendingWorldRestores();
 
     public CatEntityService(
             JavaPlugin plugin,
@@ -79,6 +75,7 @@ public class CatEntityService {
             CatStore store,
             CatCache cache,
             CatProgressionService progression,
+            CatVariantService variantService,
             NamespacedKey catKey,
             NamespacedKey ownerKey,
             CatBattleState battleState
@@ -89,6 +86,7 @@ public class CatEntityService {
         this.store = store;
         this.cache = cache;
         this.progression = progression;
+        this.variantService = variantService;
         this.catKey = catKey;
         this.ownerKey = ownerKey;
         this.battleState = battleState;
@@ -140,13 +138,12 @@ public class CatEntityService {
             return;
         }
 
-        Registry<org.bukkit.entity.Cat.Type> registry =
-                getCatVariantRegistry();
-
         NamespacedKey key =
-                registry.getKey(
-                        bukkitCat.getCatType()
-                );
+                variantService
+                        .getRegistry()
+                        .getKey(
+                                bukkitCat.getCatType()
+                        );
 
         if (key != null) {
 
@@ -213,7 +210,7 @@ public class CatEntityService {
                             logicalCat.getName()
                     );
 
-                    restoreCatVariant(
+                    variantService.restoreVariant(
                             playerUUID,
                             cat,
                             logicalCat
@@ -274,12 +271,10 @@ public class CatEntityService {
                             + " is not loaded. Waiting for world load."
             );
 
-            pendingWorldRestores
-                    .computeIfAbsent(
-                            worldUUID,
-                            key -> ConcurrentHashMap.newKeySet()
-                    )
-                    .add(playerUUID);
+            pendingWorldRestores.add(
+                    worldUUID,
+                    playerUUID
+            );
 
             return;
         }
@@ -345,7 +340,7 @@ public class CatEntityService {
                                                                 logicalCat.getName()
                                                         );
 
-                                                        restoreCatVariant(
+                                                        variantService.restoreVariant(
                                                                 playerUUID,
                                                                 cat,
                                                                 logicalCat
@@ -380,7 +375,7 @@ public class CatEntityService {
                                                         logicalCat.getName()
                                                 );
 
-                                                restoreCatVariant(
+                                                variantService.restoreVariant(
                                                         playerUUID,
                                                         oldCat,
                                                         logicalCat
@@ -426,7 +421,7 @@ public class CatEntityService {
                                                         logicalCat.getName()
                                                 );
 
-                                                restoreCatVariant(
+                                                variantService.restoreVariant(
                                                         playerUUID,
                                                         loadedCat,
                                                         logicalCat
@@ -465,12 +460,12 @@ public class CatEntityService {
 
                                         } catch (Exception exception) {
 
-                                            logger.severe(
+                                            logger.log(
+                                                    Level.SEVERE,
                                                     "Failed to restore cat entity for "
-                                                            + player.getName()
+                                                            + player.getName(),
+                                                    exception
                                             );
-
-                                            exception.printStackTrace();
                                         }
                                     }
                             );
@@ -499,12 +494,12 @@ public class CatEntityService {
 
                                         } catch (Exception ex) {
 
-                                            logger.severe(
+                                            logger.log(
+                                                    Level.SEVERE,
                                                     "Failed to finish cat restore after chunk failure for "
-                                                            + player.getName()
+                                                            + player.getName(),
+                                                    ex
                                             );
-
-                                            ex.printStackTrace();
                                         }
                                     }
                             );
@@ -547,7 +542,7 @@ public class CatEntityService {
                 logicalCat.getName()
         );
 
-        restoreCatVariant(
+        variantService.restoreVariant(
                 player.getUniqueId(),
                 cat,
                 logicalCat
@@ -622,7 +617,7 @@ public class CatEntityService {
                 logicalCat.getName()
         );
 
-        restoreCatVariant(
+        variantService.restoreVariant(
                 player.getUniqueId(),
                 cat,
                 logicalCat
@@ -669,14 +664,13 @@ public class CatEntityService {
             return;
         }
 
+        /*
+         * 取走该世界的全部等待玩家（空集时循环自然跳过）。
+         */
         Set<UUID> players =
-                pendingWorldRestores.remove(
+                pendingWorldRestores.consumeForWorld(
                         world.getUID()
                 );
-
-        if (players == null || players.isEmpty()) {
-            return;
-        }
 
         for (UUID playerUUID : players) {
 
@@ -698,15 +692,9 @@ public class CatEntityService {
 
     public void clearPendingRestore(UUID playerUUID) {
 
-        if (playerUUID == null) {
-            return;
-        }
-
-        for (Set<UUID> players :
-                pendingWorldRestores.values()) {
-
-            players.remove(playerUUID);
-        }
+        pendingWorldRestores.removePlayer(
+                playerUUID
+        );
     }
 
     /*
@@ -833,12 +821,12 @@ public class CatEntityService {
 
             summoning.remove(playerUUID);
 
-            logger.severe(
+            logger.log(
+                    Level.SEVERE,
                     "Failed to summon cat for "
-                            + player.getName()
+                            + player.getName(),
+                    exception
             );
-
-            exception.printStackTrace();
 
             player.sendMessage(
                     mm.deserialize(
@@ -1089,12 +1077,12 @@ public class CatEntityService {
 
                                         } catch (Exception exception) {
 
-                                            logger.severe(
+                                            logger.log(
+                                                    Level.SEVERE,
                                                     "Failed to process cat chunk for "
-                                                            + player.getName()
+                                                            + player.getName(),
+                                                    exception
                                             );
-
-                                            exception.printStackTrace();
 
                                             callback.accept(false);
                                         }
@@ -1165,12 +1153,12 @@ public class CatEntityService {
 
                                         } catch (Exception ex) {
 
-                                            logger.severe(
+                                            logger.log(
+                                                    Level.SEVERE,
                                                     "Failed to recover cat after chunk failure for "
-                                                            + player.getName()
+                                                            + player.getName(),
+                                                    ex
                                             );
-
-                                            ex.printStackTrace();
 
                                             callback.accept(false);
                                         }
@@ -1385,7 +1373,7 @@ public class CatEntityService {
                         name
                 );
 
-        restoreCatVariant(
+        variantService.restoreVariant(
                 playerUUID,
                 cat,
                 logicalCat
@@ -1484,12 +1472,12 @@ public class CatEntityService {
 
                                         } catch (Exception exception) {
 
-                                            logger.severe(
+                                            logger.log(
+                                                    Level.SEVERE,
                                                     "Failed to teleport cat for "
-                                                            + player.getName()
+                                                            + player.getName(),
+                                                    exception
                                             );
-
-                                            exception.printStackTrace();
 
                                             callback.accept(false);
                                         }
@@ -1526,12 +1514,12 @@ public class CatEntityService {
 
                                         } catch (Exception ex) {
 
-                                            logger.severe(
+                                            logger.log(
+                                                    Level.SEVERE,
                                                     "Failed to finish teleport after chunk failure for "
-                                                            + player.getName()
+                                                            + player.getName(),
+                                                    ex
                                             );
-
-                                            ex.printStackTrace();
 
                                             callback.accept(false);
                                         }
@@ -1626,7 +1614,7 @@ public class CatEntityService {
         /*
          * 确定并永久保存花色。
          */
-        restoreCatVariant(
+        variantService.restoreVariant(
                 playerUUID,
                 cat,
                 logicalCat
@@ -1727,7 +1715,7 @@ public class CatEntityService {
                 entity
         );
 
-        restoreCatVariant(
+        variantService.restoreVariant(
                 ownerUUID,
                 entity,
                 logicalCat
@@ -2057,214 +2045,5 @@ public class CatEntityService {
         logicalCat.setEntityUuid(
                 entity.getUniqueId()
         );
-    }
-
-    /*
-     * ============================================================
-     * Cat Variant Registry
-     * ============================================================
-     */
-
-    private Registry<org.bukkit.entity.Cat.Type>
-    getCatVariantRegistry() {
-
-        return io.papermc.paper.registry.RegistryAccess
-                .registryAccess()
-                .getRegistry(
-                        RegistryKey.CAT_VARIANT
-                );
-    }
-
-    /*
-     * ============================================================
-     * 随机花色
-     * ============================================================
-     */
-
-    private org.bukkit.entity.Cat.Type getRandomCatType() {
-
-        java.util.List<org.bukkit.entity.Cat.Type> types =
-                getCatVariantRegistry()
-                        .stream()
-                        .toList();
-
-        if (types.isEmpty()) {
-
-            throw new IllegalStateException(
-                    "No cat variants are registered!"
-            );
-        }
-
-        return types.get(
-                random.nextInt(types.size())
-        );
-    }
-
-    /*
-     * ============================================================
-     * 保存花色
-     * ============================================================
-     */
-
-    private String saveCatVariant(
-            UUID playerUUID,
-            org.bukkit.entity.Cat.Type variant
-    ) {
-
-        if (playerUUID == null || variant == null) {
-            return null;
-        }
-
-        Registry<org.bukkit.entity.Cat.Type> registry =
-                getCatVariantRegistry();
-
-        NamespacedKey key =
-                registry.getKey(variant);
-
-        if (key == null) {
-            return null;
-        }
-
-        String variantString =
-                key.toString();
-
-        store.setCatVariant(
-                playerUUID,
-                variantString
-        );
-
-        return variantString;
-    }
-
-    /*
-     * ============================================================
-     * 恢复 / 建立永久花色
-     * ============================================================
-     *
-     * 规则：
-     * 1. Cat 已有 variant → 使用 Cat 的 variant
-     * 2. 存档已有 variant → 使用存档 variant
-     * 3. 当前 Bukkit 实体存在 → 使用当前实体花色并永久保存
-     * 4. 完全没有历史信息 → 随机一次，然后永久保存
-     */
-
-    private void restoreCatVariant(
-            UUID playerUUID,
-            org.bukkit.entity.Cat entity,
-            Cat logicalCat
-    ) {
-
-        if (playerUUID == null ||
-                entity == null ||
-                logicalCat == null) {
-
-            return;
-        }
-
-        /*
-         * 1. 逻辑 Cat 已经有 variant。
-         */
-        String logicalVariant =
-                logicalCat.getVariant();
-
-        if (logicalVariant != null &&
-                !logicalVariant.isBlank()) {
-
-            org.bukkit.entity.Cat.Type variant =
-                    getCatType(logicalVariant);
-
-            if (variant != null) {
-
-                entity.setCatType(variant);
-
-                return;
-            }
-        }
-
-        /*
-         * 2. 从 CatStore 恢复。
-         */
-        String savedVariant =
-                store.getCatVariant(playerUUID);
-
-        if (savedVariant != null &&
-                !savedVariant.isBlank()) {
-
-            org.bukkit.entity.Cat.Type variant =
-                    getCatType(savedVariant);
-
-            if (variant != null) {
-
-                entity.setCatType(variant);
-
-                logicalCat.setVariant(savedVariant);
-
-                return;
-            }
-
-            /*
-             * 存档中的 variant 无效。
-             * 不让插件崩溃，后面使用当前实体花色修复。
-             */
-        }
-
-        /*
-         * 3. 使用当前 Bukkit 实体已经拥有的花色。
-         * 这个分支对老存档非常重要。
-         */
-        org.bukkit.entity.Cat.Type currentType =
-                entity.getCatType();
-
-        if (currentType == null) {
-
-            /*
-             * 4. 完全没有可用历史信息。
-             * 只能随机一次。
-             */
-            currentType =
-                    getRandomCatType();
-
-            entity.setCatType(currentType);
-        }
-
-        String variantString =
-                saveCatVariant(
-                        playerUUID,
-                        currentType
-                );
-
-        if (variantString != null) {
-
-            logicalCat.setVariant(variantString);
-        }
-    }
-
-    /*
-     * ============================================================
-     * NamespacedKey → Cat.Type
-     * ============================================================
-     */
-
-    private org.bukkit.entity.Cat.Type getCatType(
-            String variantString
-    ) {
-
-        if (variantString == null ||
-                variantString.isBlank()) {
-
-            return null;
-        }
-
-        NamespacedKey key =
-                NamespacedKey.fromString(
-                        variantString
-                );
-
-        if (key == null) {
-            return null;
-        }
-
-        return getCatVariantRegistry()
-                .get(key);
     }
 }

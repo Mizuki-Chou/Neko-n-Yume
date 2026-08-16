@@ -114,20 +114,21 @@ public class CatFoodListener implements Listener {
 
         /*
          * ============================================================
-         * 4. 获取使用的手
+         * 4. 只处理主手
          * ============================================================
+         *
+         * 副手持食物不触发，避免双持时重复处理。
          */
 
-        EquipmentSlot hand =
-                event.getHand();
+        if (event.getHand()
+                != EquipmentSlot.HAND) {
 
-        if (hand == null) {
             return;
         }
 
         ItemStack item =
                 player.getInventory()
-                        .getItem(hand);
+                        .getItemInMainHand();
 
         if (item == null ||
                 item.getType().isAir()) {

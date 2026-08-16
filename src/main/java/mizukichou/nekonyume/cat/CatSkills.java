@@ -71,6 +71,15 @@ public final class CatSkills {
     /**
      * 替换指定槽位（用于刷新）。
      */
+    /**
+     * 替换指定槽位（用于刷新）。
+     *
+     * <p>
+     * 不变量：槽位集合必须保持唯一。
+     * 若目标技能已存在于其他槽位，拒绝写入，
+     * 防止产生重复技能。
+     * </p>
+     */
     public void set(
             int index,
             CatSkill skill
@@ -79,6 +88,17 @@ public final class CatSkills {
         if (index < 0 ||
                 index >= skills.size() ||
                 skill == null) {
+
+            return;
+        }
+
+        int existing =
+                skills.indexOf(
+                        skill
+                );
+
+        if (existing >= 0 &&
+                existing != index) {
 
             return;
         }

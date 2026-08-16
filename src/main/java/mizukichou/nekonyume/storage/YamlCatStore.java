@@ -326,7 +326,11 @@ public class YamlCatStore extends AbstractCatStore {
                 );
             }
 
-            e.printStackTrace();
+            env.logger().log(
+                    java.util.logging.Level.SEVERE,
+                    "Failed to save players.yml",
+                    e
+            );
 
             if (temp.exists() && !temp.delete()) {
 
@@ -561,12 +565,24 @@ public class YamlCatStore extends AbstractCatStore {
 
         if (version > DATA_VERSION) {
 
-            env.logger().warning(
+            /*
+             * P0：拒绝为未来版本数据继续服务。
+             *
+             * 插件只理解 data-version <= DATA_VERSION 的格式；
+             * 若继续运行，后续任何写盘都会用旧格式覆盖新数据，
+             * 造成不可逆的数据丢失。
+             *
+             * fail-fast：直接拒绝启动，
+             * 管理员要么升级插件，要么用备份回退。
+             */
+            throw new IllegalStateException(
                     "players.yml data-version "
                             + version
-                            + " is newer than supported version "
+                            + " 高于本插件支持的 "
                             + DATA_VERSION
-                            + ". The plugin may not understand all fields."
+                            + "，插件拒绝启动以保护数据。"
+                            + "请升级插件，或从 backup/ 恢复旧版本数据。文件："
+                            + file.getAbsolutePath()
             );
         }
     }

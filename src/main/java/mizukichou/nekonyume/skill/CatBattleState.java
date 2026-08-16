@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.skill;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -14,6 +15,11 @@ import java.util.UUID;
  * 攻击间隔 / 攻击计数 / 重生冷却 / 协助目标 /
  * 追击状态 / 扑击冷却 / 追击收势 /
  * 受伤恢复期 / 缓慢回血。
+ * </p>
+ *
+ * <p>
+ * 由 CatBattleTask 周期性调用 retainOnly 清理
+ * 已不存在实体/主人的残留状态，防止 Map 无限膨胀。
  * </p>
  */
 public class CatBattleState {
@@ -493,5 +499,61 @@ public class CatBattleState {
                 entityUuid,
                 System.currentTimeMillis()
         );
+    }
+
+    /*
+     * ============================================================
+     * 状态清理
+     * ============================================================
+     *
+     * 由战斗任务周期性调用：
+     * 移除已不存在实体/主人的残留状态，
+     * 防止长跑服务器上各 Map 无限膨胀。
+     */
+
+    public void retainOnly(
+            Collection<UUID> activeEntityUuids,
+            Collection<UUID> activeOwnerUuids
+    ) {
+
+        Set<UUID> entities =
+                activeEntityUuids == null
+                        ? Set.of()
+                        : new HashSet<>(
+                        activeEntityUuids
+                );
+
+        Set<UUID> owners =
+                activeOwnerUuids == null
+                        ? Set.of()
+                        : new HashSet<>(
+                        activeOwnerUuids
+                );
+
+        lastAttackTimes.keySet()
+                .retainAll(entities);
+
+        attackCounts.keySet()
+                .retainAll(entities);
+
+        rebirthTimes.keySet()
+                .retainAll(entities);
+
+        lastPounceTimes.keySet()
+                .retainAll(entities);
+
+        lastChaseEndTimes.keySet()
+                .retainAll(entities);
+
+        recoveryEndTimes.keySet()
+                .retainAll(entities);
+
+        lastRegenTimes.keySet()
+                .retainAll(entities);
+
+        chasing.retainAll(entities);
+
+        assistTargets.keySet()
+                .retainAll(owners);
     }
 }

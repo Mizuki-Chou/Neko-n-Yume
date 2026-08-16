@@ -80,4 +80,18 @@ class CatSkillsTest {
         skills.replaceAll(null);
         assertTrue(skills.isEmpty());
     }
+
+    @Test
+    void setRejectsDuplicateSkill() {
+
+        CatSkills skills = new CatSkills();
+
+        skills.add(CatSkill.SHARP_CLAW);
+        skills.add(CatSkill.IRON_WALL);
+
+        skills.set(0, CatSkill.IRON_WALL);
+
+        assertEquals(CatSkill.SHARP_CLAW, skills.get(0));
+        assertEquals(2, skills.size());
+    }
 }

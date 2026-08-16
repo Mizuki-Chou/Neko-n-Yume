@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
+import java.nio.charset.StandardCharsets;
 
 /**
  * 逻辑猫运行时缓存与持久化桥梁。
@@ -261,9 +262,33 @@ public class CatCache {
 
         if (catUUID == null) {
 
-            catUUID = UUID.randomUUID();
+            /*
+             * 数据异常：猫节点存在但缺失 id。
+             *
+             * 绝不能用随机 UUID 修复：
+             * 性格与底蕴都由猫 UUID 确定性推导，
+             * 随机会静默改变这两项，
+             * 而且每次重启都可能产生不同的猫。
+             *
+             * 改用"由主人 UUID 确定性推导"修复：
+             * 结果稳定、可复现，并在日志中留下痕迹。
+             */
+            catUUID =
+                    UUID.nameUUIDFromBytes(
+                            ("nekonyume-cat-" + ownerUUID)
+                                    .getBytes(
+                                            StandardCharsets.UTF_8
+                                    )
+                    );
 
             store.setCatUUID(ownerUUID, catUUID);
+
+            logger.warning(
+                    "Cat for "
+                            + ownerUUID
+                            + " was missing its id; repaired deterministically as "
+                            + catUUID
+            );
         }
 
         /*

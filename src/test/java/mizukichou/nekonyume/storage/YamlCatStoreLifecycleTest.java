@@ -366,6 +366,46 @@ class YamlCatStoreLifecycleTest {
         assertTrue(reopened.getCatPlayers().isEmpty());
     }
 
+    @Test
+    void futureVersionFailsFastAndKeepsOriginal() throws IOException {
+
+        String content = """
+                data-version: 99
+                players:
+                  11111111-1111-1111-1111-111111111111:
+                   cat:
+                    id: 22222222-2222-2222-2222-222222222222
+                    name: FutCat
+                """;
+
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                content
+        );
+
+        IllegalStateException exception =
+                assertThrows(
+                        IllegalStateException.class,
+                        this::newStore
+                );
+
+        assertTrue(
+                exception.getMessage()
+                        .contains("99")
+        );
+
+        /*
+         * 原文件必须原样保留：
+         * 未来版本数据绝不允许被旧插件覆盖。
+         */
+        assertEquals(
+                content,
+                Files.readString(
+                        tempDir.resolve("players.yml")
+                )
+        );
+    }
+
     /*
      * ============================================================
      * 测试环境

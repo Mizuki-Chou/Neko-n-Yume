@@ -878,28 +878,11 @@ public abstract class AbstractCatStore implements CatStore {
 
     private void resetPetCountIfNewDay(UUID playerUUID) {
 
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        String today =
-                LocalDate.now().toString();
-
-        String saved =
-                getString(
-                        playerUUID,
-                        FIELD_PET_DATE,
-                        null
-                );
-
-        if (saved == null ||
-                !saved.equals(today)) {
-
-            setRaw(playerUUID, FIELD_PET_DATE, today);
-            setRaw(playerUUID, FIELD_PET_COUNT, 0);
-        }
+        resetDayCounterIfNeeded(
+                playerUUID,
+                FIELD_PET_DATE,
+                FIELD_PET_COUNT
+        );
     }
 
     @Override
@@ -943,6 +926,24 @@ public abstract class AbstractCatStore implements CatStore {
 
     private void resetFeedCountIfNewDay(UUID playerUUID) {
 
+        resetDayCounterIfNeeded(
+                playerUUID,
+                FIELD_FEED_DATE,
+                FIELD_FEED_COUNT
+        );
+    }
+
+    /*
+     * 通用跨天重置：
+     * 日期与今日不一致时，日期刷新、计数归零。
+     * 两个每日计数共用同一实现，避免重复膨胀（Issue #15）。
+     */
+    private void resetDayCounterIfNeeded(
+            UUID playerUUID,
+            String dateField,
+            String countField
+    ) {
+
         if (playerUUID == null ||
                 !hasCat(playerUUID)) {
 
@@ -955,15 +956,24 @@ public abstract class AbstractCatStore implements CatStore {
         String saved =
                 getString(
                         playerUUID,
-                        FIELD_FEED_DATE,
+                        dateField,
                         null
                 );
 
         if (saved == null ||
                 !saved.equals(today)) {
 
-            setRaw(playerUUID, FIELD_FEED_DATE, today);
-            setRaw(playerUUID, FIELD_FEED_COUNT, 0);
+            setRaw(
+                    playerUUID,
+                    dateField,
+                    today
+            );
+
+            setRaw(
+                    playerUUID,
+                    countField,
+                    0
+            );
         }
     }
 
@@ -1348,6 +1358,18 @@ public abstract class AbstractCatStore implements CatStore {
         if (playerUUID == null ||
                 worldUUID == null ||
                 !hasCat(playerUUID)) {
+
+            return;
+        }
+
+        /*
+         * 坐标有效性检查：
+         * NaN / Infinity 坐标会击穿后续的粒子、
+         * 传送与存档恢复逻辑，必须拒绝写入。
+         */
+        if (!Double.isFinite(x) ||
+                !Double.isFinite(y) ||
+                !Double.isFinite(z)) {
 
             return;
         }

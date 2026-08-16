@@ -20,6 +20,13 @@ import java.util.UUID;
  * 探测失败时 isAvailable() 返回 false，
  * 管理器自动回退到喵力并记录告警。
  * </p>
+ *
+ * <p>
+ * 扣款契约：
+ * take() 必须返回 boolean 且以返回值为准——
+ * 返回 false（余额不足 / 内部失败）时，
+ * 本次扣款视为失败，绝不允许玩家免费刷新。
+ * </p>
  */
 public class ReflectivePlayerPointsCostProvider
         implements SkillRefreshCostProvider {
@@ -152,6 +159,20 @@ public class ReflectivePlayerPointsCostProvider
                 );
             }
 
+            /*
+             * 扣款结果必须可判定：
+             * 只有返回 boolean 的 take 才可信。
+             * 否则扣款失败无法感知，直接判定不可用，
+             * 回退到喵力消耗。
+             */
+            if (take.getReturnType()
+                    != boolean.class) {
+
+                throw new IllegalStateException(
+                        "take(..., int) must return boolean"
+                );
+            }
+
             ok = true;
 
         } catch (Exception e) {
@@ -182,6 +203,13 @@ public class ReflectivePlayerPointsCostProvider
     ) {
 
         if (!available) {
+            return false;
+        }
+
+        /*
+         * 负数花费视为非法，直接拒绝。
+         */
+        if (cost < 0) {
             return false;
         }
 
@@ -235,6 +263,13 @@ public class ReflectivePlayerPointsCostProvider
             return false;
         }
 
+        /*
+         * 负数花费视为非法，直接拒绝。
+         */
+        if (cost < 0) {
+            return false;
+        }
+
         try {
 
             Object id =
@@ -242,13 +277,22 @@ public class ReflectivePlayerPointsCostProvider
                             player.getUniqueId()
                     );
 
-            takeMethod.invoke(
-                    pointsApi,
-                    id,
-                    cost
-            );
+            /*
+             * 修复：必须检查 take() 的返回结果。
+             *
+             * 之前无条件返回 true，
+             * 扣款失败（余额不足竞态 / 内部异常返回 false）
+             * 也会被当成成功，玩家可以无限免费刷新技能。
+             */
+            Object result =
+                    takeMethod.invoke(
+                            pointsApi,
+                            id,
+                            cost
+                    );
 
-            return true;
+            return result instanceof Boolean bool &&
+                    bool;
 
         } catch (Exception e) {
 

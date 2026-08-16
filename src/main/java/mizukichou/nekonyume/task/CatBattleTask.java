@@ -20,6 +20,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -128,6 +130,29 @@ public class CatBattleTask implements Runnable {
         if (!config.isBattleEnabled()) {
             return;
         }
+
+        /*
+         * 状态清理：
+         * 移除已不存在实体/主人的残留战斗状态，
+         * 防止长跑服务器上 CatBattleState 无限膨胀。
+         */
+        List<UUID> activeEntities = new ArrayList<>();
+        List<UUID> activeOwners = new ArrayList<>();
+
+        for (Cat cat : cache.getCats()) {
+
+            activeOwners.add(cat.getOwnerUuid());
+
+            if (cat.getEntityUuid() != null) {
+
+                activeEntities.add(cat.getEntityUuid());
+            }
+        }
+
+        battleState.retainOnly(
+                activeEntities,
+                activeOwners
+        );
 
         for (Cat logicalCat :
                 cache.getCats()) {
@@ -875,11 +900,19 @@ public class CatBattleTask implements Runnable {
                 entityUuid
         );
 
+        /*
+         * 灵弹伤害为近战 80%：
+         * 取整后必须至少为 1，
+         * 避免 1 × 0.8 = 0 的零伤害。
+         */
         int damage =
-                (int) (computeDamage(
-                        logicalCat,
-                        cat
-                ) * 0.8);
+                Math.max(
+                        1,
+                        (int) (computeDamage(
+                                logicalCat,
+                                cat
+                        ) * 0.8)
+                );
 
         target.damage(
                 damage,

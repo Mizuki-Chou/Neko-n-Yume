@@ -124,6 +124,19 @@ public class CatGuiListener implements Listener {
 
         switch (slot) {
 
+            case 13 -> {
+
+                /*
+                 * 点击猫头 → 进入技能界面。
+                 * （事件已在方法开头取消，无需额外处理）
+                 */
+                skillGuiManager.open(
+                        player
+                );
+
+                return;
+            }
+
             case 18 ->
                     mode = CatBehaviorMode.FOLLOW;
 
