@@ -23,6 +23,7 @@ import mizukichou.nekonyume.cat.CatVariantService;
 import mizukichou.nekonyume.command.NekoYumeAdminCommand;
 import mizukichou.nekonyume.command.NekoYumeCommand;
 import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.craft.CraftingRecipes;
 import mizukichou.nekonyume.data.PlayerDataManager;
 import mizukichou.nekonyume.gift.GiftManager;
 import mizukichou.nekonyume.gui.CatGuiManager;
@@ -31,8 +32,12 @@ import mizukichou.nekonyume.listener.CatFoodListener;
 import mizukichou.nekonyume.listener.CatGuiListener;
 import mizukichou.nekonyume.listener.CatInteractionListener;
 import mizukichou.nekonyume.listener.CatToolListener;
+import mizukichou.nekonyume.listener.MeowDanCraftListener;
+import mizukichou.nekonyume.listener.MumaNightListener;
 import mizukichou.nekonyume.listener.PlayerJoinListener;
 import mizukichou.nekonyume.listener.PlayerQuitListener;
+import mizukichou.nekonyume.muma.MumaNightManager;
+import mizukichou.nekonyume.muma.MumaNightTask;
 import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.skill.CatSkillManager;
 import mizukichou.nekonyume.skill.SkillGuiManager;
@@ -65,11 +70,12 @@ import java.util.logging.Level;
  *
  * <p>
  * 装配顺序（依赖链，无环）：
- * CatStore → CatCache → CatBattleState → CatVariantService
+ * CatStore → CatCache → CatBattleState / CatVariantService
  * → CatSkillManager → CatProgressionService → CatEntityService
  * → CatManager（门面，对外 API）
- * → CatFoodManager → CatGuiManager → GiftManager
- * → SkillGuiManager → 命令 → 监听器 → 任务
+ * → CatFoodManager → MumaNightManager → CraftingRecipes
+ * → CatGuiManager → GiftManager → SkillGuiManager
+ * → 命令 → 监听器 → 任务
  * </p>
  *
  * <p>
@@ -116,6 +122,16 @@ public final class NekoNYume extends JavaPlugin {
     private SkillGuiManager skillGuiManager;
 
     /*
+     * 梦魔之夜（Muma's Night）。
+     */
+    private MumaNightManager mumaNightManager;
+
+    /*
+     * 合成配方注册器。
+     */
+    private CraftingRecipes craftingRecipes;
+
+    /*
      * 定时任务引用。
      */
     private BukkitTask hungerTask;
@@ -123,6 +139,7 @@ public final class NekoNYume extends JavaPlugin {
     private BukkitTask behaviorTask;
     private BukkitTask battleTask;
     private BukkitTask auraTask;
+    private BukkitTask mumaNightTask;
     private BukkitTask autosaveTask;
 
     public PluginConfig getPluginConfig() {
@@ -192,6 +209,15 @@ public final class NekoNYume extends JavaPlugin {
         if (catFoodManager != null) {
 
             catFoodManager.reloadFoods();
+        }
+
+        /*
+         * 配方整体重注册：
+         * 批次号 / 材质编号变更即时生效。
+         */
+        if (craftingRecipes != null) {
+
+            craftingRecipes.registerAll();
         }
 
         if (playerJoinListener != null) {
@@ -354,6 +380,41 @@ public final class NekoNYume extends JavaPlugin {
 
         /*
          * ========================================================
+         * 梦魔之夜（Muma's Night）
+         * ========================================================
+         *
+         * 世界开关存于世界 PDC，
+         * 由 /nekoyumeadmin mumanight <on|off> 管理。
+         */
+
+        mumaNightManager =
+                new MumaNightManager(
+                        this,
+                        getLogger(),
+                        catFoodManager
+                );
+
+        /*
+         * ========================================================
+         * 合成配方
+         * ========================================================
+         *
+         * 喵丹升级 + 逗猫棒。
+         * 结果按当前批次号生成；
+         * /nyadmin reload 时整体重注册。
+         */
+
+        craftingRecipes =
+                new CraftingRecipes(
+                        this,
+                        catFoodManager,
+                        toolKey
+                );
+
+        craftingRecipes.registerAll();
+
+        /*
+         * ========================================================
          * 猫咪面板
          * ========================================================
          */
@@ -429,7 +490,8 @@ public final class NekoNYume extends JavaPlugin {
                         catStore,
                         catEntityService,
                         catProgressionService,
-                        catFoodManager
+                        catFoodManager,
+                        mumaNightManager
                 )
         )) {
 
@@ -497,7 +559,14 @@ public final class NekoNYume extends JavaPlugin {
                         catStore,
                         catEntityService,
                         toolKey
+                ),
+                new MumaNightListener(
+                        mumaNightManager
+                ),
+                new MeowDanCraftListener(
+                        catFoodManager
                 )
+
         );
 
         /*
@@ -613,6 +682,26 @@ public final class NekoNYume extends JavaPlugin {
 
         /*
          * ========================================================
+         * 梦魔之夜判定
+         * ========================================================
+         *
+         * 每 5 秒检查一次：夜幕掷骰 / 强化扫描 / 黎明还原。
+         */
+
+        mumaNightTask =
+                getServer()
+                        .getScheduler()
+                        .runTaskTimer(
+                                this,
+                                new MumaNightTask(
+                                        mumaNightManager
+                                ),
+                                100L,
+                                100L
+                        );
+
+        /*
+         * ========================================================
          * 自动保存
          * ========================================================
          *
@@ -685,6 +774,10 @@ public final class NekoNYume extends JavaPlugin {
 
         if (auraTask != null) {
             auraTask.cancel();
+        }
+
+        if (mumaNightTask != null) {
+            mumaNightTask.cancel();
         }
 
         if (autosaveTask != null) {

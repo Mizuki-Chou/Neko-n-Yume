@@ -33,6 +33,12 @@ import java.util.UUID;
  * 数据读写走 CatStore，猫加载走 CatCache，
  * 数值走 PluginConfig，成长走 CatProgressionService。
  * </p>
+ *
+ * <p>
+ * 喵丹批次（generation）：
+ * 只有批次号与当前一致的喵丹才有效；
+ * 旧版发放（无批次号）或过期批次的喵丹一律失效。
+ * </p>
  */
 public class CatFoodManager {
 
@@ -51,6 +57,11 @@ public class CatFoodManager {
      */
 
     private static final int MEOW_DAN_MAX_STACK = 64;
+
+    /*
+     * 喵丹默认批次号（config: items.meowdan.generation）。
+     */
+    private static final int MEOW_DAN_DEFAULT_GENERATION = 1;
 
     /*
      * MiniMessage 实例。
@@ -92,6 +103,11 @@ public class CatFoodManager {
      */
     private final NamespacedKey meowDanKey;
 
+    /*
+     * 喵丹批次 PDC 标记（INTEGER）。
+     */
+    private final NamespacedKey meowDanGenKey;
+
     public CatFoodManager(
             JavaPlugin plugin,
             CatStore store,
@@ -110,6 +126,12 @@ public class CatFoodManager {
                 new NamespacedKey(
                         plugin,
                         "nekonyume_meowdan"
+                );
+
+        this.meowDanGenKey =
+                new NamespacedKey(
+                        plugin,
+                        "nekonyume_meowdan_gen"
                 );
 
         registerFoods();
@@ -213,6 +235,40 @@ public class CatFoodManager {
 
     /*
      * ============================================================
+     * 品质顺序（与枚举声明顺序无关）
+     * ============================================================
+     *
+     * 按"喵力收益升序"排列品质：
+     * 平凡 → 精良 → 独特 → 卓越 → 至极。
+     *
+     * 合成升级逻辑依赖此顺序，
+     * 不依赖 MeowDanQuality.values() 的声明顺序。
+     */
+    public static java.util.List<MeowDanQuality>
+    orderedQualities() {
+
+        java.util.List<MeowDanQuality> list =
+                new java.util.ArrayList<>(
+                        java.util.List.of(
+                                MeowDanQuality.values()
+                        )
+                );
+
+        list.sort(
+                java.util.Comparator
+                        .comparingInt(
+                                MeowDanQuality::getMeowPowerGain
+                        )
+                        .thenComparingInt(
+                                MeowDanQuality::getXpGain
+                        )
+        );
+
+        return list;
+    }
+
+    /*
+     * ============================================================
      * 喵丹 - 创建
      * ============================================================
      */
@@ -291,6 +347,16 @@ public class CatFoodManager {
                             quality.name()
                     );
 
+            /*
+             * 批次号：重装/换代后按批次识别。
+             */
+            meta.getPersistentDataContainer()
+                    .set(
+                            meowDanGenKey,
+                            PersistentDataType.INTEGER,
+                            currentMeowDanGeneration()
+                    );
+
             item.setItemMeta(
                     meta
             );
@@ -304,11 +370,57 @@ public class CatFoodManager {
      * 喵丹 - 判定
      * ============================================================
      *
-     * 只有携带 PDC 标记的物品才是喵丹。
-     * 玩家改名 / 伪造外观的物品无效。
+     * 有效喵丹必须同时满足：
+     * 1. 带品质标记；
+     * 2. 带批次号，且批次号与当前一致。
+     *
+     * 旧版物品（无批次号）与过期批次
+     * 一律视为普通金粒。
      */
 
     public boolean isMeowDan(
+            ItemStack item
+    ) {
+
+        if (item == null ||
+                item.getType().isAir()) {
+
+            return false;
+        }
+
+        ItemMeta meta =
+                item.getItemMeta();
+
+        if (meta == null) {
+            return false;
+        }
+
+        if (!meta.getPersistentDataContainer()
+                .has(
+                        meowDanKey,
+                        PersistentDataType.STRING
+                )) {
+
+            return false;
+        }
+
+        Integer generation =
+                meta.getPersistentDataContainer()
+                        .get(
+                                meowDanGenKey,
+                                PersistentDataType.INTEGER
+                        );
+
+        return generation != null &&
+                generation == currentMeowDanGeneration();
+    }
+
+    /**
+     * 是否"已失效的喵丹"：
+     * 带品质标记但批次缺失 / 不匹配。
+     * 用于给持有过期喵丹的玩家明确反馈。
+     */
+    public boolean isLegacyMeowDan(
             ItemStack item
     ) {
 
@@ -329,6 +441,19 @@ public class CatFoodManager {
                 .has(
                         meowDanKey,
                         PersistentDataType.STRING
+                ) &&
+                !isMeowDan(item);
+    }
+
+    /*
+     * 当前批次号（config: items.meowdan.generation，默认 1）。
+     */
+    private int currentMeowDanGeneration() {
+
+        return plugin.getConfig()
+                .getInt(
+                        "items.meowdan.generation",
+                        MEOW_DAN_DEFAULT_GENERATION
                 );
     }
 

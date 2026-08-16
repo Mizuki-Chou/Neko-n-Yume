@@ -179,7 +179,26 @@ public class CatFoodListener implements Listener {
 
         /*
          * ============================================================
-         * 5b. 交给 CatFoodManager 判断和处理
+         * 5b. 过期喵丹：明确提示 + 取消事件 + 不消耗
+         * ============================================================
+         */
+
+        if (foodManager.isLegacyMeowDan(item)) {
+
+            event.setCancelled(true);
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<red>🐱 这颗喵丹已经过期，无法使用了。</red>"
+                    )
+            );
+
+            return;
+        }
+
+        /*
+         * ============================================================
+         * 5c. 交给 CatFoodManager 判断和处理
          * ============================================================
          *
          * 不再在 Listener 里自己操作 hunger / affection。

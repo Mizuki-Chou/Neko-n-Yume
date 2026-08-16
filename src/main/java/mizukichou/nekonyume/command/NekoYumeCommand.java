@@ -9,9 +9,9 @@ import mizukichou.nekonyume.config.PluginConfig;
 import mizukichou.nekonyume.gui.CatGuiManager;
 import mizukichou.nekonyume.skill.SkillGuiManager;
 import mizukichou.nekonyume.storage.CatStore;
+import mizukichou.nekonyume.util.CatToolItem;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -19,8 +19,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Arrays;
 import java.util.List;
@@ -540,6 +538,7 @@ public class NekoYumeCommand
          *
          * 领取快捷工具（逗猫棒）：
          * 右键打开猫咪面板。
+         * 与工作台合成（木棍 + 生鳕鱼）完全同款。
          */
         if (args.length > 0 &&
                 args[0].equalsIgnoreCase("tool")) {
@@ -566,38 +565,14 @@ public class NekoYumeCommand
                 return true;
             }
 
+            /*
+             * 与工作台合成完全同款的逗猫棒
+             * （统一工厂保证 PDC 与外观一致）。
+             */
             ItemStack tool =
-                    new ItemStack(
-                            Material.STICK,
-                            1
+                    CatToolItem.create(
+                            toolKey
                     );
-
-            ItemMeta meta =
-                    tool.getItemMeta();
-
-            if (meta != null) {
-
-                meta.setDisplayName(
-                        "§d🐱 逗猫棒"
-                );
-
-                meta.setLore(
-                        List.of(
-                                "§7右键打开猫咪面板"
-                        )
-                );
-
-                meta.getPersistentDataContainer()
-                        .set(
-                                toolKey,
-                                PersistentDataType.BYTE,
-                                (byte) 1
-                        );
-
-                tool.setItemMeta(
-                        meta
-                );
-            }
 
             if (player.getInventory()
                     .addItem(tool)

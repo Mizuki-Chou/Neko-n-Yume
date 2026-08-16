@@ -5,10 +5,13 @@ import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.CatProgressionService;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.MeowDanQuality;
+import mizukichou.nekonyume.muma.MumaNightManager;
 import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -35,8 +38,16 @@ public class NekoYumeAdminCommand
     private final CatEntityService entityService;
     private final CatProgressionService progression;
     private final CatFoodManager foodManager;
+    private final MumaNightManager mumaNightManager;
 
     private final MiniMessage mm = MiniMessage.miniMessage();
+
+    /*
+     * 解析物品名等含 § 颜色码的文本，
+     * 避免 LegacyFormattingDetected 警告。
+     */
+    private final LegacyComponentSerializer legacySerializer =
+            LegacyComponentSerializer.legacySection();
 
     public NekoYumeAdminCommand(
             Runnable reloadAction,
@@ -44,7 +55,8 @@ public class NekoYumeAdminCommand
             CatStore store,
             CatEntityService entityService,
             CatProgressionService progression,
-            CatFoodManager foodManager
+            CatFoodManager foodManager,
+            MumaNightManager mumaNightManager
     ) {
 
         this.reloadAction = reloadAction;
@@ -53,6 +65,7 @@ public class NekoYumeAdminCommand
         this.entityService = entityService;
         this.progression = progression;
         this.foodManager = foodManager;
+        this.mumaNightManager = mumaNightManager;
     }
 
     @Override
@@ -83,7 +96,7 @@ public class NekoYumeAdminCommand
 
             sender.sendMessage(
                     mm.deserialize(
-                            "<yellow>用法: /nekoyumeadmin <meowdan|cat|skill|reload></yellow>"
+                            "<yellow>用法: /nekoyumeadmin <meowdan|cat|skill|mumanight|reload></yellow>"
                     )
             );
 
@@ -124,6 +137,17 @@ public class NekoYumeAdminCommand
         }
 
         /*
+         * /nekoyumeadmin mumanight [on|off]
+         */
+        if (args[0].equalsIgnoreCase("mumanight")) {
+
+            return handleMumaNight(
+                    sender,
+                    args
+            );
+        }
+
+        /*
          * /nekoyumeadmin reload
          */
         if (args[0].equalsIgnoreCase("reload")) {
@@ -144,7 +168,7 @@ public class NekoYumeAdminCommand
          */
         sender.sendMessage(
                 mm.deserialize(
-                        "<yellow>用法: /nekoyumeadmin <meowdan|cat|skill|reload></yellow>"
+                        "<yellow>用法: /nekoyumeadmin <meowdan|cat|skill|mumanight|reload></yellow>"
                 )
         );
 
@@ -323,7 +347,7 @@ public class NekoYumeAdminCommand
                                         + " 个 </white>"
                         )
                 ).append(
-                        Component.text(
+                        legacySerializer.deserialize(
                                 quality.getFullDisplayName()
                         )
                 )
@@ -333,7 +357,7 @@ public class NekoYumeAdminCommand
                 mm.deserialize(
                         "<gradient:#c4b5fd:#a78bfa>✨ 你收到了 </gradient>"
                 ).append(
-                        Component.text(
+                        legacySerializer.deserialize(
                                 amount
                                         + " 个 "
                                         + quality.getFullDisplayName()
@@ -550,7 +574,7 @@ public class NekoYumeAdminCommand
                                     "<white> 技能 </white>"
                             )
                     ).append(
-                            Component.text(
+                            legacySerializer.deserialize(
                                     skill.getDisplayName()
                             )
                     )
@@ -560,7 +584,7 @@ public class NekoYumeAdminCommand
                     mm.deserialize(
                             "<gradient:#fde68a:#f59e0b>🎉 你的猫咪学会了新技能：</gradient>"
                     ).append(
-                            Component.text(
+                            legacySerializer.deserialize(
                                     skill.getDisplayName()
                             )
                     )
@@ -574,6 +598,92 @@ public class NekoYumeAdminCommand
                     )
             );
         }
+
+        return true;
+    }
+
+    /*
+     * ============================================================
+     * mumanight [on|off]
+     * ============================================================
+     *
+     * 按世界开启 / 关闭梦魔之夜（作用于执行者所在世界）。
+     */
+
+    private boolean handleMumaNight(
+            CommandSender sender,
+            String[] args
+    ) {
+
+        if (!(sender instanceof Player player)) {
+
+            sender.sendMessage(
+                    "只有玩家可以使用此命令（作用于你所在的世界）。"
+            );
+
+            return true;
+        }
+
+        World world =
+                player.getWorld();
+
+        if (args.length < 2) {
+
+            boolean enabled =
+                    mumaNightManager.isEnabled(
+                            world
+                    );
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<yellow>🌑 梦魔之夜（当前世界）：</yellow> "
+                                    + (enabled
+                                    ? "<green>开启</green>"
+                                    : "<gray>关闭</gray>")
+                                    + " <gray>用法: /nekoyumeadmin mumanight <on|off></gray>"
+                    )
+            );
+
+            return true;
+        }
+
+        if (args[1].equalsIgnoreCase("on")) {
+
+            mumaNightManager.setEnabled(
+                    world,
+                    true
+            );
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<green>✔ 已在本世界开启梦魔之夜：每晚 20% 概率降临。</green>"
+                    )
+            );
+
+            return true;
+        }
+
+        if (args[1].equalsIgnoreCase("off")) {
+
+            mumaNightManager.setEnabled(
+                    world,
+                    false
+            );
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<green>✔ 已在本世界关闭梦魔之夜。</green>"
+                    )
+            );
+
+            return true;
+        }
+
+        sender.sendMessage(
+                mm.deserialize(
+                        "<red>❌ 用法: /nekoyumeadmin mumanight <on|off></red>"
+                )
+        );
 
         return true;
     }
@@ -630,6 +740,7 @@ public class NekoYumeAdminCommand
                     "meowdan",
                     "cat",
                     "skill",
+                    "mumanight",
                     "reload"
             );
         }
@@ -643,6 +754,9 @@ public class NekoYumeAdminCommand
 
                 case "cat" ->
                         filter(args[1], "remove");
+
+                case "mumanight" ->
+                        filter(args[1], "on", "off");
 
                 default -> List.of();
             };

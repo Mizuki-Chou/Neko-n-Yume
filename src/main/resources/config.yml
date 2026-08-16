@@ -15,6 +15,7 @@ storage:
 # 物品自定义材质
 items:
   meowdan:
+    generation: 1
     custom-model-data:
       common: 91001
       uncommon: 91002
