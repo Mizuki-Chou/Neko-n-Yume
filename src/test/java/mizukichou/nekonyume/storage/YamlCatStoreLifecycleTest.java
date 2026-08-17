@@ -23,10 +23,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 磁盘存储可靠性测试（临时目录，无 Bukkit 服务器）。
  *
  * <p>
+ * 0.6.1：写盘已异步化（快照 + 保存线程）。
+ * 因此所有"重开文件验证"之前必须先
+ * {@link YamlCatStore#awaitPendingSave()}。
+ * </p>
+ *
+ * <p>
  * 覆盖：
  * 重启往返 / v1→v4 迁移 / 损坏 fail-fast 不覆盖 /
  * 备份修剪 / 残留 tmp 清理 / 空文件处理 /
- * 删除持久化 / 读不建档。
+ * 删除持久化 / 读不建档 / future-version 拒启。
  * </p>
  */
 class YamlCatStoreLifecycleTest {
@@ -44,6 +50,19 @@ class YamlCatStoreLifecycleTest {
                         3
                 )
         );
+    }
+
+    /*
+     * 提交 + 等待落盘完成。
+     * 模拟"关服前等待"，保证重开文件时数据已在磁盘上。
+     */
+    private void flushAndAwait(
+            YamlCatStore store
+    ) {
+
+        store.flush();
+
+        store.awaitPendingSave();
     }
 
     @Test
@@ -100,16 +119,14 @@ class YamlCatStoreLifecycleTest {
         store.addCatFeedCount(player);
 
         /*
-         * 时间戳类字段最后写入，
-         * 保证不会被"计数顺带更新时间"覆盖，
-         * 之后才能对它们做精确断言。
+         * 时间戳类字段最后写入。
          */
         store.setCatHungerLastUpdate(player, 4242L);
         store.setCatCreatedAt(player, 4000L);
         store.setCatLastFedAt(player, 4100L);
         store.setCatLastInteractionAt(player, 4200L);
 
-        store.flush();
+        flushAndAwait(store);
 
         /*
          * 模拟重启：同一个目录重新构造。
@@ -173,6 +190,9 @@ class YamlCatStoreLifecycleTest {
                 yaml
         );
 
+        /*
+         * 构造器内完成迁移（同步落盘，保存线程尚未启动）。
+         */
         YamlCatStore store = newStore();
 
         UUID player =
@@ -180,28 +200,15 @@ class YamlCatStoreLifecycleTest {
                         "11111111-1111-1111-1111-111111111111"
                 );
 
-        /*
-         * v2 迁移：经验 = 到达当前等级所需累计经验。
-         * 曲线基数 100 → cumXp(3) = 100 × 3 × 2 / 2 = 300。
-         */
         assertEquals("OldCat", store.getCatName(player));
         assertEquals(3, store.getCatLevel(player));
         assertEquals(300, store.getCatExperience(player));
         assertEquals(0, store.getCatMeowPower(player));
         assertEquals(0, store.getCatMeowRank(player));
         assertEquals(1000L, store.getCatHungerLastUpdate(player));
-
-        /*
-         * v3 迁移：行为模式补齐。
-         */
         assertEquals("FOLLOW", store.getCatBehaviorMode(player));
-
-        /*
-         * v4 迁移：底蕴由猫 UUID 推导，技能为空。
-         */
         assertNotNull(store.getCatTier(player));
         assertTrue(store.getCatSkills(player).isEmpty());
-
         assertEquals(60, store.getCatAffection(player));
         assertEquals(70, store.getCatHunger(player));
         assertEquals(80, store.getCatHealth(player));
@@ -213,9 +220,6 @@ class YamlCatStoreLifecycleTest {
         assertEquals(0, store.getCatFeedCount(player));
         assertFalse(store.isGiftCheckedToday(player));
 
-        /*
-         * 迁移结果已落盘，data-version 必须为 4。
-         */
         String written =
                 Files.readString(
                         tempDir.resolve("players.yml")
@@ -247,11 +251,44 @@ class YamlCatStoreLifecycleTest {
                 exception.getMessage().contains("players.yml")
         );
 
-        /*
-         * 原文件必须原样保留，绝不允许被空数据覆盖。
-         */
         assertEquals(
                 garbage,
+                Files.readString(
+                        tempDir.resolve("players.yml")
+                )
+        );
+    }
+
+    @Test
+    void futureVersionFailsFastAndKeepsOriginal() throws IOException {
+
+        String content = """
+                data-version: 99
+                players:
+                  11111111-1111-1111-1111-111111111111:
+                   cat:
+                    id: 22222222-2222-2222-2222-222222222222
+                    name: FutCat
+                """;
+
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                content
+        );
+
+        IllegalStateException exception =
+                assertThrows(
+                        IllegalStateException.class,
+                        this::newStore
+                );
+
+        assertTrue(
+                exception.getMessage()
+                        .contains("99")
+        );
+
+        assertEquals(
+                content,
                 Files.readString(
                         tempDir.resolve("players.yml")
                 )
@@ -293,6 +330,7 @@ class YamlCatStoreLifecycleTest {
 
         first.createCat(UUID.randomUUID());
         first.saveNow();
+        first.awaitPendingSave();
 
         /*
          * 连续"重启"4 次，每次构造都会先备份。
@@ -336,7 +374,8 @@ class YamlCatStoreLifecycleTest {
          */
         store.setCatName(player, "Ghost");
         store.setCatHunger(player, 10);
-        store.flush();
+
+        flushAndAwait(store);
 
         YamlCatStore reopened = newStore();
 
@@ -358,52 +397,12 @@ class YamlCatStoreLifecycleTest {
         assertTrue(store.getCatSkills(ghost).isEmpty());
         assertFalse(store.hasCat(ghost));
 
-        store.flush();
+        flushAndAwait(store);
 
         YamlCatStore reopened = newStore();
 
         assertFalse(reopened.hasCat(ghost));
         assertTrue(reopened.getCatPlayers().isEmpty());
-    }
-
-    @Test
-    void futureVersionFailsFastAndKeepsOriginal() throws IOException {
-
-        String content = """
-                data-version: 99
-                players:
-                  11111111-1111-1111-1111-111111111111:
-                   cat:
-                    id: 22222222-2222-2222-2222-222222222222
-                    name: FutCat
-                """;
-
-        Files.writeString(
-                tempDir.resolve("players.yml"),
-                content
-        );
-
-        IllegalStateException exception =
-                assertThrows(
-                        IllegalStateException.class,
-                        this::newStore
-                );
-
-        assertTrue(
-                exception.getMessage()
-                        .contains("99")
-        );
-
-        /*
-         * 原文件必须原样保留：
-         * 未来版本数据绝不允许被旧插件覆盖。
-         */
-        assertEquals(
-                content,
-                Files.readString(
-                        tempDir.resolve("players.yml")
-                )
-        );
     }
 
     /*

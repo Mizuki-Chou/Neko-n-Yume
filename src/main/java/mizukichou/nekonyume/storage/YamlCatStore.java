@@ -8,6 +8,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import java.io.File;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -20,14 +21,22 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Level;
 
 /**
  * CatStore 的 YAML 磁盘实现（players.yml）。
  *
  * <p>
- * 承载全部 P0 可靠性加固：
- * 损坏检测 fail-fast、启动备份、单向迁移（data-version v4）、
- * 原子写 + fsync、残留 tmp 清理、连续失败计数。
+ * P0-1/P0-5 修复：写盘完全脱离主线程。
+ * 主线程只做"序列化为字节快照"（纯内存，极快）；
+ * 真正落盘（tmp + fsync + 原子替换）由单条保存线程串行执行。
+ * 同时只有一份在飞快照，新的覆盖旧的，保证最终一致。
+ * </p>
+ *
+ * <p>
+ * 其余 P0 机制不变：损坏检测 fail-fast、启动备份、
+ * 单向迁移、future-version 拒启、tmp 清理。
  * </p>
  */
 public class YamlCatStore extends AbstractCatStore {
@@ -40,11 +49,48 @@ public class YamlCatStore extends AbstractCatStore {
 
     private final File file;
 
+    /*
+     * 主线程读写的内存 YAML。
+     */
     private final YamlConfiguration data;
 
+    /*
+     * 是否已通过主线程校验（文件损坏 / 迁移完成前
+     * 不允许任何线程触碰磁盘）。
+     */
+    private volatile boolean ready;
+
+    /*
+     * 是否有未落盘的修改。
+     */
     private boolean dirty;
 
     private int consecutiveSaveFailures;
+
+    /*
+     * 保存线程。
+     * 守护线程：服务器关闭时不会被 JVM 卡死。
+     */
+    private final Thread saverThread;
+
+    /*
+     * 最近一次"待写入"的字节快照。
+     * 写入线程空闲时取走它；写失败时放回重试。
+     */
+    private final AtomicReference<byte[]> pendingSnapshot =
+            new AtomicReference<>();
+
+    /*
+     * 写入线程空闲标志（用于关服时的唤醒等待）。
+     */
+    private final Object saverMonitor = new Object();
+
+    private boolean saverIdle = true;
+
+    /*
+     * 在飞快照的写入是否已失败（失败后要回填）。
+     */
+    private volatile boolean lastWriteFailed;
 
     public YamlCatStore(CatStoreEnv env) {
 
@@ -62,8 +108,7 @@ public class YamlCatStore extends AbstractCatStore {
         /*
          * 加载 + 损坏检测：
          * 文件存在且非空、但解析后没有任何键，
-         * 说明文件已损坏。
-         * fail-fast，绝不用空数据覆盖原文件。
+         * 说明文件已损坏。fail-fast，绝不用空数据覆盖。
          */
         if (file.exists() && file.length() > 0) {
 
@@ -104,14 +149,212 @@ public class YamlCatStore extends AbstractCatStore {
         dirty = false;
         consecutiveSaveFailures = 0;
 
+        /*
+         * 启动备份与迁移（同步，此时尚无保存线程）。
+         */
         createBackupIfEnabled();
 
         migrate();
+
+        /*
+         * 迁移可能直接落盘（见 migrate 的同步写）。
+         * 此后进入"快照 + 保存线程"模式。
+         */
+        ready = true;
+
+        this.saverThread =
+                new Thread(
+                        this::saverLoop,
+                        "NekoNYume-SaveThread"
+                );
+
+        saverThread.setDaemon(true);
+
+        saverThread.start();
     }
 
     /*
      * ============================================================
-     * 原始操作实现
+     * 保存线程
+     * ============================================================
+     */
+
+    private void saverLoop() {
+
+        while (true) {
+
+            byte[] snapshot = null;
+
+            synchronized (saverMonitor) {
+
+                while (pendingSnapshot.get() == null) {
+
+                    saverIdle = true;
+
+                    try {
+
+                        saverMonitor.wait();
+
+                    } catch (InterruptedException e) {
+
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+
+                saverIdle = false;
+
+                snapshot = pendingSnapshot.get();
+            }
+
+            if (snapshot == null) {
+                continue;
+            }
+
+            writeSnapshot(snapshot);
+
+            synchronized (saverMonitor) {
+
+                if (!lastWriteFailed) {
+
+                    /*
+                     * 只清除"刚刚写成功的那份快照"：
+                     * 若写入期间主线程又提交了更新的快照，
+                     * CAS 会失败并保留新快照，
+                     * 绝不覆盖丢弃（丢失更新竞态）。
+                     */
+                    pendingSnapshot.compareAndSet(
+                            snapshot,
+                            null
+                    );
+
+                    /*
+                     * 唤醒等待落盘的线程
+                     * （awaitPendingSave / shutdownAndAwait）。
+                     */
+                    saverMonitor.notifyAll();
+                }
+
+                saverIdle = true;
+            }
+
+            /*
+             * 写入失败时保留快照并节流重试：
+             * 避免磁盘持续异常时保存线程热循环。
+             */
+            if (lastWriteFailed) {
+
+                try {
+
+                    Thread.sleep(
+                            5000L
+                    );
+
+                } catch (InterruptedException e) {
+
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+
+        }
+    }
+
+    private void writeSnapshot(byte[] snapshot) {
+
+        File temp =
+                new File(
+                        file.getParentFile(),
+                        "players.yml.tmp"
+                );
+
+        try {
+
+            if (temp.exists() && !temp.delete()) {
+
+                env.logger().warning(
+                        "Failed to delete stale temp file players.yml.tmp"
+                );
+            }
+
+            Files.write(
+                    temp.toPath(),
+                    snapshot,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE
+            );
+
+            /*
+             * fsync。
+             */
+            try (FileChannel channel =
+                         FileChannel.open(
+                                 temp.toPath(),
+                                 StandardOpenOption.WRITE
+                         )) {
+
+                channel.force(true);
+            }
+
+            try {
+
+                Files.move(
+                        temp.toPath(),
+                        file.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE
+                );
+
+            } catch (AtomicMoveNotSupportedException e) {
+
+                Files.move(
+                        temp.toPath(),
+                        file.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING
+                );
+            }
+
+            lastWriteFailed = false;
+            consecutiveSaveFailures = 0;
+
+        } catch (Exception e) {
+
+            lastWriteFailed = true;
+
+            consecutiveSaveFailures++;
+
+            env.logger().log(
+                    Level.SEVERE,
+                    "Failed to save players.yml (consecutive failures: "
+                            + consecutiveSaveFailures
+                            + ")",
+                    e
+            );
+
+            if (consecutiveSaveFailures >= 3) {
+
+                env.logger().severe(
+                        "players.yml has failed to save "
+                                + consecutiveSaveFailures
+                                + " times in a row. "
+                                + "Check disk space and file permissions. "
+                                + "Data is kept in memory and will be retried."
+                );
+            }
+
+            if (temp.exists() && !temp.delete()) {
+
+                env.logger().warning(
+                        "Failed to clean up temp file players.yml.tmp"
+                );
+            }
+        }
+    }
+
+    /*
+     * ============================================================
+     * 主线程：原始操作实现（不变）
      * ============================================================
      */
 
@@ -218,7 +461,7 @@ public class YamlCatStore extends AbstractCatStore {
 
     /*
      * ============================================================
-     * 保存生命周期
+     * 保存生命周期（主线程）
      * ============================================================
      */
 
@@ -234,6 +477,38 @@ public class YamlCatStore extends AbstractCatStore {
         return dirty;
     }
 
+    /**
+     * 提交快照（不等待磁盘完成）。
+     * 返回是否已提交给保存线程。
+     */
+    public boolean submitSnapshot() {
+
+        if (!ready) {
+            return false;
+        }
+
+        if (!dirty) {
+            return true;
+        }
+
+        byte[] snapshot =
+                data.saveToString()
+                        .getBytes(
+                                StandardCharsets.UTF_8
+                        );
+
+        pendingSnapshot.set(snapshot);
+
+        dirty = false;
+
+        synchronized (saverMonitor) {
+
+            saverMonitor.notifyAll();
+        }
+
+        return true;
+    }
+
     @Override
     public void flush() {
 
@@ -241,109 +516,95 @@ public class YamlCatStore extends AbstractCatStore {
             return;
         }
 
-        saveNow();
+        submitSnapshot();
     }
 
-    @Override
-    public synchronized void saveNow() {
+    /**
+     * 无条件立即提交快照（主线程，不等待磁盘）。
+     */
+    public void saveNow() {
 
-        File temp =
-                new File(
-                        file.getParentFile(),
-                        "players.yml.tmp"
-                );
+        byte[] snapshot =
+                data.saveToString()
+                        .getBytes(
+                                StandardCharsets.UTF_8
+                        );
 
-        try {
+        pendingSnapshot.set(snapshot);
 
-            if (temp.exists() && !temp.delete()) {
+        dirty = false;
 
-                env.logger().warning(
-                        "Failed to delete stale temp file players.yml.tmp"
-                );
-            }
+        synchronized (saverMonitor) {
 
-            data.save(temp);
+            saverMonitor.notifyAll();
+        }
+    }
 
-            /*
-             * fsync：确保内容真正落到磁盘，
-             * 再执行原子替换，避免断电时出现空文件。
-             */
-            try (FileChannel channel =
-                         FileChannel.open(
-                                 temp.toPath(),
-                                 StandardOpenOption.WRITE
-                         )) {
+    /**
+     * 关服时调用：
+     * 提交最后快照并等待保存线程完成在飞写入。
+     */
+    public void shutdownAndAwait() {
 
-                channel.force(true);
-            }
+        if (!ready) {
+            return;
+        }
 
-            try {
+        saveNow();
 
-                Files.move(
-                        temp.toPath(),
-                        file.toPath(),
-                        StandardCopyOption.REPLACE_EXISTING,
-                        StandardCopyOption.ATOMIC_MOVE
-                );
+        awaitPendingSave();
+    }
 
-            } catch (AtomicMoveNotSupportedException e) {
+    /**
+     * 等待在飞快照写入完成（主线程调用，上限 15 秒）。
+     *
+     * <p>
+     * 供测试与关服场景使用：
+     * 保证"调用返回后，磁盘文件包含全部已提交修改"。
+     * </p>
+     */
+    public void awaitPendingSave() {
 
-                Files.move(
-                        temp.toPath(),
-                        file.toPath(),
-                        StandardCopyOption.REPLACE_EXISTING
-                );
-            }
+        synchronized (saverMonitor) {
 
-            dirty = false;
-            consecutiveSaveFailures = 0;
+            long deadline =
+                    System.currentTimeMillis()
+                            + 15_000L;
 
-        } catch (Exception e) {
+            while (pendingSnapshot.get() != null) {
 
-            /*
-             * 保存失败时保留 dirty=true，
-             * 下一次自动保存仍然会重试。
-             */
-            dirty = true;
+                long remaining =
+                        deadline
+                                - System.currentTimeMillis();
 
-            consecutiveSaveFailures++;
+                if (remaining <= 0) {
 
-            env.logger().severe(
-                    "Failed to save players.yml (consecutive failures: "
-                            + consecutiveSaveFailures
-                            + "): "
-                            + e.getMessage()
-            );
+                    env.logger().warning(
+                            "Timed out waiting for players.yml save to complete."
+                    );
 
-            if (consecutiveSaveFailures >= 3) {
+                    return;
+                }
 
-                env.logger().severe(
-                        "players.yml has failed to save "
-                                + consecutiveSaveFailures
-                                + " times in a row. "
-                                + "Check disk space and file permissions. "
-                                + "Data is kept in memory and will be retried."
-                );
-            }
+                try {
 
-            env.logger().log(
-                    java.util.logging.Level.SEVERE,
-                    "Failed to save players.yml",
-                    e
-            );
+                    saverMonitor.wait(
+                            remaining
+                    );
 
-            if (temp.exists() && !temp.delete()) {
+                } catch (InterruptedException e) {
 
-                env.logger().warning(
-                        "Failed to clean up temp file players.yml.tmp"
-                );
+                    Thread.currentThread().interrupt();
+                    return;
+                }
             }
         }
     }
 
+
     /*
      * ============================================================
-     * 文件初始化
+     * 文件初始化 / 备份 / 迁移（与旧版一致）
      * ============================================================
      */
 
@@ -407,12 +668,6 @@ public class YamlCatStore extends AbstractCatStore {
             }
         }
     }
-
-    /*
-     * ============================================================
-     * 启动备份
-     * ============================================================
-     */
 
     private void createBackupIfEnabled() {
 
@@ -534,6 +789,22 @@ public class YamlCatStore extends AbstractCatStore {
             version = 1;
         }
 
+        if (version > DATA_VERSION) {
+
+            /*
+             * P0：拒绝为未来版本数据继续服务。
+             */
+            throw new IllegalStateException(
+                    "players.yml data-version "
+                            + version
+                            + " 高于本插件支持的 "
+                            + DATA_VERSION
+                            + "，插件拒绝启动以保护数据。"
+                            + "请升级插件，或从 backup/ 恢复旧版本数据。文件："
+                            + file.getAbsolutePath()
+            );
+        }
+
         if (version < DATA_VERSION) {
 
             env.logger().info(
@@ -558,39 +829,74 @@ public class YamlCatStore extends AbstractCatStore {
 
             data.set("data-version", DATA_VERSION);
 
-            saveNow();
-
-            return;
-        }
-
-        if (version > DATA_VERSION) {
-
             /*
-             * P0：拒绝为未来版本数据继续服务。
-             *
-             * 插件只理解 data-version <= DATA_VERSION 的格式；
-             * 若继续运行，后续任何写盘都会用旧格式覆盖新数据，
-             * 造成不可逆的数据丢失。
-             *
-             * fail-fast：直接拒绝启动，
-             * 管理员要么升级插件，要么用备份回退。
+             * 迁移属于启动关键操作：
+             * 直接同步落盘（保存线程尚未启动）。
              */
-            throw new IllegalStateException(
-                    "players.yml data-version "
-                            + version
-                            + " 高于本插件支持的 "
-                            + DATA_VERSION
-                            + "，插件拒绝启动以保护数据。"
-                            + "请升级插件，或从 backup/ 恢复旧版本数据。文件："
-                            + file.getAbsolutePath()
+            synchronousWrite();
+        }
+    }
+
+    private void synchronousWrite() {
+
+        File temp =
+                new File(
+                        file.getParentFile(),
+                        "players.yml.tmp"
+                );
+
+        try {
+
+            if (temp.exists() && !temp.delete()) {
+
+                env.logger().warning(
+                        "Failed to delete stale temp file players.yml.tmp"
+                );
+            }
+
+            data.save(temp);
+
+            try (FileChannel channel =
+                         FileChannel.open(
+                                 temp.toPath(),
+                                 StandardOpenOption.WRITE
+                         )) {
+
+                channel.force(true);
+            }
+
+            try {
+
+                Files.move(
+                        temp.toPath(),
+                        file.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE
+                );
+
+            } catch (AtomicMoveNotSupportedException e) {
+
+                Files.move(
+                        temp.toPath(),
+                        file.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING
+                );
+            }
+
+        } catch (Exception e) {
+
+            env.logger().log(
+                    Level.SEVERE,
+                    "Failed to write players.yml during startup migration",
+                    e
             );
         }
     }
 
     /*
-     * 迁移期间直接操作 YamlConfiguration，
-     * 绝不经过抽象层 getter/setter，
-     * 避免迁移触发意外建档。
+     * ============================================================
+     * 迁移体（与旧版一致）
+     * ============================================================
      */
 
     private void migrateV1ToV2() {

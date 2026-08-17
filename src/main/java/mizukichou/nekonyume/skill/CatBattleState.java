@@ -14,12 +14,7 @@ import java.util.UUID;
  * 不持久化，重启重置：
  * 攻击间隔 / 攻击计数 / 重生冷却 / 协助目标 /
  * 追击状态 / 扑击冷却 / 追击收势 /
- * 受伤恢复期 / 缓慢回血。
- * </p>
- *
- * <p>
- * 由 CatBattleTask 周期性调用 retainOnly 清理
- * 已不存在实体/主人的残留状态，防止 Map 无限膨胀。
+ * 受伤恢复期 / 缓慢回血 / 恢复期清扫节流。
  * </p>
  */
 public class CatBattleState {
@@ -83,6 +78,22 @@ public class CatBattleState {
      * 实体 UUID → 上次缓慢回血时间（毫秒）。
      */
     private final Map<UUID, Long> lastRegenTimes =
+            new HashMap<>();
+
+    /*
+     * 实体 UUID → 上次"目标清扫 + 悬浮字刷新"时间（毫秒）。
+     *
+     * P0-9：恢复期半径扫描降频到约 1 秒一次，
+     * 避免 120 秒恢复期产生数百次全半径实体扫描。
+     */
+    private final Map<UUID, Long> lastSweepTimes =
+            new HashMap<>();
+
+    /*
+     * 实体 UUID → 上次刷新悬浮字时的剩余秒数。
+     * 同秒内倒计时跨整数秒边界时补一次刷新。
+     */
+    private final Map<UUID, Long> lastSweepDisplaySeconds =
             new HashMap<>();
 
     /*
@@ -457,6 +468,14 @@ public class CatBattleState {
         recoveryEndTimes.remove(
                 entityUuid
         );
+
+        lastSweepTimes.remove(
+                entityUuid
+        );
+
+        lastSweepDisplaySeconds.remove(
+                entityUuid
+        );
     }
 
     /*
@@ -499,6 +518,69 @@ public class CatBattleState {
                 entityUuid,
                 System.currentTimeMillis()
         );
+    }
+
+    /*
+     * ============================================================
+     * 恢复期目标清扫节流（P0-9）
+     * ============================================================
+     *
+     * 恢复期降频清扫：约每秒执行一次半径扫描 + 悬浮字刷新；
+     * 同秒内倒计时跨整数秒边界时补一次刷新，保证显示准确。
+     */
+
+    public boolean shouldSweepTargets(
+            UUID entityUuid,
+            long remainingSeconds
+    ) {
+
+        if (entityUuid == null) {
+            return false;
+        }
+
+        long now =
+                System.currentTimeMillis();
+
+        Long last =
+                lastSweepTimes.get(
+                        entityUuid
+                );
+
+        if (last == null ||
+                now - last >= 1000L) {
+
+            lastSweepTimes.put(
+                    entityUuid,
+                    now
+            );
+
+            lastSweepDisplaySeconds.put(
+                    entityUuid,
+                    remainingSeconds
+            );
+
+            return true;
+        }
+
+        Long lastDisplay =
+                lastSweepDisplaySeconds.get(
+                        entityUuid
+                );
+
+        if (lastDisplay != null &&
+                !lastDisplay.equals(
+                        remainingSeconds
+                )) {
+
+            lastSweepDisplaySeconds.put(
+                    entityUuid,
+                    remainingSeconds
+            );
+
+            return true;
+        }
+
+        return false;
     }
 
     /*
@@ -549,6 +631,12 @@ public class CatBattleState {
                 .retainAll(entities);
 
         lastRegenTimes.keySet()
+                .retainAll(entities);
+
+        lastSweepTimes.keySet()
+                .retainAll(entities);
+
+        lastSweepDisplaySeconds.keySet()
                 .retainAll(entities);
 
         chasing.retainAll(entities);

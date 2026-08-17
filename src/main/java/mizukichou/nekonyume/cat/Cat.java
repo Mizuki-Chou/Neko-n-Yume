@@ -584,7 +584,17 @@ public class Cat {
             return 0;
         }
 
-        this.experience += amount;
+        /*
+         * 防溢出：经验累计封顶 Integer.MAX_VALUE。
+         */
+        long totalExperience =
+                (long) this.experience + amount;
+
+        this.experience =
+                totalExperience > Integer.MAX_VALUE
+                        ? Integer.MAX_VALUE
+                        : (int) totalExperience;
+
 
         int newLevel =
                 GrowthMath.levelFromExperience(
@@ -673,7 +683,16 @@ public class Cat {
             return 0;
         }
 
-        this.meowPower += amount;
+        /*
+         * 防溢出：喵力累计封顶 Integer.MAX_VALUE。
+         */
+        long totalMeowPower =
+                (long) this.meowPower + amount;
+
+        this.meowPower =
+                totalMeowPower > Integer.MAX_VALUE
+                        ? Integer.MAX_VALUE
+                        : (int) totalMeowPower;
 
         int newRank =
                 GrowthMath.meowRankFromPower(

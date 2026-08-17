@@ -172,8 +172,13 @@ public class MeowDanCraftListener implements Listener {
          * 命中本插件配方或配方未识别（无匹配）时，
          * 现场生成下一级喵丹作为结果。
          */
-        if (ourRecipe ||
-                recipe == null) {
+        /*
+         * P0-12：
+         * 只在"命中的就是本插件配方"时接管结果；
+         * recipe == null（无配方匹配）时不插手——
+         * 避免覆盖其他插件的 9 金粒类配方。
+         */
+        if (ourRecipe) {
 
             event.getInventory()
                     .setResult(
@@ -185,5 +190,6 @@ public class MeowDanCraftListener implements Listener {
                             )
                     );
         }
+
     }
 }

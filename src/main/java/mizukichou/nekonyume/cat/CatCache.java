@@ -133,9 +133,29 @@ public class CatCache {
             return;
         }
 
+        UUID ownerUuid =
+                cat.getOwnerUuid();
+
+        /*
+         * P0-2 / P0-6：
+         * 维护"一玩家一猫"不变量与索引一致性——
+         * 同一主人新猫注册时，先移除旧猫条目与索引，
+         * 绝不残留两条逻辑猫。
+         */
+        UUID oldCatId =
+                ownerToCatId.remove(
+                        ownerUuid
+                );
+
+        if (oldCatId != null) {
+
+            cats.remove(oldCatId);
+        }
+
         cats.put(cat.getId(), cat);
-        ownerToCatId.put(cat.getOwnerUuid(), cat.getId());
+        ownerToCatId.put(ownerUuid, cat.getId());
     }
+
 
     public void put(Cat cat) {
 
@@ -463,50 +483,88 @@ public class CatCache {
         }
 
         /*
-         * 基础身份
+         * 性能优化：只写"与存档不同"的字段。
+         *
+         * 此前无条件重写全部字段并标记脏，
+         * 导致即使没有任何变化，自动保存每 60 秒
+         * 仍要全量序列化整个 players.yml。
+         * 改为逐字段比对后：
+         * - 无变化的猫不触碰存储；
+         * - flush() 见不到脏标记，磁盘零写入；
+         * - 真正变化时才序列化落盘。
+         * 行为与原实现完全一致。
          */
-        store.setCatUUID(ownerUUID, cat.getId());
 
-        store.setCatName(ownerUUID, cat.getName());
+        if (!java.util.Objects.equals(
+                store.getCatUUID(ownerUUID),
+                cat.getId()
+        )) {
 
-        /*
-         * 成长
-         */
-        store.setCatLevel(ownerUUID, cat.getLevel());
+            store.setCatUUID(ownerUUID, cat.getId());
+        }
 
-        store.setCatExperience(
-                ownerUUID,
-                cat.getExperience()
-        );
+        if (!java.util.Objects.equals(
+                store.getCatName(ownerUUID),
+                cat.getName()
+        )) {
 
-        /*
-         * 喵力 / 喵阶
-         */
-        store.setCatMeowPower(
-                ownerUUID,
-                cat.getMeowPower()
-        );
+            store.setCatName(ownerUUID, cat.getName());
+        }
 
-        store.setCatMeowRank(
-                ownerUUID,
-                cat.getMeowRank()
-        );
+        if (store.getCatLevel(ownerUUID)
+                != cat.getLevel()) {
 
-        /*
-         * 行为模式
-         */
-        store.setCatBehaviorMode(
-                ownerUUID,
+            store.setCatLevel(ownerUUID, cat.getLevel());
+        }
+
+        if (store.getCatExperience(ownerUUID)
+                != cat.getExperience()) {
+
+            store.setCatExperience(
+                    ownerUUID,
+                    cat.getExperience()
+            );
+        }
+
+        if (store.getCatMeowPower(ownerUUID)
+                != cat.getMeowPower()) {
+
+            store.setCatMeowPower(
+                    ownerUUID,
+                    cat.getMeowPower()
+            );
+        }
+
+        if (store.getCatMeowRank(ownerUUID)
+                != cat.getMeowRank()) {
+
+            store.setCatMeowRank(
+                    ownerUUID,
+                    cat.getMeowRank()
+            );
+        }
+
+        if (!java.util.Objects.equals(
+                store.getCatBehaviorMode(ownerUUID),
                 cat.getBehaviorMode().name()
-        );
+        )) {
 
-        /*
-         * 底蕴与技能
-         */
-        store.setCatTier(
-                ownerUUID,
+            store.setCatBehaviorMode(
+                    ownerUUID,
+                    cat.getBehaviorMode().name()
+            );
+        }
+
+        if (!java.util.Objects.equals(
+                store.getCatTier(ownerUUID),
                 cat.getTier().name()
-        );
+        )) {
+
+            store.setCatTier(
+                    ownerUUID,
+                    cat.getTier().name()
+            );
+        }
 
         List<String> skillNames = new ArrayList<>();
 
@@ -514,31 +572,46 @@ public class CatCache {
             skillNames.add(skill.name());
         }
 
-        store.setCatSkills(ownerUUID, skillNames);
+        if (!skillNames.equals(
+                store.getCatSkills(ownerUUID)
+        )) {
 
-        /*
-         * 状态
-         */
-        store.setCatAffection(
-                ownerUUID,
-                cat.getAffection()
-        );
+            store.setCatSkills(ownerUUID, skillNames);
+        }
 
-        store.setCatHunger(
-                ownerUUID,
-                cat.getHunger()
-        );
+        if (store.getCatAffection(ownerUUID)
+                != cat.getAffection()) {
 
-        store.setCatHealth(
-                ownerUUID,
-                cat.getHealth()
-        );
+            store.setCatAffection(
+                    ownerUUID,
+                    cat.getAffection()
+            );
+        }
 
-        /*
-         * 花色
-         */
+        if (store.getCatHunger(ownerUUID)
+                != cat.getHunger()) {
+
+            store.setCatHunger(
+                    ownerUUID,
+                    cat.getHunger()
+            );
+        }
+
+        if (store.getCatHealth(ownerUUID)
+                != cat.getHealth()) {
+
+            store.setCatHealth(
+                    ownerUUID,
+                    cat.getHealth()
+            );
+        }
+
         if (cat.getVariant() != null &&
-                !cat.getVariant().isBlank()) {
+                !cat.getVariant().isBlank() &&
+                !java.util.Objects.equals(
+                        store.getCatVariant(ownerUUID),
+                        cat.getVariant()
+                )) {
 
             store.setCatVariant(
                     ownerUUID,
@@ -546,28 +619,37 @@ public class CatCache {
             );
         }
 
-        /*
-         * 时间
-         */
-        store.setCatCreatedAt(
-                ownerUUID,
-                cat.getCreatedAt()
-        );
+        if (store.getCatCreatedAt(ownerUUID)
+                != cat.getCreatedAt()) {
 
-        store.setCatLastFedAt(
-                ownerUUID,
-                cat.getLastFedAt()
-        );
+            store.setCatCreatedAt(
+                    ownerUUID,
+                    cat.getCreatedAt()
+            );
+        }
 
-        store.setCatLastInteractionAt(
-                ownerUUID,
-                cat.getLastInteractionAt()
-        );
+        if (store.getCatLastFedAt(ownerUUID)
+                != cat.getLastFedAt()) {
 
-        /*
-         * 当前 Bukkit Entity UUID
-         */
-        if (cat.getEntityUuid() != null) {
+            store.setCatLastFedAt(
+                    ownerUUID,
+                    cat.getLastFedAt()
+            );
+        }
+
+        if (store.getCatLastInteractionAt(ownerUUID)
+                != cat.getLastInteractionAt()) {
+
+            store.setCatLastInteractionAt(
+                    ownerUUID,
+                    cat.getLastInteractionAt()
+            );
+        }
+
+        if (cat.getEntityUuid() != null &&
+                !cat.getEntityUuid().equals(
+                        store.getCatEntityUUID(ownerUUID)
+                )) {
 
             store.setCatEntityUUID(
                     ownerUUID,
@@ -575,9 +657,6 @@ public class CatCache {
             );
         }
 
-        /*
-         * 当前保存位置
-         */
         if (cat.getWorldName() != null &&
                 !cat.getWorldName().isBlank()) {
 
@@ -586,13 +665,27 @@ public class CatCache {
 
             if (world != null) {
 
-                store.setCatLocation(
-                        ownerUUID,
-                        world.getUID(),
-                        cat.getX(),
-                        cat.getY(),
-                        cat.getZ()
-                );
+                boolean locationChanged =
+                        !world.getUID().equals(
+                                store.getCatWorldUUID(ownerUUID)
+                        ) ||
+                                store.getCatX(ownerUUID)
+                                        != cat.getX() ||
+                                store.getCatY(ownerUUID)
+                                        != cat.getY() ||
+                                store.getCatZ(ownerUUID)
+                                        != cat.getZ();
+
+                if (locationChanged) {
+
+                    store.setCatLocation(
+                            ownerUUID,
+                            world.getUID(),
+                            cat.getX(),
+                            cat.getY(),
+                            cat.getZ()
+                    );
+                }
             }
         }
     }

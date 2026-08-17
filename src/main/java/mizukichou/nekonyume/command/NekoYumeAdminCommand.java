@@ -27,7 +27,11 @@ import java.util.logging.Logger;
 
 public class NekoYumeAdminCommand
         implements CommandExecutor, TabCompleter {
-
+    /*
+     * 喵丹单次发放上限（100 组 × 64）。
+     * 防止超大数量导致发放循环冻结主线程。
+     */
+    private static final int MAX_MEOW_DAN_GIVE = 6400;
     /*
      * reloadAction：由装配根注入的"重载配置"动作
      * （NekoNYume::reloadSettings）。
@@ -291,6 +295,23 @@ public class NekoYumeAdminCommand
 
             return true;
         }
+
+        /*
+         * 安全上限：超过则按上限发放并提示。
+         */
+        if (amount > MAX_MEOW_DAN_GIVE) {
+
+            amount = MAX_MEOW_DAN_GIVE;
+
+            sender.sendMessage(
+                    mm.deserialize(
+                            "<yellow>⚠ 单次最多发放 "
+                                    + MAX_MEOW_DAN_GIVE
+                                    + " 个，已按上限处理。</yellow>"
+                    )
+            );
+        }
+
 
         /*
          * 发放：

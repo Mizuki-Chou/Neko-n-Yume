@@ -266,13 +266,12 @@ public class CatBattleTask implements Runnable {
 
                 /*
                  * 恢复期内：
-                 * 1. 持续"幽灵化"（幂等，每 tick 续期）：
-                 *    - AI 冻结：不移动、不产生振动噪声；
-                 *    - 隐身：无粒子，视觉索敌失效；
-                 * 2. 清空怪物目标锁定 + 清零监守者愤怒；
-                 * 3. 每 tick 刷新头顶倒计时悬浮字；
-                 * 4. 禁止一切战斗行为（不扑击、不攻击）；
-                 * 5. 没有缓慢回血（血量固定在 1）。
+                 * 1. 持续"幽灵化"（幂等，每 tick 续期）；
+                 * 2. 禁止一切战斗行为；
+                 * 3. 没有缓慢回血（血量固定在 1）；
+                 * 4. 半径 24 格的怪物目标清扫与倒计时刷新
+                 *    降频到每 20 tick（1 秒）一次，
+                 *    避免 120 秒恢复期产生 240 次全半径扫描。
                  */
                 cat.setAI(
                         false
@@ -289,18 +288,30 @@ public class CatBattleTask implements Runnable {
                         )
                 );
 
-                TargetGuard.clearTargetsOn(
-                        cat,
-                        TARGET_CLEAR_RADIUS
-                );
+                long remainingSeconds =
+                        (long) Math.ceil(
+                                remaining / 1000.0
+                        );
 
-                entityService.refreshCustomName(
-                        cat,
-                        logicalCat
-                );
+                if (battleState.shouldSweepTargets(
+                        entityUuid,
+                        remainingSeconds
+                )) {
+
+                    TargetGuard.clearTargetsOn(
+                            cat,
+                            TARGET_CLEAR_RADIUS
+                    );
+
+                    entityService.refreshCustomName(
+                            cat,
+                            logicalCat
+                    );
+                }
 
                 return;
             }
+
         } else {
 
             /*

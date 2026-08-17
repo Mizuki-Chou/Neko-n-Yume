@@ -802,9 +802,9 @@ public final class NekoNYume extends JavaPlugin {
                 catManager.saveAllCats();
             }
 
-            if (dataManager != null) {
+            if (catStore instanceof YamlCatStore yamlStore) {
 
-                dataManager.saveNow();
+                yamlStore.shutdownAndAwait();
             }
 
         } catch (Exception exception) {
