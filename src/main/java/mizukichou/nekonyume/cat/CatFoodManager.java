@@ -9,7 +9,9 @@ import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -28,84 +30,38 @@ import java.util.UUID;
  * 猫咪食物与喵丹管理。
  *
  * <p>
- * Step 5A-2：构造注入。
- * plugin 仅用于 NamespacedKey 与原始 config 读取；
- * 数据读写走 CatStore，猫加载走 CatCache，
- * 数值走 PluginConfig，成长走 CatProgressionService。
+ * plugin 仅用于 NamespacedKey 与原始 config 读取。
  * </p>
  *
  * <p>
- * 喵丹批次（generation）：
- * 只有批次号与当前一致的喵丹才有效；
- * 旧版发放（无批次号）或过期批次的喵丹一律失效。
+ * 喵丹：PDC 品质 + 批次；批次不匹配即过期。
+ * 0.6.2：吃喵丹有概率提升底蕴。
  * </p>
  */
 public class CatFoodManager {
 
     private static final int MAX_HUNGER = 100;
 
-    /*
-     * ============================================================
-     * 喵丹
-     * ============================================================
-     *
-     * 稳定获得喵力的珍贵道具。
-     * 五种品质：平凡 / 精良 / 独特 / 卓越 / 至极。
-     *
-     * 本轮只提供管理指令发放；
-     * 合成配方以后单独立项。
-     */
-
     private static final int MEOW_DAN_MAX_STACK = 64;
 
-    /*
-     * 喵丹默认批次号（config: items.meowdan.generation）。
-     */
     private static final int MEOW_DAN_DEFAULT_GENERATION = 1;
 
-    /*
-     * MiniMessage 实例。
-     *
-     * 全局消息格式统一为 MiniMessage；
-     * 玩家可控文本一律用 Component.text 拼接，
-     * 避免标签注入。
-     */
     private final MiniMessage mm =
             MiniMessage.miniMessage();
 
-    /*
-     * 喵力概率随机源。
-     */
     private final Random random =
             new Random();
 
-    /*
-     * 食物 → 饱食度。
-     *
-     * 数据来自 config.yml 的 food.values，
-     * 由 PluginConfig 读取。
-     */
     private final Map<Material, Integer> foodValues =
             new EnumMap<>(Material.class);
 
-    /*
-     * 注入依赖。
-     */
     private final JavaPlugin plugin;
     private final CatStore store;
     private final CatCache cache;
     private final PluginConfig config;
     private final CatProgressionService progression;
 
-    /*
-     * 喵丹 PDC 标记。
-     * 存储品质枚举名（STRING）。
-     */
     private final NamespacedKey meowDanKey;
-
-    /*
-     * 喵丹批次 PDC 标记（INTEGER）。
-     */
     private final NamespacedKey meowDanGenKey;
 
     public CatFoodManager(
@@ -137,12 +93,6 @@ public class CatFoodManager {
         registerFoods();
     }
 
-    /*
-     * ============================================================
-     * 注册食物
-     * ============================================================
-     */
-
     private void registerFoods() {
 
         foodValues.putAll(
@@ -150,26 +100,12 @@ public class CatFoodManager {
         );
     }
 
-    /*
-     * ============================================================
-     * 重载食物表
-     * ============================================================
-     *
-     * /nekoyume reload 时由主类调用。
-     */
-
     public void reloadFoods() {
 
         foodValues.clear();
 
         registerFoods();
     }
-
-    /*
-     * ============================================================
-     * 判断是否为 Neko n' Yume 猫咪食物
-     * ============================================================
-     */
 
     public boolean isFood(
             ItemStack item
@@ -188,12 +124,6 @@ public class CatFoodManager {
         );
     }
 
-    /*
-     * ============================================================
-     * 获取食物饱食度
-     * ============================================================
-     */
-
     public int getFoodValue(
             ItemStack item
     ) {
@@ -208,14 +138,6 @@ public class CatFoodManager {
         );
     }
 
-    /*
-     * ============================================================
-     * 获取当前注册的食物
-     * ============================================================
-     *
-     * 返回只读 Map，方便以后 GUI / 命令查看食物数据。
-     */
-
     public Map<Material, Integer> getFoodValues() {
 
         return Collections.unmodifiableMap(
@@ -223,26 +145,13 @@ public class CatFoodManager {
         );
     }
 
-    /*
-     * ============================================================
-     * 喵丹 - PDC 标记
-     * ============================================================
-     */
-
     public NamespacedKey getMeowDanKey() {
         return meowDanKey;
     }
 
     /*
-     * ============================================================
-     * 品质顺序（与枚举声明顺序无关）
-     * ============================================================
-     *
-     * 按"喵力收益升序"排列品质：
+     * 品质顺序（与枚举声明顺序无关）：
      * 平凡 → 精良 → 独特 → 卓越 → 至极。
-     *
-     * 合成升级逻辑依赖此顺序，
-     * 不依赖 MeowDanQuality.values() 的声明顺序。
      */
     public static java.util.List<MeowDanQuality>
     orderedQualities() {
@@ -266,12 +175,6 @@ public class CatFoodManager {
 
         return list;
     }
-
-    /*
-     * ============================================================
-     * 喵丹 - 创建
-     * ============================================================
-     */
 
     public ItemStack createMeowDan(
             MeowDanQuality quality,
@@ -320,11 +223,6 @@ public class CatFoodManager {
                     )
             );
 
-            /*
-             * 自定义材质编号。
-             * 可在 config.yml 的
-             * items.meowdan.custom-model-data.<品质> 中覆盖。
-             */
             meta.setCustomModelData(
                     plugin.getConfig()
                             .getInt(
@@ -337,9 +235,6 @@ public class CatFoodManager {
                             )
             );
 
-            /*
-             * PDC 存储品质枚举名。
-             */
             meta.getPersistentDataContainer()
                     .set(
                             meowDanKey,
@@ -347,9 +242,6 @@ public class CatFoodManager {
                             quality.name()
                     );
 
-            /*
-             * 批次号：重装/换代后按批次识别。
-             */
             meta.getPersistentDataContainer()
                     .set(
                             meowDanGenKey,
@@ -364,19 +256,6 @@ public class CatFoodManager {
 
         return item;
     }
-
-    /*
-     * ============================================================
-     * 喵丹 - 判定
-     * ============================================================
-     *
-     * 有效喵丹必须同时满足：
-     * 1. 带品质标记；
-     * 2. 带批次号，且批次号与当前一致。
-     *
-     * 旧版物品（无批次号）与过期批次
-     * 一律视为普通金粒。
-     */
 
     public boolean isMeowDan(
             ItemStack item
@@ -415,11 +294,6 @@ public class CatFoodManager {
                 generation == currentMeowDanGeneration();
     }
 
-    /**
-     * 是否"已失效的喵丹"：
-     * 带品质标记但批次缺失 / 不匹配。
-     * 用于给持有过期喵丹的玩家明确反馈。
-     */
     public boolean isLegacyMeowDan(
             ItemStack item
     ) {
@@ -445,9 +319,6 @@ public class CatFoodManager {
                 !isMeowDan(item);
     }
 
-    /*
-     * 当前批次号（config: items.meowdan.generation，默认 1）。
-     */
     private int currentMeowDanGeneration() {
 
         return plugin.getConfig()
@@ -456,15 +327,6 @@ public class CatFoodManager {
                         MEOW_DAN_DEFAULT_GENERATION
                 );
     }
-
-    /*
-     * ============================================================
-     * 喵丹 - 读取品质
-     * ============================================================
-     *
-     * 未知 / 非法品质返回 null，
-     * 调用方应拒绝使用。
-     */
 
     public MeowDanQuality getMeowDanQuality(
             ItemStack item
@@ -499,15 +361,6 @@ public class CatFoodManager {
         return null;
     }
 
-    /*
-     * ============================================================
-     * 喵丹 - 使用
-     * ============================================================
-     *
-     * 效果由品质决定。
-     * 不计入每日前 3 次喂食机会。
-     */
-
     public boolean feedMeowDan(
             Player player,
             ItemStack item
@@ -531,9 +384,6 @@ public class CatFoodManager {
         UUID playerUUID =
                 player.getUniqueId();
 
-        /*
-         * 玩家必须拥有猫。
-         */
         if (!store.hasCat(playerUUID)) {
             return false;
         }
@@ -545,9 +395,6 @@ public class CatFoodManager {
             return false;
         }
 
-        /*
-         * 好感。
-         */
         int oldAffection =
                 cat.getAffection();
 
@@ -564,28 +411,18 @@ public class CatFoodManager {
                 cat.getAffection()
         );
 
-        /*
-         * 经验（统一入口，含升级反馈）。
-         */
         progression.gainExperience(
                 player,
                 cat,
                 quality.getXpGain()
         );
 
-        /*
-         * 喵力（统一入口，含喵光一闪与升阶反馈）。
-         */
         progression.grantMeowPower(
                 player,
                 cat,
                 quality.getMeowPowerGain()
         );
 
-        /*
-         * 消耗喵丹。
-         * 创造模式不消耗。
-         */
         if (player.getGameMode() != GameMode.CREATIVE) {
 
             if (item.getAmount() <= 1) {
@@ -600,9 +437,6 @@ public class CatFoodManager {
             }
         }
 
-        /*
-         * 音效。
-         */
         player.playSound(
                 player.getLocation(),
                 Sound.ENTITY_GENERIC_EAT,
@@ -610,10 +444,6 @@ public class CatFoodManager {
                 1.0f
         );
 
-        /*
-         * 提示。
-         * 名字是玩家可控文本，用 Component.text 拼接。
-         */
         player.sendMessage(
                 mm.deserialize(
                         "<gradient:#c4b5fd:#a78bfa>✨ </gradient>"
@@ -649,21 +479,182 @@ public class CatFoodManager {
             );
         }
 
+        /*
+         * 底蕴升阶判定（0.6.2）。
+         */
+        tryTierUpgrade(
+                player,
+                cat,
+                quality,
+                playerUUID
+        );
+
         return true;
+    }
+
+    /*
+     * ============================================================
+     * 底蕴升阶（吃喵丹触发，0.6.2）
+     * ============================================================
+     *
+     * 普通：卓越 50% → 稀有；至极 100% → 稀有
+     * 稀有：卓越无效；至极 50% → 独特
+     * 独特：至极 20% → 梦幻
+     * 梦幻：封顶
+     */
+    private void tryTierUpgrade(
+            Player player,
+            Cat cat,
+            MeowDanQuality quality,
+            UUID playerUUID
+    ) {
+
+        java.util.List<MeowDanQuality> ordered =
+                orderedQualities();
+
+        int qualityIndex =
+                ordered.indexOf(
+                        quality
+                );
+
+        boolean isEpic =
+                qualityIndex == 3;
+
+        boolean isLegendary =
+                qualityIndex >= 4;
+
+        CatTier newTier = null;
+        int chance = 0;
+
+        switch (cat.getTier()) {
+
+            case COMMON -> {
+
+                if (isLegendary) {
+
+                    newTier = CatTier.RARE;
+                    chance = 100;
+
+                } else if (isEpic) {
+
+                    newTier = CatTier.RARE;
+                    chance = 50;
+                }
+            }
+
+            case RARE -> {
+
+                if (isLegendary) {
+
+                    newTier = CatTier.UNIQUE;
+                    chance = 50;
+                }
+            }
+
+            case UNIQUE -> {
+
+                if (isLegendary) {
+
+                    newTier = CatTier.DREAM;
+                    chance = 20;
+                }
+            }
+
+            case DREAM -> {
+                return;
+            }
+        }
+
+        if (newTier == null) {
+            return;
+        }
+
+        boolean success =
+                chance >= 100 ||
+                        random.nextInt(100) < chance;
+
+        if (!success) {
+
+            player.sendMessage(
+                    mm.deserialize(
+                            "<gray>喵丹的力量在体内流转，但底蕴没有变化…</gray>"
+                    )
+            );
+
+            return;
+        }
+
+        cat.setTier(
+                newTier
+        );
+
+        store.setCatTier(
+                playerUUID,
+                newTier.name()
+        );
+
+        progression.syncSkillSlots(
+                player,
+                cat
+        );
+
+        player.sendMessage(
+                mm.deserialize(
+                        "<gradient:#c4b5fd:#a78bfa>🌟 底蕴升华!</gradient>"
+                ).append(
+                        Component.text(
+                                " " + cat.getName()
+                        )
+                ).append(
+                        mm.deserialize(
+                                "<white> 的底蕴提升到了 </white>"
+                        )
+                ).append(
+                        Component.text(
+                                newTier.getDisplayName()
+                        )
+                )
+        );
+
+        player.playSound(
+                player.getLocation(),
+                Sound.UI_TOAST_CHALLENGE_COMPLETE,
+                1.0f,
+                1.0f
+        );
+
+        UUID entityUuid =
+                cat.getEntityUuid();
+
+        if (entityUuid != null) {
+
+            Entity entity =
+                    Bukkit.getEntity(
+                            entityUuid
+                    );
+
+            if (entity != null &&
+                    entity.isValid()) {
+
+                entity.getWorld()
+                        .spawnParticle(
+                                Particle.END_ROD,
+                                entity.getLocation()
+                                        .add(0, 1, 0),
+                                50,
+                                0.5,
+                                0.5,
+                                0.5,
+                                0.05
+                        );
+            }
+        }
     }
 
     /*
      * ============================================================
      * 喂猫
      * ============================================================
-     *
-     * true  = 成功喂食
-     * false = 不能喂
-     *
-     * 现在 Cat 是运行时唯一真相。
-     *
-     * 数值（基础好感 / 喵力概率 / 每日机会次数）
-     * 全部来自 config.yml。
      */
 
     public boolean feedCat(
@@ -677,9 +668,6 @@ public class CatFoodManager {
             return false;
         }
 
-        /*
-         * 必须是 Neko n' Yume 注册食物。
-         */
         if (!isFood(item)) {
             return false;
         }
@@ -687,18 +675,9 @@ public class CatFoodManager {
         UUID playerUUID =
                 player.getUniqueId();
 
-        /*
-         * 玩家必须拥有猫。
-         */
         if (!store.hasCat(playerUUID)) {
             return false;
         }
-
-        /*
-         * ========================================================
-         * 获取运行时 Cat
-         * ========================================================
-         */
 
         Cat cat =
                 cache.loadCat(player);
@@ -707,18 +686,9 @@ public class CatFoodManager {
             return false;
         }
 
-        /*
-         * ========================================================
-         * 当前饱食度
-         * ========================================================
-         */
-
         int currentHunger =
                 cat.getHunger();
 
-        /*
-         * 已经吃饱。
-         */
         if (currentHunger >= MAX_HUNGER) {
 
             player.sendMessage(
@@ -730,12 +700,6 @@ public class CatFoodManager {
             return false;
         }
 
-        /*
-         * ========================================================
-         * 食物价值
-         * ========================================================
-         */
-
         int foodValue =
                 getFoodValue(
                         item
@@ -745,14 +709,6 @@ public class CatFoodManager {
             return false;
         }
 
-        /*
-         * 性格修正：
-         *
-         * 挑食猫的食物效果打折扣。
-         *
-         * 经验与饱食度使用修正后的实际价值，
-         * 保持一致。
-         */
         CatPersonality personality =
                 cat.getPersonality();
 
@@ -766,19 +722,6 @@ public class CatFoodManager {
         if (effectiveFoodValue <= 0) {
             return false;
         }
-
-        /*
-         * ========================================================
-         * 计算实际增加值
-         * ========================================================
-         *
-         * 例如：
-         *
-         * 当前 95
-         * 食物 +20
-         *
-         * 实际只能 +5。
-         */
 
         int newHunger =
                 Math.min(
@@ -795,23 +738,10 @@ public class CatFoodManager {
             return false;
         }
 
-        /*
-         * ========================================================
-         * 修改运行时 Cat
-         * ========================================================
-         */
-
         cat.setHunger(
                 newHunger
         );
 
-        /*
-         * 喂食增加好感度：
-         * 基础（config: affection.feed-base）+ 性格额外加成。
-         *
-         * 计算实际增加值，
-         * 好感度封顶 100 时如实反馈。
-         */
         int oldAffection =
                 cat.getAffection();
 
@@ -825,27 +755,12 @@ public class CatFoodManager {
                 cat.getAffection()
                         - oldAffection;
 
-        /*
-         * 记录最后喂食时间。
-         */
         cat.markFed();
-
-        /*
-         * ========================================================
-         * 喂食后重新开始饥饿计时
-         * ========================================================
-         */
 
         store.setCatHungerLastUpdate(
                 playerUUID,
                 System.currentTimeMillis()
         );
-
-        /*
-         * ========================================================
-         * 持久化运行时状态
-         * ========================================================
-         */
 
         store.setCatHunger(
                 playerUUID,
@@ -862,14 +777,6 @@ public class CatFoodManager {
                 cat.getLastFedAt()
         );
 
-        /*
-         * ========================================================
-         * 消耗食物
-         * ========================================================
-         *
-         * 创造模式不消耗。
-         */
-
         if (player.getGameMode() != GameMode.CREATIVE) {
 
             if (item.getAmount() <= 1) {
@@ -884,15 +791,6 @@ public class CatFoodManager {
             }
         }
 
-        /*
-         * ========================================================
-         * 经验
-         * ========================================================
-         *
-         * 喂食经验 = 实际食物价值。
-         * 统一走 CatProgressionService.gainExperience()。
-         */
-
         int xpGain =
                 effectiveFoodValue;
 
@@ -901,18 +799,6 @@ public class CatFoodManager {
                 cat,
                 xpGain
         );
-
-        /*
-         * ========================================================
-         * 喵力概率
-         * ========================================================
-         *
-         * 每天前 N 次成功喂食才有机会
-         * （N = config: meow.feed-chance-limit）。
-         *
-         * 基础概率 config: meow.feed-chance
-         * + 性格偏移（百分点）。
-         */
 
         int meowGain = 0;
 
@@ -942,19 +828,9 @@ public class CatFoodManager {
             }
         }
 
-        /*
-         * 成功喂食计数 +1。
-         * （无论是否获得喵力）
-         */
         store.addCatFeedCount(
                 playerUUID
         );
-
-        /*
-         * ========================================================
-         * 触发事件
-         * ========================================================
-         */
 
         Bukkit.getPluginManager()
                 .callEvent(
@@ -969,12 +845,6 @@ public class CatFoodManager {
                         )
                 );
 
-        /*
-         * ========================================================
-         * 获取显示信息
-         * ========================================================
-         */
-
         String catName =
                 cat.getName();
 
@@ -982,18 +852,6 @@ public class CatFoodManager {
                 getFoodName(
                         item.getType()
                 );
-
-        /*
-         * ========================================================
-         * 玩家提示
-         * ========================================================
-         *
-         * catName 是玩家可控文本，
-         * 用 Component.text 拼接，
-         * 避免 MiniMessage 标签注入。
-         *
-         * foodName 来自内部常量表，可以安全走 MiniMessage。
-         */
 
         player.sendMessage(
                 mm.deserialize(
@@ -1035,12 +893,6 @@ public class CatFoodManager {
 
         return true;
     }
-
-    /*
-     * ============================================================
-     * 获取食物显示名称
-     * ============================================================
-     */
 
     private String getFoodName(
             Material material

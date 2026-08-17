@@ -9,8 +9,10 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.entity.Boss;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Warden;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
@@ -30,22 +32,12 @@ import java.util.logging.Logger;
  * </p>
  *
  * <p>
- * 玩法：
- * 1. 世界开关存于世界 PDC（持久化，重启不丢），
- *    管理员用 /nyadmin mumanight &lt;on|off&gt; 切换（对当前世界生效）；
- * 2. 每晚有概率（默认 20%）触发梦魔之夜；
- * 3. 触发后该世界野外怪物：血量 ×5、攻击 ×3、
- *    主手随机钻石剑 / 下界合金剑（掉落率 0）；
- * 4. 被强化的怪物死亡有概率掉落喵丹（默认 12%，
- *    品质权重 75/20/4/1/0，至极绝不出）；
- * 5. 黎明到来怪物全部还原。
+ * 0.6.2：监守者与 Boss 不强化；
+ * 掉落分布 80/16/3/1/0。
  * </p>
  */
 public class MumaNightManager {
 
-    /*
-     * 配置路径。
-     */
     private static final String CONFIG_CHANCE =
             "muma-night.chance";
 
@@ -58,16 +50,9 @@ public class MumaNightManager {
     private static final String CONFIG_DROP_CHANCE =
             "muma-night.meowdan-drop-chance";
 
-    /*
-     * PDC 标记。
-     */
     private final NamespacedKey buffedKey;
     private final NamespacedKey origHealthKey;
     private final NamespacedKey origDamageKey;
-
-    /*
-     * 世界开关 PDC Key（world 级）。
-     */
     private final NamespacedKey enabledKey;
 
     private final JavaPlugin plugin;
@@ -80,21 +65,12 @@ public class MumaNightManager {
     private final Random random =
             new Random();
 
-    /*
-     * 当前处于梦魔之夜的世界。
-     */
     private final Set<UUID> activeWorlds =
             new HashSet<>();
 
-    /*
-     * 今晚已经掷过骰子的世界（防止同一晚重复判定）。
-     */
     private final Set<UUID> rolledThisNight =
             new HashSet<>();
 
-    /*
-     * 启动后是否已做过残留标记清理。
-     */
     private boolean initialCleanupDone;
 
     public MumaNightManager(
@@ -131,12 +107,6 @@ public class MumaNightManager {
                         "muma_night_enabled"
                 );
     }
-
-    /*
-     * ============================================================
-     * 世界开关（存于世界 PDC）
-     * ============================================================
-     */
 
     public boolean isEnabled(
             World world
@@ -195,17 +165,8 @@ public class MumaNightManager {
         }
     }
 
-    /*
-     * ============================================================
-     * 周期判定（由 MumaNightTask 每 5 秒调用）
-     * ============================================================
-     */
-
     public void tick() {
 
-        /*
-         * 启动清理：把上次会话残留的强化标记全部还原。
-         */
         if (!initialCleanupDone) {
 
             initialCleanupDone = true;
@@ -261,9 +222,6 @@ public class MumaNightManager {
                 continue;
             }
 
-            /*
-             * 夜幕降临：每夜只掷一次骰子。
-             */
             if (!rolledThisNight.contains(
                     world.getUID()
             )) {
@@ -296,12 +254,6 @@ public class MumaNightManager {
         }
     }
 
-    /*
-     * ============================================================
-     * 状态查询
-     * ============================================================
-     */
-
     public boolean isActive(
             World world
     ) {
@@ -324,12 +276,6 @@ public class MumaNightManager {
                         );
     }
 
-    /*
-     * ============================================================
-     * 强化 / 还原
-     * ============================================================
-     */
-
     public void buffMonster(
             Monster monster
     ) {
@@ -342,25 +288,29 @@ public class MumaNightManager {
             return;
         }
 
+        /*
+         * 0.6.2：监守者与 Boss 不强化。
+         */
+        if (monster instanceof Warden ||
+                monster instanceof Boss) {
+
+            return;
+        }
+
         double healthMult =
                 plugin.getConfig()
                         .getDouble(
                                 CONFIG_HEALTH_MULT,
-                                5.0
+                                4.0
                         );
 
         double damageMult =
                 plugin.getConfig()
                         .getDouble(
                                 CONFIG_DAMAGE_MULT,
-                                3.0
+                                2.5
                         );
 
-        /*
-         * Paper 26.2 属性常量：
-         * Attribute.MAX_HEALTH / Attribute.ATTACK_DAMAGE
-         * （GENERIC_ 前缀已移除）。
-         */
         AttributeInstance maxHealth =
                 monster.getAttribute(
                         Attribute.MAX_HEALTH
@@ -371,11 +321,6 @@ public class MumaNightManager {
                         Attribute.ATTACK_DAMAGE
                 );
 
-        /*
-         * 原始值兜底：
-         * getMaxHealth() 已弃用，这里用当前血量兜底
-         * （几乎所有怪物都拥有 MAX_HEALTH，兜底极少触发）。
-         */
         double origHealth =
                 maxHealth != null
                         ? maxHealth.getBaseValue()
@@ -434,10 +379,6 @@ public class MumaNightManager {
             );
         }
 
-        /*
-         * 主手随机钻石剑 / 下界合金剑；
-         * 掉落率 0——武器绝不会掉给玩家。
-         */
         monster.getEquipment()
                 .setItemInMainHand(
                         new ItemStack(
@@ -534,12 +475,6 @@ public class MumaNightManager {
         pdc.remove(origDamageKey);
     }
 
-    /*
-     * ============================================================
-     * 喵丹掉落
-     * ============================================================
-     */
-
     public void maybeDropMeowDan(
             Monster monster
     ) {
@@ -552,7 +487,7 @@ public class MumaNightManager {
                 plugin.getConfig()
                         .getDouble(
                                 CONFIG_DROP_CHANCE,
-                                0.12
+                                0.15
                         );
 
         if (random.nextDouble() >= chance) {
@@ -577,10 +512,8 @@ public class MumaNightManager {
     }
 
     /*
-     * 品质权重（按 MeowDanQuality.values() 顺序）：
-     * 平凡 75 / 精良 20 / 独特 4 / 卓越 1 / 至极 0。
-     *
-     * 至极永远不会从梦魔之夜掉落。
+     * 品质权重（按品质升序）：
+     * 平凡 80 / 精良 16 / 独特 3 / 卓越 1 / 至极 0。
      */
     private int qualityWeight(
             int index
@@ -588,9 +521,9 @@ public class MumaNightManager {
 
         return switch (index) {
 
-            case 0 -> 75;
-            case 1 -> 20;
-            case 2 -> 4;
+            case 0 -> 80;
+            case 1 -> 16;
+            case 2 -> 3;
             case 3 -> 1;
             default -> 0;
         };
@@ -637,10 +570,6 @@ public class MumaNightManager {
                             i
                     );
 
-            /*
-             * 权重为 0 的品质（至极）直接跳过：
-             * 它永远不会被选中。
-             */
             if (weight <= 0) {
                 continue;
             }
@@ -659,18 +588,8 @@ public class MumaNightManager {
             }
         }
 
-        /*
-         * 理论不可达：兜底返回第一个权重为正的品质，
-         * 绝不落到权重为 0 的品质上。
-         */
         return fallback;
     }
-
-    /*
-     * ============================================================
-     * 内部工具
-     * ============================================================
-     */
 
     private void activate(
             World world

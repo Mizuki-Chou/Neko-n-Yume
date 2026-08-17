@@ -2,6 +2,7 @@ package mizukichou.nekonyume.cat;
 
 import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.storage.CatStore;
+import org.bukkit.attribute.Attribute;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
@@ -1769,6 +1770,46 @@ public class CatEntityService {
          * 受伤减免与致死保护由 CatEntityListener 处理。
          */
         cat.setInvulnerable(false);
+
+        /*
+         * 0.6.2：最大生命按等级补刷
+         * （离线升级 / 老存档在下次绑定或恢复时同步）。
+         */
+        Cat logical =
+                cache.getCat(
+                        player.getUniqueId()
+                );
+
+        if (logical != null) {
+
+            double scaled =
+                    10.0
+                            + logical.getLevel()
+                            / 4.0;
+
+            org.bukkit.attribute.AttributeInstance attribute =
+                    cat.getAttribute(
+                            Attribute.MAX_HEALTH
+                    );
+
+            if (attribute != null &&
+                    Math.abs(
+                            attribute.getBaseValue()
+                                    - scaled
+                    ) > 0.01) {
+
+                attribute.setBaseValue(
+                        scaled
+                );
+
+                if (cat.getHealth() > scaled) {
+
+                    cat.setHealth(
+                            scaled
+                    );
+                }
+            }
+        }
 
         cat.getPersistentDataContainer()
                 .set(

@@ -39,13 +39,9 @@ public class CatEntityListener implements Listener {
 
     /*
      * 恢复期内清理怪物目标的半径（格）。
-     * 覆盖常规索敌与监守者愤怒系统的生效范围。
      */
     private static final double TARGET_CLEAR_RADIUS = 24.0;
 
-    /*
-     * plugin 仅用于调度器（延迟 PDC 检查）。
-     */
     private final JavaPlugin plugin;
     private final Logger logger;
     private final CatStore store;
@@ -101,15 +97,6 @@ public class CatEntityListener implements Listener {
             return;
         }
 
-        /*
-         * 注意：
-         * 新生成的猫在 spawnEntity 时触发本事件，
-         * 此时 updateCat() 还没有写入 PDC。
-         *
-         * 所以 PDC 检查必须放在延迟任务里，
-         * 而不是事件触发的那一刻。
-         * 否则新生成的正式实体永远无法通过检查。
-         */
         Bukkit.getScheduler()
                 .runTask(
                         plugin,
@@ -120,9 +107,6 @@ public class CatEntityListener implements Listener {
                                 return;
                             }
 
-                            /*
-                             * 这里只处理我们的猫
-                             */
                             if (!cat.getPersistentDataContainer()
                                     .has(
                                             catKey,
@@ -157,9 +141,6 @@ public class CatEntityListener implements Listener {
                                 return;
                             }
 
-                            /*
-                             * 玩家已经没有宠物数据
-                             */
                             if (!store.hasCat(playerUUID)) {
                                 return;
                             }
@@ -169,10 +150,6 @@ public class CatEntityListener implements Listener {
                                             playerUUID
                                     );
 
-                            /*
-                             * 当前没有正式实体。
-                             * 让这个实体成为正式实体。
-                             */
                             if (currentUUID == null) {
 
                                 store.setCatEntityUUID(
@@ -180,9 +157,6 @@ public class CatEntityListener implements Listener {
                                         cat.getUniqueId()
                                 );
 
-                                /*
-                                 * 同步运行时缓存。
-                                 */
                                 mizukichou.nekonyume.cat.Cat logicalCat =
                                         cache.getCat(
                                                 playerUUID
@@ -198,10 +172,6 @@ public class CatEntityListener implements Listener {
                                 return;
                             }
 
-                            /*
-                             * UUID 相同：
-                             * 正常实体。
-                             */
                             if (currentUUID.equals(
                                     cat.getUniqueId()
                             )) {
@@ -209,10 +179,6 @@ public class CatEntityListener implements Listener {
                                 return;
                             }
 
-                            /*
-                             * UUID 不同：
-                             * 这是旧实体 / 重复实体。
-                             */
                             cat.remove();
                         }
                 );
@@ -222,12 +188,6 @@ public class CatEntityListener implements Listener {
      * ============================================================
      * 协同战斗（Issue #6）
      * ============================================================
-     *
-     * 主人攻击任意活物 → 猫协同攻击该目标；
-     * 主人被怪物攻击 → 猫反击该目标。
-     *
-     * 目标写入 CatBattleState，
-     * 由 CatBattleTask 在下一个战斗周期接管。
      */
 
     @EventHandler(
@@ -242,9 +202,6 @@ public class CatEntityListener implements Listener {
             return;
         }
 
-        /*
-         * 1. 主人被怪物攻击 → 反击。
-         */
         if (event.getEntity() instanceof Player player) {
 
             Entity attacker =
@@ -265,12 +222,6 @@ public class CatEntityListener implements Listener {
             return;
         }
 
-        /*
-         * 2. 主人攻击任意活物 → 协同。
-         *
-         * 和平生物也算：主人出手了，猫就帮忙。
-         * 排除：玩家（PVP 不介入）与本插件的猫。
-         */
         if (event.getEntity() instanceof LivingEntity living &&
                 !(living instanceof Player) &&
                 event.getDamager() instanceof Player player &&
@@ -307,9 +258,6 @@ public class CatEntityListener implements Listener {
             LivingEntity target
     ) {
 
-        /*
-         * 只有拥有猫咪数据的玩家才需要记录。
-         */
         if (!store.hasCat(
                 player.getUniqueId()
         )) {
@@ -323,9 +271,6 @@ public class CatEntityListener implements Listener {
         );
     }
 
-    /*
-     * 目标是否为本插件的猫实体。
-     */
     private boolean isOurCat(
             Entity entity
     ) {
@@ -345,13 +290,6 @@ public class CatEntityListener implements Listener {
      * ============================================================
      * 恢复期目标屏蔽：怪物视猫为不存在
      * ============================================================
-     *
-     * 拦截标准索敌路径：
-     * 任何怪物尝试锁定一只"恢复期中的本插件猫"时，
-     * 直接取消目标获取。
-     *
-     * 非标准路径（如监守者愤怒系统、受伤前已锁定）
-     * 由 CatBattleTask 的周期性扫荡 + TargetGuard 兜底。
      */
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -365,10 +303,6 @@ public class CatEntityListener implements Listener {
             return;
         }
 
-        /*
-         * 只保护我们自己的、处于恢复期的猫；
-         * 其他猫完全不受影响（保留原版索敌行为）。
-         */
         if (!isOurCat(cat)) {
             return;
         }
@@ -387,17 +321,6 @@ public class CatEntityListener implements Listener {
      * ============================================================
      * 猫受伤与致死保护
      * ============================================================
-     *
-     * 战斗开启时：
-     * - 受伤减免（轻毛 / 铁壁）
-     * - 致死拦截：进入 120 秒受伤恢复期
-     *   （1 血保底、AI 冻结、隐身、
-     *     怪物视猫为不存在、悬浮字倒计时、
-     *     结束满血复活；恢复期内重复受伤不重置倒计时）
-     * - 永恒：满血重生（冷却内）
-     *
-     * 战斗关闭时：
-     * 猫保持无敌（旧行为）。
      */
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -411,9 +334,6 @@ public class CatEntityListener implements Listener {
             return;
         }
 
-        /*
-         * 只处理我们的猫。
-         */
         if (!cat.getPersistentDataContainer()
                 .has(
                         catKey,
@@ -423,9 +343,6 @@ public class CatEntityListener implements Listener {
             return;
         }
 
-        /*
-         * 战斗关闭：猫恢复无敌。
-         */
         if (!config.isBattleEnabled()) {
 
             event.setCancelled(
@@ -440,9 +357,6 @@ public class CatEntityListener implements Listener {
                         cat
                 );
 
-        /*
-         * 受伤减免。
-         */
         double reduction = 0.0;
 
         if (logicalCat != null) {
@@ -470,9 +384,6 @@ public class CatEntityListener implements Listener {
             );
         }
 
-        /*
-         * 致死保护。
-         */
         double finalHealth =
                 cat.getHealth()
                         - event.getFinalDamage();
@@ -489,14 +400,6 @@ public class CatEntityListener implements Listener {
             );
         }
     }
-
-    /*
-     * 解析猫对应的逻辑 Cat。
-     *
-     * 主人离线时缓存中可能没有逻辑猫，
-     * 这里按 PDC 的 owner UUID 加载一次，
-     * 保证减伤与致死保护技能在离线场景同样生效。
-     */
 
     private mizukichou.nekonyume.cat.Cat resolveLogicalCat(
             Cat cat
@@ -578,10 +481,6 @@ public class CatEntityListener implements Listener {
                         cat.getUniqueId()
                 );
 
-                /*
-                 * 恢复 AI 与可见性
-                 * （防止在恢复期冻结状态下触发永恒）。
-                 */
                 cat.setAI(true);
 
                 cat.removePotionEffect(
@@ -613,10 +512,7 @@ public class CatEntityListener implements Listener {
         }
 
         /*
-         * 已经处于恢复期：
-         * 只保底 1 血，绝不重置恢复倒计时。
-         * （否则高伤怪物持续攻击会让猫永远无法复活——
-         *   这正是打坚守者只打一下就不动的根因。）
+         * 已经处于恢复期：只保底 1 血，绝不重置倒计时。
          */
         if (battleState.isRecovering(
                 cat.getUniqueId()
@@ -633,8 +529,7 @@ public class CatEntityListener implements Listener {
         }
 
         /*
-         * 首次进入恢复期：
-         * 1 血保底 + 倒计时 + 悬浮字 + 主人提示。
+         * 首次进入恢复期。
          */
         cat.setHealth(
                 1.0
@@ -645,11 +540,11 @@ public class CatEntityListener implements Listener {
                         * 1000L;
 
         /*
-         * 九命：恢复期缩短为四分之一。
+         * 九命：恢复期固定 20 秒（0.6.2）。
          */
         if (hasNineLives) {
 
-            recoveryMillis /= 4;
+            recoveryMillis = 20_000L;
         }
 
         battleState.markRecovering(
@@ -657,14 +552,6 @@ public class CatEntityListener implements Listener {
                 recoveryMillis
         );
 
-        /*
-         * 恢复期"幽灵化"：
-         * - AI 冻结：不移动、不发声，
-         *   不给监守者任何振动信号；
-         * - 隐身（无粒子）：视觉/感知类索敌失效。
-         * 配合 TargetGuard 的清目标 + 清愤怒，
-         * 怪物才会真正当作猫不存在。
-         */
         cat.setAI(
                 false
         );
@@ -680,10 +567,6 @@ public class CatEntityListener implements Listener {
                 )
         );
 
-        /*
-         * 立刻清空当前以它为目标的怪物：
-         * 让怪物即刻"当作猫不存在"。
-         */
         TargetGuard.clearTargetsOn(
                 cat,
                 TARGET_CLEAR_RADIUS
@@ -694,17 +577,11 @@ public class CatEntityListener implements Listener {
                         recoveryMillis / 1000.0
                 );
 
-        /*
-         * 悬浮字：立即刷新头顶名称。
-         */
         entityService.refreshCustomName(
                 cat,
                 logicalCat
         );
 
-        /*
-         * 主人提示。
-         */
         if (logicalCat != null) {
 
             Player owner =
@@ -746,17 +623,6 @@ public class CatEntityListener implements Listener {
                 );
     }
 
-    /*
-     * ============================================================
-     * 猫死亡
-     * ============================================================
-     *
-     * 致死保护之外的死亡路径（例如 /kill）：
-     * 只清绑定，
-     * 逻辑猫与全部存档数据保留。
-     * 玩家执行 /nekoyume summon 即可恢复。
-     */
-
     @EventHandler(priority = EventPriority.MONITOR)
     public void onEntityDeath(
             EntityDeathEvent event
@@ -771,16 +637,6 @@ public class CatEntityListener implements Listener {
         );
     }
 
-    /*
-     * ============================================================
-     * 世界加载
-     * ============================================================
-     *
-     * 玩家登录时，猫咪所在世界可能尚未加载。
-     * 世界加载完成后，
-     * 重试等待中的实体恢复。
-     */
-
     @EventHandler
     public void onWorldLoad(
             WorldLoadEvent event
@@ -791,22 +647,6 @@ public class CatEntityListener implements Listener {
         );
     }
 
-    /*
-     * ============================================================
-     * 工具
-     * ============================================================
-     */
-
-    /*
-     * 防御性清绑定。
-     *
-     * 只有被移除 / 死亡的实体
-     * 正是当前绑定实体时才清。
-     *
-     * 同时该方法在死亡 + 移除连续触发时
-     * 是幂等的：第一次已清空，
-     * 第二次 currentUUID 为 null 直接返回。
-     */
     private void handleEntityLoss(
             Cat cat
     ) {
@@ -840,9 +680,6 @@ public class CatEntityListener implements Listener {
             return;
         }
 
-        /*
-         * 确认这就是当前绑定的实体。
-         */
         UUID currentUUID =
                 store.getCatEntityUUID(
                         playerUUID
@@ -856,10 +693,6 @@ public class CatEntityListener implements Listener {
             return;
         }
 
-        /*
-         * 只清绑定。
-         * 逻辑猫与全部状态保留。
-         */
         entityService.clearEntityBinding(
                 playerUUID
         );

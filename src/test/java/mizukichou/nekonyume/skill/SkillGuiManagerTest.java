@@ -50,9 +50,25 @@ class SkillGuiManagerTest {
     @Test
     void hintsAreReadable() {
 
-        assertEquals("天生梦槽", SkillGuiManager.checkpointHint(0));
-        assertEquals("喵阶 1", SkillGuiManager.checkpointHint(1));
-        assertEquals("喵阶 10 且等级 30", SkillGuiManager.checkpointHint(2));
-        assertEquals("喵阶 30 且等级 80", SkillGuiManager.checkpointHint(3));
+        assertEquals(
+                "天生梦槽",
+                SkillGuiManager.checkpointHint(0)
+        );
+
+        assertEquals(
+                "喵阶 1",
+                SkillGuiManager.checkpointHint(1)
+        );
+
+        assertEquals(
+                "喵阶 10 且等级 30",
+                SkillGuiManager.checkpointHint(2)
+        );
+
+        assertEquals(
+                "喵阶 30 且等级 60",
+                SkillGuiManager.checkpointHint(3)
+        );
     }
+
 }

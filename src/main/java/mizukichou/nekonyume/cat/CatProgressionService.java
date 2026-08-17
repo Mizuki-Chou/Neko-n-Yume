@@ -12,6 +12,8 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
@@ -24,14 +26,7 @@ import java.util.UUID;
  * 猫咪成长与技能槽服务。
  *
  * <p>
- * 职责：
- * 1. 经验（统一入口，含升级反馈与事件）；
- * 2. 喵力（统一入口，含升阶反馈与事件）；
- * 3. 技能槽同步 / 抽取 / 刷新 / 管理员授予。
- * </p>
- *
- * <p>
- * 不接触 Bukkit 猫实体；实体效果由 CatEntityService / CatSkillManager 负责。
+ * 0.6.2：升级时同步猫实体最大生命（10 + 等级/4）。
  * </p>
  */
 public class CatProgressionService {
@@ -60,15 +55,6 @@ public class CatProgressionService {
         this.skillManager = skillManager;
     }
 
-    /*
-     * ============================================================
-     * 增加经验
-     * ============================================================
-     *
-     * 统一入口：所有经验来源都应该通过这里。
-     * 等级曲线由配置 growth.level-curve-base 决定。
-     */
-
     public void gainExperience(
             Player player,
             Cat cat,
@@ -90,9 +76,6 @@ public class CatProgressionService {
                         config.getLevelCurveBase()
                 );
 
-        /*
-         * 持久化。
-         */
         store.setCatExperience(
                 player.getUniqueId(),
                 cat.getExperience()
@@ -107,9 +90,6 @@ public class CatProgressionService {
             return;
         }
 
-        /*
-         * 升级反馈。
-         */
         player.sendMessage(
                 mm.deserialize(
                         "<gradient:#fde68a:#f59e0b>🎉 </gradient>"
@@ -131,9 +111,6 @@ public class CatProgressionService {
                 1.0f
         );
 
-        /*
-         * 事件。
-         */
         Bukkit.getPluginManager()
                 .callEvent(
                         new CatLevelUpEvent(
@@ -145,19 +122,15 @@ public class CatProgressionService {
                 );
 
         /*
-         * 等级可能触发了技能槽拐点。
+         * 升级：同步实体最大生命（10 + 等级/4）。
          */
+        applyLevelMaxHealth(
+                player,
+                cat
+        );
+
         syncSkillSlots(player, cat);
     }
-
-    /*
-     * ============================================================
-     * 增加喵力
-     * ============================================================
-     *
-     * 统一入口：抚摸 / 喂食概率 / 喵丹都应该通过这里。
-     * 喵阶曲线由配置 meow.rank-curve-offset 决定。
-     */
 
     public void grantMeowPower(
             Player player,
@@ -180,9 +153,6 @@ public class CatProgressionService {
                         config.getMeowRankCurveOffset()
                 );
 
-        /*
-         * 持久化。
-         */
         store.setCatMeowPower(
                 player.getUniqueId(),
                 cat.getMeowPower()
@@ -193,9 +163,6 @@ public class CatProgressionService {
                 cat.getMeowRank()
         );
 
-        /*
-         * 获得喵力的惊喜反馈（无论是否升阶）。
-         */
         player.sendMessage(
                 mm.deserialize(
                         "<gradient:#c4b5fd:#a78bfa>✨ 喵光一闪!</gradient>"
@@ -221,9 +188,6 @@ public class CatProgressionService {
             return;
         }
 
-        /*
-         * 升阶反馈。
-         */
         player.sendMessage(
                 mm.deserialize(
                         "<gradient:#c4b5fd:#a78bfa>🌟 喵阶提升!</gradient>"
@@ -245,9 +209,6 @@ public class CatProgressionService {
                 1.2f
         );
 
-        /*
-         * 粒子：如果猫实体在线，在猫的位置生成粒子。
-         */
         UUID entityUuid = cat.getEntityUuid();
 
         if (entityUuid != null) {
@@ -270,9 +231,6 @@ public class CatProgressionService {
             }
         }
 
-        /*
-         * 事件。
-         */
         Bukkit.getPluginManager()
                 .callEvent(
                         new CatMeowRankUpEvent(
@@ -283,20 +241,8 @@ public class CatProgressionService {
                         )
                 );
 
-        /*
-         * 喵阶可能触发了技能槽拐点。
-         */
         syncSkillSlots(player, cat);
     }
-
-    /*
-     * ============================================================
-     * 技能槽同步
-     * ============================================================
-     *
-     * 在经验 / 喵力变化后调用。
-     * 若技能数少于应有槽数，对每个新槽免费抽取一次并通知玩家。
-     */
 
     public void syncSkillSlots(
             Player player,
@@ -350,19 +296,6 @@ public class CatProgressionService {
             persistSkills(player.getUniqueId(), cat);
         }
     }
-
-    /*
-     * ============================================================
-     * 为指定槽位抽取技能（不修改任何状态）
-     * ============================================================
-     *
-     * 品质上限：
-     * 梦槽 → 只出梦幻级（精确品质池，补丁 1）；
-     * 梦幻猫其他槽 → 独特；
-     * 其余 → 自身底蕴。
-     *
-     * 排除已有技能，按品质权重抽取。
-     */
 
     private CatSkill rollSkillForSlot(
             Cat cat,
@@ -427,17 +360,6 @@ public class CatProgressionService {
         return chosen;
     }
 
-    /*
-     * ============================================================
-     * 刷新技能槽
-     * ============================================================
-     *
-     * 消耗由 CatSkillManager 的刷新消耗提供者处理。
-     * 梦槽消耗 × 倍率。
-     *
-     * true = 刷新成功。
-     */
-
     public boolean refreshSkillSlot(
             Player player,
             int slotIndex
@@ -491,10 +413,6 @@ public class CatProgressionService {
         CatSkill oldSkill =
                 currentSkills.get(slotIndex);
 
-        /*
-         * 排除已有技能（重抽必然换新）。
-         * 补丁 1：梦槽使用精确梦幻品质池。
-         */
         List<CatSkill> candidates =
                 dreamSlot
                         ? CatSkill.poolOfTierExact(CatTier.DREAM)
@@ -525,9 +443,6 @@ public class CatProgressionService {
             return false;
         }
 
-        /*
-         * 扣费。
-         */
         if (!provider.charge(player, cost)) {
 
             player.sendMessage(
@@ -552,9 +467,6 @@ public class CatProgressionService {
 
         persistSkills(player.getUniqueId(), cat);
 
-        /*
-         * 事件与反馈。
-         */
         Bukkit.getPluginManager()
                 .callEvent(
                         new CatSkillRollEvent(
@@ -582,14 +494,6 @@ public class CatProgressionService {
         return true;
     }
 
-    /*
-     * ============================================================
-     * 管理员发放技能
-     * ============================================================
-     *
-     * 无视槽位上限，追加到技能列表末尾。
-     */
-
     public boolean grantSkill(
             Player player,
             CatSkill skill
@@ -614,6 +518,64 @@ public class CatProgressionService {
         persistSkills(player.getUniqueId(), cat);
 
         return true;
+    }
+
+    /*
+     * 猫最大生命随等级成长：10 + 等级/4。
+     * 升级且实体在线时刷新；
+     * 离线时由 CatEntityService.updateCat 在绑定/恢复时补刷。
+     */
+    private void applyLevelMaxHealth(
+            Player player,
+            Cat cat
+    ) {
+
+        UUID entityUuid =
+                cat.getEntityUuid();
+
+        if (entityUuid == null) {
+            return;
+        }
+
+        Entity entity =
+                Bukkit.getEntity(
+                        entityUuid
+                );
+
+        if (!(entity instanceof org.bukkit.entity.LivingEntity living) ||
+                !living.isValid()) {
+
+            return;
+        }
+
+        AttributeInstance attribute =
+                living.getAttribute(
+                        Attribute.MAX_HEALTH
+                );
+
+        if (attribute == null) {
+            return;
+        }
+
+        double scaled =
+                10.0 + cat.getLevel() / 4.0;
+
+        if (Math.abs(
+                attribute.getBaseValue()
+                        - scaled
+        ) > 0.01) {
+
+            attribute.setBaseValue(
+                    scaled
+            );
+
+            living.setHealth(
+                    Math.min(
+                            living.getHealth(),
+                            scaled
+                    )
+            );
+        }
     }
 
     private void persistSkills(

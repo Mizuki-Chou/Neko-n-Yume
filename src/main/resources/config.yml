@@ -35,9 +35,11 @@ affection:
   pet-base: 3
 
 # 喵力
+#
+# 0.6.2：概率上调（抚摸 18→25，喂食 8→12）。
 meow:
-  pet-chance: 18
-  feed-chance: 8
+  pet-chance: 25
+  feed-chance: 12
   feed-chance-limit: 3
   rank-curve-offset: 19
 
@@ -97,7 +99,7 @@ food:
 #     weight: 5
 #
 # 注意：至极（LEGENDARY）喵丹不应出现在礼物池，
-# 它只通过管理员指令发放。
+# 它只通过合成（9×卓越）获得。
 
 gift:
   enabled: true
@@ -211,13 +213,16 @@ skills:
   refresh:
     cost-type: meow-power
     cost: 10
-    dream-slot-cost-multiplier: 5
+    dream-slot-cost-multiplier: 3
   values: {}
 
 # 战斗
 #
 # 猫跟随模式下自动攻击主人附近的敌对生物。
-# 猫可受伤但不会死亡（致死保底 1 血 + 虚弱）。
+# 猫可受伤但不会死亡：
+# 致死时进入受伤恢复期（默认 90 秒，九命固定 20 秒），
+# 期间隐身冻结、怪物无视，倒计时结束满血复活。
+# 恢复期外残血每 4 秒回复 1 点。
 
 battle:
   enabled: true
@@ -227,7 +232,7 @@ battle:
   aggro-radius: 12
   weakness-seconds: 10
   eternity-rebirth-seconds: 180
-  recovery-seconds: 120
+  recovery-seconds: 90
   regen-interval-seconds: 4
 
 # 光环
@@ -241,3 +246,18 @@ aura:
   strength-unlock-meow-rank: 2
   regen-unlock-level: 15
   regen-affection: 80
+
+# 梦魔之夜（Muma's Night）
+#
+# 世界开关：/nyadmin mumanight <on|off>（存于世界 PDC，重启保留）。
+# 每夜 chance 概率降临。
+# 降临后野外怪物：血量 ×health-multiplier、攻击 ×damage-multiplier、
+# 主手随机钻石/下界合金剑（不掉落）；监守者与 Boss 不受影响。
+# 被强化的怪物死亡 meowdan-drop-chance 概率掉落喵丹，
+# 品质权重：平凡 80 / 精良 16 / 独特 3 / 卓越 1 / 至极 0。
+
+muma-night:
+  chance: 0.2
+  health-multiplier: 4.0
+  damage-multiplier: 2.5
+  meowdan-drop-chance: 0.15

@@ -3,244 +3,96 @@ package mizukichou.nekonyume.cat;
 import java.util.UUID;
 
 /**
- * 猫咪底蕴（品质）。
- *
- * <p>
- * 四档：普通 / 稀有 / 独特 / 梦幻。
- * 决定技能槽成长轨迹与可抽取的技能品质上限。
- * </p>
+ * 猫咪底蕴。
  *
  * <p>
  * 由逻辑猫 UUID 确定性生成，
- * 创建时写入 players.yml（data-version v4）。
+ * 创建时持久化到 players.yml（data-version v4）。
+ * 决定技能槽成长轨迹与技能品质上限。
+ * </p>
+ *
+ * <p>
+ * 0.6.2：出生分布改为 90% 普通 / 10% 稀有
+ * （升阶通过喵丹喂养实现）；
+ * 技能池权重（getWeight）保持不变。
  * </p>
  */
 public enum CatTier {
 
+    /*
+     * 普通
+     *
+     * 基础槽位：0
+     * 每个拐点解锁：1
+     */
     COMMON(
             "普通",
-            50,
+            0,
             new int[]{1, 0, 0},
-            0
+            50
     ),
 
+    /*
+     * 稀有
+     */
     RARE(
             "稀有",
-            30,
+            0,
             new int[]{1, 1, 1},
-            0
+            30
     ),
 
+    /*
+     * 独特
+     */
     UNIQUE(
             "独特",
-            15,
+            0,
             new int[]{2, 2, 2},
-            0
+            15
     ),
 
+    /*
+     * 梦幻
+     *
+     * 基础槽位：1（梦槽）
+     */
     DREAM(
             "梦幻",
-            5,
+            1,
             new int[]{3, 3, 3},
-            1
+            5
     );
 
     private final String displayName;
-
-    /*
-     * UUID 确定性生成的权重。
-     */
-    private final int weight;
-
-    /*
-     * 每个成长拐点给予的技能槽数。
-     */
-    private final int[] slotsPerCheckpoint;
-
-    /*
-     * 出生即拥有的槽数（仅梦幻 = 梦槽）。
-     */
     private final int baseSlots;
+    private final int[] slotsPerCheckpoint;
+    private final int weight;
 
     CatTier(
             String displayName,
-            int weight,
+            int baseSlots,
             int[] slotsPerCheckpoint,
-            int baseSlots
+            int weight
     ) {
 
         this.displayName = displayName;
-        this.weight = weight;
-        this.slotsPerCheckpoint = slotsPerCheckpoint;
         this.baseSlots = baseSlots;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public int getWeight() {
-        return weight;
-    }
-
-    public int getBaseSlots() {
-        return baseSlots;
+        this.slotsPerCheckpoint = slotsPerCheckpoint;
+        this.weight = weight;
     }
 
     /*
-     * ============================================================
-     * 成长拐点
-     * ============================================================
-     *
-     * 拐点 1：喵阶 >= 1
-     * 拐点 2：喵阶 >= 10 且等级 >= 30
-     * 拐点 3：喵阶 >= 30 且等级 >= 80
+     * 出生分布（0.6.2）：
+     * 90% 普通 / 10% 稀有。
+     * 独立于技能池权重（getWeight）。
      */
+    private static final int BIRTH_COMMON_WEIGHT = 90;
 
-    public static int checkpointsReached(
-            int meowRank,
-            int level
-    ) {
+    private static final int BIRTH_RARE_WEIGHT = 10;
 
-        int reached = 0;
-
-        if (meowRank >= 1) {
-            reached++;
-        }
-
-        if (meowRank >= 10 &&
-                level >= 30) {
-
-            reached++;
-        }
-
-        if (meowRank >= 30 &&
-                level >= 80) {
-
-            reached++;
-        }
-
-        return reached;
-    }
-
-    /*
-     * ============================================================
-     * 当前技能槽数
-     * ============================================================
-     */
-
-    public int slotCount(
-            int checkpointsReached
-    ) {
-
-        if (checkpointsReached < 0) {
-            checkpointsReached = 0;
-        }
-
-        if (checkpointsReached >
-                slotsPerCheckpoint.length) {
-
-            checkpointsReached =
-                    slotsPerCheckpoint.length;
-        }
-
-        int slots =
-                baseSlots;
-
-        for (int i = 0;
-             i < checkpointsReached;
-             i++) {
-
-            slots += slotsPerCheckpoint[i];
-        }
-
-        return slots;
-    }
-
-    /*
-     * ============================================================
-     * 槽位的技能品质上限
-     * ============================================================
-     *
-     * 梦幻级技能只可能出现在"梦槽"
-     * （梦幻猫的第 0 槽）。
-     *
-     * 梦幻猫的其余槽位上限为独特。
-     * 其余底蕴的上限为自身。
-     */
-
-    public static CatTier maxSkillTierForSlot(
-            CatTier catTier,
-            boolean dreamSlot
-    ) {
-
-        if (dreamSlot) {
-            return DREAM;
-        }
-
-        if (catTier == DREAM) {
-            return UNIQUE;
-        }
-
-        return catTier;
-    }
-
-    /*
-     * ============================================================
-     * 梦槽判定
-     * ============================================================
-     *
-     * 只有梦幻猫的第 0 槽是梦槽
-     * （专属梦幻级技能）。
-     */
-    public boolean isDreamSlot(
-            int slotIndex
-    ) {
-
-        return this == DREAM &&
-                slotIndex == 0;
-    }
-
-
-    /*
-     * ============================================================
-     * 由逻辑猫 UUID 确定性生成
-     * ============================================================
-     */
-
-    public static CatTier fromCatId(
-            UUID catId
-    ) {
-
-        if (catId == null) {
-            return COMMON;
-        }
-
-        int roll =
-                Math.floorMod(
-                        catId.hashCode(),
-                        100
-                );
-
-        int cumulative = 0;
-
-        for (CatTier tier :
-                values()) {
-
-            cumulative += tier.weight;
-
-            if (roll < cumulative) {
-                return tier;
-            }
-        }
-
-        return COMMON;
-    }
-
-    /*
-     * 从存档字符串恢复。
-     * 未知值返回 null（调用方回退 UUID 推导）。
-     */
+    private static final int BIRTH_TOTAL_WEIGHT =
+            BIRTH_COMMON_WEIGHT + BIRTH_RARE_WEIGHT;
 
     public static CatTier fromName(
             String name
@@ -260,8 +112,149 @@ public enum CatTier {
 
                 return tier;
             }
+
+            if (tier.displayName.equals(
+                    name
+            )) {
+
+                return tier;
+            }
         }
 
         return null;
+    }
+
+    /**
+     * 由逻辑猫 UUID 确定性生成底蕴。
+     *
+     * <p>
+     * 0.6.2：出生只会是普通（90%）或稀有（10%）；
+     * 更高底蕴通过喵丹喂养升阶获得。
+     * </p>
+     */
+    public static CatTier fromCatId(
+            UUID catId
+    ) {
+
+        if (catId == null) {
+            return null;
+        }
+
+        int hash =
+                Math.floorMod(
+                        catId.hashCode(),
+                        BIRTH_TOTAL_WEIGHT
+                );
+
+        if (hash < BIRTH_COMMON_WEIGHT) {
+            return COMMON;
+        }
+
+        return RARE;
+    }
+
+    /**
+     * 已达成拐点数。
+     *
+     * <p>
+     * 拐点条件：
+     * 1 = 喵阶 1；
+     * 2 = 喵阶 10 且等级 30；
+     * 3 = 喵阶 30 且等级 60（0.6.2 由 80 下调）。
+     * </p>
+     */
+    public static int checkpointsReached(
+            int meowRank,
+            int level
+    ) {
+
+        int checkpoints = 0;
+
+        if (meowRank >= 1) {
+            checkpoints = 1;
+        }
+
+        if (meowRank >= 10 &&
+                level >= 30) {
+
+            checkpoints = 2;
+        }
+
+        if (meowRank >= 30 &&
+                level >= 60) {
+
+            checkpoints = 3;
+        }
+
+        return checkpoints;
+    }
+
+    /**
+     * 该底蕴在指定拐点数下的技能槽数。
+     */
+    public int slotCount(
+            int checkpoints
+    ) {
+
+        if (checkpoints <= 0) {
+            return baseSlots;
+        }
+
+        if (checkpoints > 3) {
+            checkpoints = 3;
+        }
+
+        int slots = baseSlots;
+
+        for (int i = 0;
+             i < checkpoints;
+             i++) {
+
+            slots += slotsPerCheckpoint[i];
+        }
+
+        return slots;
+    }
+
+    /**
+     * 该底蕴与槽位可抽取的最高技能品质。
+     */
+    public static CatTier maxSkillTierForSlot(
+            CatTier tier,
+            boolean dreamSlot
+    ) {
+
+        if (dreamSlot) {
+            return DREAM;
+        }
+
+        if (tier == DREAM) {
+            return UNIQUE;
+        }
+
+        return tier;
+    }
+
+    public int getWeight() {
+        return weight;
+    }
+
+    public int getBaseSlots() {
+        return baseSlots;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    /*
+     * 梦槽判定：只有梦幻猫的第 0 槽是梦槽。
+     */
+    public boolean isDreamSlot(
+            int slotIndex
+    ) {
+
+        return this == DREAM &&
+                slotIndex == 0;
     }
 }

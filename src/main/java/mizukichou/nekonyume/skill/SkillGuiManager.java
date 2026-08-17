@@ -25,11 +25,6 @@ import java.util.UUID;
  * 顶部信息行（底蕴 / 成长 / 槽位进度 / 操作说明 / 猫头 / 关闭）
  * 槽位区（第 18 格起，最多 10 个槽）
  * </p>
- *
- * <p>
- * Step 5A-2：构造注入（CatStore / CatCache / CatSkillManager / PluginConfig）。
- * 槽位 → 拐点映射保持纯静态函数，供单元测试。
- * </p>
  */
 public class SkillGuiManager {
 
@@ -257,7 +252,7 @@ public class SkillGuiManager {
             case 0 -> "天生梦槽";
             case 1 -> "喵阶 1";
             case 2 -> "喵阶 10 且等级 30";
-            case 3 -> "喵阶 30 且等级 80";
+            case 3 -> "喵阶 30 且等级 60";
             default -> "未知";
         };
     }
@@ -481,12 +476,8 @@ public class SkillGuiManager {
         /*
          * 补丁 3：已达上限判定。
          *
-         * 该底蕴下可拥有的最大槽数 = slotCount(3)
-         * （全部拐点达成后的槽数）：
+         * 该底蕴下可拥有的最大槽数 = slotCount(3)：
          * 普通 1 / 稀有 3 / 独特 6 / 梦幻 10。
-         *
-         * 索引超出上限时再展示"解锁条件"属于误导，
-         * 因为这只猫永远无法再解锁任何槽位。
          */
         int maxSlots =
                 cat.getTier().slotCount(3);

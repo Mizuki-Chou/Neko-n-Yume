@@ -7,8 +7,10 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CatTierTest {
 
@@ -20,8 +22,13 @@ class CatTierTest {
         assertEquals(1, CatTier.checkpointsReached(9, 99));
         assertEquals(1, CatTier.checkpointsReached(10, 29));
         assertEquals(2, CatTier.checkpointsReached(10, 30));
-        assertEquals(2, CatTier.checkpointsReached(29, 80));
-        assertEquals(3, CatTier.checkpointsReached(30, 80));
+
+        /*
+         * 0.6.2：第三拐点由等级 80 下调至 60。
+         */
+        assertEquals(2, CatTier.checkpointsReached(29, 99));
+        assertEquals(2, CatTier.checkpointsReached(30, 59));
+        assertEquals(3, CatTier.checkpointsReached(30, 60));
     }
 
     @Test
@@ -98,20 +105,25 @@ class CatTierTest {
     @Test
     void tierGenerationIsDeterministicAndInRange() {
 
-        UUID id =
-                UUID.fromString(
-                        "8441445b-2aeb-45bd-a1f1-bde96df6d1eb"
-                );
+        UUID catId = UUID.randomUUID();
+
+        CatTier first =
+                CatTier.fromCatId(catId);
+
+        assertNotNull(first);
 
         assertEquals(
-                CatTier.fromCatId(id),
-                CatTier.fromCatId(id)
+                first,
+                CatTier.fromCatId(catId)
         );
 
-        assertNotNull(
-                CatTier.fromCatId(
-                        null
-                )
+        /*
+         * 0.6.2：出生底蕴只有普通/稀有两档
+         * （更高底蕴通过喵丹喂养升阶）。
+         */
+        assertTrue(
+                first == CatTier.COMMON ||
+                        first == CatTier.RARE
         );
     }
 
@@ -132,9 +144,28 @@ class CatTierTest {
             );
         }
 
-        assertEquals(
-                4,
-                seen.size()
+        /*
+         * 0.6.2：出生分布只覆盖普通与稀有；
+         * 独特与梦幻只能通过升阶获得。
+         */
+        assertTrue(
+                seen.contains(CatTier.COMMON),
+                "should see COMMON"
+        );
+
+        assertTrue(
+                seen.contains(CatTier.RARE),
+                "should see RARE"
+        );
+
+        assertFalse(
+                seen.contains(CatTier.UNIQUE),
+                "UNIQUE should not be born naturally"
+        );
+
+        assertFalse(
+                seen.contains(CatTier.DREAM),
+                "DREAM should not be born naturally"
         );
     }
 
