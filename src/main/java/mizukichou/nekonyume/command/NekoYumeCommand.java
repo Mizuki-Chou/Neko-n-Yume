@@ -1,5 +1,7 @@
 package mizukichou.nekonyume.command;
 
+import mizukichou.nekonyume.achievement.AchievementGuiManager;
+import mizukichou.nekonyume.achievement.AchievementService;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
 import mizukichou.nekonyume.cat.CatCache;
@@ -32,6 +34,8 @@ public class NekoYumeCommand
     private final CatEntityService entityService;
     private final CatGuiManager guiManager;
     private final SkillGuiManager skillGuiManager;
+    private final AchievementGuiManager achievementGuiManager;
+    private final AchievementService achievementService;
     private final NamespacedKey toolKey;
 
     private final MiniMessage mm = MiniMessage.miniMessage();
@@ -43,6 +47,8 @@ public class NekoYumeCommand
             CatEntityService entityService,
             CatGuiManager guiManager,
             SkillGuiManager skillGuiManager,
+            AchievementGuiManager achievementGuiManager,
+            AchievementService achievementService,
             NamespacedKey toolKey
     ) {
 
@@ -52,6 +58,8 @@ public class NekoYumeCommand
         this.entityService = entityService;
         this.guiManager = guiManager;
         this.skillGuiManager = skillGuiManager;
+        this.achievementGuiManager = achievementGuiManager;
+        this.achievementService = achievementService;
         this.toolKey = toolKey;
     }
 
@@ -84,6 +92,7 @@ public class NekoYumeCommand
                             <gray>/nekoyume gui</gray> - Open cat panel
                             <gray>/nekoyume skill</gray> - Open skill panel
                             <gray>/nekoyume tool</gray> - Get quick-access cat wand
+                            <gray>/nekoyume achievements</gray> - View your achievements
                             <gray>/nekoyume help</gray> - Show help
                             """
                     )
@@ -139,6 +148,13 @@ public class NekoYumeCommand
                     store.getCatName(
                             player.getUniqueId()
                     );
+
+            /*
+             * 成就：领取动作立即判定「相遇即是缘」。
+             */
+            achievementService.checkAll(
+                    player
+            );
 
             /*
              * 第一次领取时直接生成猫咪
@@ -534,6 +550,52 @@ public class NekoYumeCommand
         }
 
         /*
+         * /nekoyume achievements
+         */
+        if (args.length > 0 &&
+                args[0].equalsIgnoreCase("achievements")) {
+
+            if (!(sender instanceof Player player)) {
+
+                sender.sendMessage(
+                        "Only players can use this command."
+                );
+
+                return true;
+            }
+
+            if (!store.hasCat(
+                    player.getUniqueId()
+            )) {
+
+                player.sendMessage(
+                        mm.deserialize(
+                                "<red>🐱 你还没有猫咪!</red>"
+                        )
+                );
+
+                return true;
+            }
+
+            if (!config.isAchievementsEnabled()) {
+
+                player.sendMessage(
+                        mm.deserialize(
+                                "<red>🏆 成就系统未开启。</red>"
+                        )
+                );
+
+                return true;
+            }
+
+            achievementGuiManager.open(
+                    player
+            );
+
+            return true;
+        }
+
+        /*
          * /nekoyume tool
          *
          * 领取快捷工具（逗猫棒）：
@@ -799,7 +861,7 @@ public class NekoYumeCommand
          */
         sender.sendMessage(
                 mm.deserialize(
-                        "<yellow>用法: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool></yellow>"
+                        "<yellow>用法: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|achievements></yellow>"
                 )
         );
 
@@ -832,7 +894,8 @@ public class NekoYumeCommand
                     "mode",
                     "gui",
                     "skill",
-                    "tool"
+                    "tool",
+                    "achievements"
             );
         }
 

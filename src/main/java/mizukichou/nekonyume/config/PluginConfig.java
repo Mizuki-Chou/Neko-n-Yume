@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.config;
 
+import mizukichou.nekonyume.achievement.CatAchievement;
 import mizukichou.nekonyume.cat.CatMood;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.MeowDanQuality;
@@ -79,6 +80,11 @@ public class PluginConfig {
      * key = 档位编号（从 1 开始）
      */
     private Map<Integer, List<GiftItemEntry>> giftTiers;
+
+    /*
+     * 成就
+     */
+    private boolean achievementsEnabled;
 
 
     /*
@@ -266,6 +272,15 @@ public class PluginConfig {
         loadGift(
                 config
         );
+
+        /*
+         * 成就
+         */
+        achievementsEnabled =
+                config.getBoolean(
+                        "achievements.enabled",
+                        true
+                );
 
         /*
          * 技能 / 战斗 / 光环
@@ -978,6 +993,52 @@ public class PluginConfig {
 
     public boolean isGiftEnabled() {
         return giftEnabled;
+    }
+
+    public boolean isAchievementsEnabled() {
+        return achievementsEnabled;
+    }
+
+    /*
+     * 成就奖励数值：
+     * config 的 achievements.rewards.<成就ID> 节可覆盖
+     * 枚举默认值；节缺失时回退枚举默认。
+     */
+
+    public int getAchievementRewardXp(
+            CatAchievement achievement,
+            int defaultValue
+    ) {
+
+        if (achievement == null) {
+            return defaultValue;
+        }
+
+        return plugin.getConfig()
+                .getInt(
+                        "achievements.rewards."
+                                + achievement.getConfigId()
+                                + ".xp",
+                        defaultValue
+                );
+    }
+
+    public int getAchievementRewardMeowPower(
+            CatAchievement achievement,
+            int defaultValue
+    ) {
+
+        if (achievement == null) {
+            return defaultValue;
+        }
+
+        return plugin.getConfig()
+                .getInt(
+                        "achievements.rewards."
+                                + achievement.getConfigId()
+                                + ".meow-power",
+                        defaultValue
+                );
     }
 
     public CatMood getGiftMoodMin() {

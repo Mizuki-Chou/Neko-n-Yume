@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>
  * 覆盖：
- * 重启往返 / v1→v4 迁移 / 损坏 fail-fast 不覆盖 /
+ * 重启往返 / v1→v5 迁移 / 损坏 fail-fast 不覆盖 /
  * 备份修剪 / 残留 tmp 清理 / 空文件处理 /
  * 删除持久化 / 读不建档 / future-version 拒启。
  * </p>
@@ -75,7 +75,7 @@ class YamlCatStoreLifecycleTest {
         assertTrue(Files.exists(file));
         assertTrue(
                 Files.readString(file)
-                        .contains("data-version: 4")
+                        .contains("data-version: 5")
         );
     }
 
@@ -109,6 +109,14 @@ class YamlCatStoreLifecycleTest {
         store.setCatEntityUUID(player, entity);
         store.setCatLocation(player, world, 12.5, 64.0, -3.25);
         store.markGiftChecked(player);
+
+        /*
+         * 成就（0.6.3）。
+         */
+        store.addAchievementUnlocked(player, "FIRST_CLAIM");
+        store.addAchievementUnlocked(player, "FIRST_CLAIM");
+        store.setAchievementProgress(player, "feed-total", 42);
+        store.setAchievementProgress(player, "pet-total", 7);
 
         /*
          * 每日计数（会顺带写入 last-interaction-at = 当前时间，
@@ -161,10 +169,50 @@ class YamlCatStoreLifecycleTest {
         assertEquals(-3.25, reopened.getCatZ(player), 0.0001);
         assertTrue(reopened.isGiftCheckedToday(player));
         assertEquals(cat, reopened.getCatUUID(player));
+
+        /*
+         * 成就字段重启往返。
+         */
+        assertTrue(
+                reopened.isAchievementUnlocked(
+                        player,
+                        "FIRST_CLAIM"
+                )
+        );
+
+        assertEquals(
+                1,
+                reopened.getAchievementsUnlockedList(player)
+                        .size()
+        );
+
+        assertEquals(
+                42,
+                reopened.getAchievementProgress(
+                        player,
+                        "feed-total"
+                )
+        );
+
+        assertEquals(
+                7,
+                reopened.getAchievementProgress(
+                        player,
+                        "pet-total"
+                )
+        );
+
+        assertEquals(
+                0,
+                reopened.getAchievementProgress(
+                        player,
+                        "unknown-key"
+                )
+        );
     }
 
     @Test
-    void migrationV1ToV4() throws IOException {
+    void migrationV1ToV5() throws IOException {
 
         String yaml = """
                 data-version: 1
@@ -220,13 +268,29 @@ class YamlCatStoreLifecycleTest {
         assertEquals(0, store.getCatFeedCount(player));
         assertFalse(store.isGiftCheckedToday(player));
 
+        /*
+         * v4 阶段补入的成就字段（v5）默认为空。
+         */
+        assertTrue(
+                store.getAchievementsUnlockedList(player)
+                        .isEmpty()
+        );
+
+        assertEquals(
+                0,
+                store.getAchievementProgress(
+                        player,
+                        "feed-total"
+                )
+        );
+
         String written =
                 Files.readString(
                         tempDir.resolve("players.yml")
                 );
 
         assertTrue(
-                written.contains("data-version: 4")
+                written.contains("data-version: 5")
         );
     }
 
@@ -256,6 +320,65 @@ class YamlCatStoreLifecycleTest {
                 Files.readString(
                         tempDir.resolve("players.yml")
                 )
+        );
+    }
+
+    @Test
+    void migrationV4ToV5AddsAchievementSection() throws IOException {
+
+        String yaml = """
+                data-version: 4
+                players:
+                  11111111-1111-1111-1111-111111111111:
+                   cat:
+                    id: 22222222-2222-2222-2222-222222222222
+                    name: OldCat
+                    level: 3
+                    tier: RARE
+                    skills:
+                     - SHARP_CLAW
+                """;
+
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                yaml
+        );
+
+        YamlCatStore store = newStore();
+
+        UUID player =
+                UUID.fromString(
+                        "11111111-1111-1111-1111-111111111111"
+                );
+
+        assertTrue(
+                store.getAchievementsUnlockedList(player)
+                        .isEmpty()
+        );
+
+        assertEquals(
+                0,
+                store.getAchievementProgress(
+                        player,
+                        "feed-total"
+                )
+        );
+
+        String written =
+                Files.readString(
+                        tempDir.resolve("players.yml")
+                );
+
+        assertTrue(
+                written.contains("data-version: 5")
+        );
+
+        assertTrue(
+                written.contains("achievements-unlocked")
+        );
+
+        assertTrue(
+                written.contains("achievements-progress")
         );
     }
 

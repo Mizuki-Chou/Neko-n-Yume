@@ -2,6 +2,7 @@ package mizukichou.nekonyume.cat;
 
 import mizukichou.nekonyume.config.PluginConfig;
 import mizukichou.nekonyume.event.CatFedEvent;
+import mizukichou.nekonyume.event.CatTierUpgradeEvent;
 import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -584,6 +585,9 @@ public class CatFoodManager {
             return;
         }
 
+        CatTier fromTier =
+                cat.getTier();
+
         cat.setTier(
                 newTier
         );
@@ -649,6 +653,19 @@ public class CatFoodManager {
                         );
             }
         }
+
+        /*
+         * 事后通知事件：成就系统等第三方监听。
+         */
+        Bukkit.getPluginManager()
+                .callEvent(
+                        new CatTierUpgradeEvent(
+                                player,
+                                cat,
+                                fromTier,
+                                newTier
+                        )
+                );
     }
 
     /*

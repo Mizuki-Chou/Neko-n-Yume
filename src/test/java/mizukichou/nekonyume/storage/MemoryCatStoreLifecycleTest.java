@@ -130,6 +130,29 @@ class MemoryCatStoreLifecycleTest {
         assertTrue(store.isGiftCheckedToday(ghost));
 
         /*
+         * 成就读操作同样不建档、不置脏。
+         */
+        assertTrue(
+                store.getAchievementsUnlockedList(ghost)
+                        .isEmpty()
+        );
+
+        assertFalse(
+                store.isAchievementUnlocked(
+                        ghost,
+                        "FIRST_CLAIM"
+                )
+        );
+
+        assertEquals(
+                0,
+                store.getAchievementProgress(
+                        ghost,
+                        "feed-total"
+                )
+        );
+
+        /*
          * 读操作不允许产生脏标记。
          */
         assertFalse(store.isDirty());
@@ -216,5 +239,107 @@ class MemoryCatStoreLifecycleTest {
         store.setCatEntityUUID(player, entity);
         store.removeCatEntityUUID(player);
         assertNull(store.getCatEntityUUID(player));
+    }
+
+    /*
+     * ============================================================
+     * 成就（0.6.3）
+     * ============================================================
+     */
+
+    @Test
+    void achievementUnlockAndProgressRoundTrip() {
+
+        UUID player = UUID.randomUUID();
+
+        store.createCat(player);
+
+        assertTrue(
+                store.getAchievementsUnlockedList(player)
+                        .isEmpty()
+        );
+
+        assertFalse(
+                store.isAchievementUnlocked(
+                        player,
+                        "FIRST_CLAIM"
+                )
+        );
+
+        assertEquals(
+                0,
+                store.getAchievementProgress(
+                        player,
+                        "feed-total"
+                )
+        );
+
+        /*
+         * 解锁幂等：重复添加不产生重复条目。
+         */
+        store.addAchievementUnlocked(player, "FIRST_CLAIM");
+        store.addAchievementUnlocked(player, "FIRST_CLAIM");
+
+        assertTrue(
+                store.isAchievementUnlocked(
+                        player,
+                        "FIRST_CLAIM"
+                )
+        );
+
+        assertEquals(
+                1,
+                store.getAchievementsUnlockedList(player)
+                        .size()
+        );
+
+        /*
+         * 计数增减与清除。
+         */
+        store.setAchievementProgress(player, "feed-total", 42);
+        assertEquals(42, store.getAchievementProgress(player, "feed-total"));
+
+        store.addAchievementProgress(player, "feed-total", 1);
+        assertEquals(43, store.getAchievementProgress(player, "feed-total"));
+
+        store.setAchievementProgress(player, "feed-total", 0);
+        assertEquals(0, store.getAchievementProgress(player, "feed-total"));
+
+        store.addAchievementProgress(player, "feed-total", 5);
+        store.addAchievementProgress(player, "feed-total", -50);
+        assertEquals(0, store.getAchievementProgress(player, "feed-total"));
+    }
+
+    @Test
+    void achievementWritesDoNotResurrectAfterRemove() {
+
+        UUID player = UUID.randomUUID();
+
+        store.createCat(player);
+
+        store.addAchievementUnlocked(player, "FIRST_CLAIM");
+        store.setAchievementProgress(player, "feed-total", 10);
+
+        assertTrue(store.removeCat(player));
+
+        /*
+         * 删除后成就写操作必须 no-op。
+         */
+        store.addAchievementUnlocked(player, "GIFT_1");
+        store.addAchievementProgress(player, "pet-total", 1);
+
+        assertFalse(store.hasCat(player));
+        assertTrue(
+                store.getAchievementsUnlockedList(player)
+                        .isEmpty()
+        );
+
+        assertEquals(
+                0,
+                store.getAchievementProgress(
+                        player,
+                        "feed-total"
+                )
+        );
     }
 }

@@ -8,7 +8,7 @@ load: POSTWORLD
 commands:
   nekoyume:
     description: Neko n' Yume main command
-    usage: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill>
+    usage: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|achievements>
     aliases:
       - ny
 

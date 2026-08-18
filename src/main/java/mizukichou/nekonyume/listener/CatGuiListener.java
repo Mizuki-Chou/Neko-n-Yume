@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.listener;
 
+import mizukichou.nekonyume.achievement.AchievementGuiHolder;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
 import mizukichou.nekonyume.cat.CatCache;
@@ -75,6 +76,33 @@ public class CatGuiListener implements Listener {
                     event,
                     skillHolder
             );
+
+            return;
+        }
+
+        /*
+         * 成就殿堂面板（只读，仅关闭按钮可用）。
+         */
+        if (event.getInventory()
+                .getHolder()
+                instanceof AchievementGuiHolder achievementHolder) {
+
+            event.setCancelled(
+                    true
+            );
+
+            if (!event.getWhoClicked()
+                    .getUniqueId()
+                    .equals(achievementHolder.getOwnerUuid())) {
+
+                return;
+            }
+
+            if (event.getRawSlot() == 8) {
+
+                event.getWhoClicked()
+                        .closeInventory();
+            }
 
             return;
         }

@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,6 +58,8 @@ public abstract class AbstractCatStore implements CatStore {
     protected static final String FIELD_X = "x";
     protected static final String FIELD_Y = "y";
     protected static final String FIELD_Z = "z";
+    protected static final String FIELD_ACHIEVEMENTS_UNLOCKED = "achievements-unlocked";
+    protected static final String FIELD_ACHIEVEMENTS_PROGRESS = "achievements-progress";
 
     /*
      * 默认值。
@@ -185,6 +188,125 @@ public abstract class AbstractCatStore implements CatStore {
         return value instanceof Number n
                 ? n.doubleValue()
                 : def;
+    }
+
+    /*
+     * ============================================================
+     * 成就原始助手
+     * ============================================================
+     *
+     * 成就数据以"字符串列表"形式存储：
+     * achievements-unlocked = ["FIRST_CLAIM", ...]；
+     * achievements-progress = ["feed-total=42", ...]。
+     * 两种存储实现（YAML / 内存）共享同一结构，
+     * 语义永远一致。
+     */
+
+    protected final List<String> getStringList(
+            UUID playerUUID,
+            String field
+    ) {
+
+        List<String> result =
+                new ArrayList<>();
+
+        if (playerUUID == null ||
+                !containsRaw(playerUUID)) {
+
+            return result;
+        }
+
+        Object value = getRaw(playerUUID, field);
+
+        if (value instanceof List<?> list) {
+
+            for (Object item : list) {
+
+                if (item instanceof String s) {
+
+                    result.add(s);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private Map<String, Integer> readProgressMap(
+            UUID playerUUID
+    ) {
+
+        Map<String, Integer> result =
+                new LinkedHashMap<>();
+
+        for (String entry :
+                getStringList(
+                        playerUUID,
+                        FIELD_ACHIEVEMENTS_PROGRESS
+                )) {
+
+            int split =
+                    entry.indexOf('=');
+
+            if (split <= 0) {
+                continue;
+            }
+
+            String key =
+                    entry.substring(
+                            0,
+                            split
+                    );
+
+            try {
+
+                int value =
+                        Integer.parseInt(
+                                entry.substring(
+                                        split + 1
+                                )
+                        );
+
+                result.put(
+                        key,
+                        value
+                );
+
+            } catch (NumberFormatException ignored) {
+
+                /*
+                 * 非法条目直接忽略，
+                 * 不阻断其余进度。
+                 */
+            }
+        }
+
+        return result;
+    }
+
+    private void writeProgressMap(
+            UUID playerUUID,
+            Map<String, Integer> map
+    ) {
+
+        List<String> entries =
+                new ArrayList<>();
+
+        for (Map.Entry<String, Integer> entry :
+                map.entrySet()) {
+
+            entries.add(
+                    entry.getKey()
+                            + "="
+                            + entry.getValue()
+            );
+        }
+
+        setRaw(
+                playerUUID,
+                FIELD_ACHIEVEMENTS_PROGRESS,
+                entries
+        );
     }
 
     protected static UUID parseUUID(String value) {
@@ -1405,5 +1527,162 @@ public abstract class AbstractCatStore implements CatStore {
         }
 
         return result;
+    }
+
+    /*
+     * ============================================================
+     * 成就
+     * ============================================================
+     *
+     * P0 不变量在此同样成立：
+     * 读操作永不建档，写操作永不复活。
+     */
+
+    @Override
+    public List<String> getAchievementsUnlockedList(UUID playerUUID) {
+
+        return getStringList(
+                playerUUID,
+                FIELD_ACHIEVEMENTS_UNLOCKED
+        );
+    }
+
+    @Override
+    public boolean isAchievementUnlocked(
+            UUID playerUUID,
+            String id
+    ) {
+
+        if (playerUUID == null ||
+                id == null ||
+                id.isBlank() ||
+                !hasCat(playerUUID)) {
+
+            return false;
+        }
+
+        return getStringList(
+                playerUUID,
+                FIELD_ACHIEVEMENTS_UNLOCKED
+        ).contains(id);
+    }
+
+    @Override
+    public void addAchievementUnlocked(
+            UUID playerUUID,
+            String id
+    ) {
+
+        if (playerUUID == null ||
+                id == null ||
+                id.isBlank() ||
+                !hasCat(playerUUID)) {
+
+            return;
+        }
+
+        List<String> unlocked =
+                getStringList(
+                        playerUUID,
+                        FIELD_ACHIEVEMENTS_UNLOCKED
+                );
+
+        if (unlocked.contains(id)) {
+            return;
+        }
+
+        unlocked.add(id);
+
+        setRaw(
+                playerUUID,
+                FIELD_ACHIEVEMENTS_UNLOCKED,
+                unlocked
+        );
+    }
+
+    @Override
+    public int getAchievementProgress(
+            UUID playerUUID,
+            String key
+    ) {
+
+        if (playerUUID == null ||
+                key == null ||
+                key.isBlank() ||
+                !hasCat(playerUUID)) {
+
+            return 0;
+        }
+
+        return Math.max(
+                0,
+                readProgressMap(playerUUID)
+                        .getOrDefault(
+                                key,
+                                0
+                        )
+        );
+    }
+
+    @Override
+    public void setAchievementProgress(
+            UUID playerUUID,
+            String key,
+            int value
+    ) {
+
+        if (playerUUID == null ||
+                key == null ||
+                key.isBlank() ||
+                !hasCat(playerUUID)) {
+
+            return;
+        }
+
+        Map<String, Integer> progress =
+                readProgressMap(playerUUID);
+
+        if (value <= 0) {
+
+            progress.remove(key);
+
+        } else {
+
+            progress.put(
+                    key,
+                    value
+            );
+        }
+
+        writeProgressMap(
+                playerUUID,
+                progress
+        );
+    }
+
+    @Override
+    public void addAchievementProgress(
+            UUID playerUUID,
+            String key,
+            int amount
+    ) {
+
+        if (playerUUID == null ||
+                key == null ||
+                key.isBlank() ||
+                amount == 0 ||
+                !hasCat(playerUUID)) {
+
+            return;
+        }
+
+        setAchievementProgress(
+                playerUUID,
+                key,
+                getAchievementProgress(
+                        playerUUID,
+                        key
+                ) + amount
+        );
     }
 }

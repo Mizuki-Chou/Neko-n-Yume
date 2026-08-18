@@ -14,6 +14,8 @@ Sora 2026-今 - 不懂事的猫咪，只能笼养呜呜
 向自然致敬。
  */
 
+import mizukichou.nekonyume.achievement.AchievementGuiManager;
+import mizukichou.nekonyume.achievement.AchievementService;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.CatFoodManager;
@@ -28,6 +30,7 @@ import mizukichou.nekonyume.data.PlayerDataManager;
 import mizukichou.nekonyume.gift.GiftManager;
 import mizukichou.nekonyume.gui.CatGuiManager;
 import mizukichou.nekonyume.listener.CatEntityListener;
+import mizukichou.nekonyume.listener.AchievementListener;
 import mizukichou.nekonyume.listener.CatFoodListener;
 import mizukichou.nekonyume.listener.CatGuiListener;
 import mizukichou.nekonyume.listener.CatInteractionListener;
@@ -75,6 +78,7 @@ import java.util.logging.Level;
  * → CatManager（门面，对外 API）
  * → CatFoodManager → MumaNightManager → CraftingRecipes
  * → CatGuiManager → GiftManager → SkillGuiManager
+ * → AchievementService → AchievementGuiManager
  * → 命令 → 监听器 → 任务
  * </p>
  *
@@ -120,6 +124,12 @@ public final class NekoNYume extends JavaPlugin {
     private CatSkillManager catSkillManager;
     private CatBattleState battleState;
     private SkillGuiManager skillGuiManager;
+
+    /*
+     * 成就系统（0.6.3）。
+     */
+    private AchievementService achievementService;
+    private AchievementGuiManager achievementGuiManager;
 
     /*
      * 梦魔之夜（Muma's Night）。
@@ -187,6 +197,14 @@ public final class NekoNYume extends JavaPlugin {
 
     public SkillGuiManager getSkillGuiManager() {
         return skillGuiManager;
+    }
+
+    public AchievementService getAchievementService() {
+        return achievementService;
+    }
+
+    public AchievementGuiManager getAchievementGuiManager() {
+        return achievementGuiManager;
     }
 
     /*
@@ -459,6 +477,32 @@ public final class NekoNYume extends JavaPlugin {
 
         /*
          * ========================================================
+         * 成就系统（0.6.3）
+         * ========================================================
+         *
+         * AchievementService：进度推进 + 解锁判定 + 奖励发放；
+         * AchievementGuiManager：成就殿堂面板；
+         * AchievementListener：订阅插件对外事件与怪物击杀。
+         */
+
+        achievementService =
+                new AchievementService(
+                        catStore,
+                        catCache,
+                        catProgressionService,
+                        pluginConfig,
+                        getLogger()
+                );
+
+        achievementGuiManager =
+                new AchievementGuiManager(
+                        catStore,
+                        catCache,
+                        achievementService
+                );
+
+        /*
+         * ========================================================
          * 命令
          * ========================================================
          *
@@ -475,6 +519,8 @@ public final class NekoNYume extends JavaPlugin {
                         catEntityService,
                         catGuiManager,
                         skillGuiManager,
+                        achievementGuiManager,
+                        achievementService,
                         toolKey
                 )
         )) {
@@ -520,6 +566,11 @@ public final class NekoNYume extends JavaPlugin {
                         catCache,
                         catStore,
                         catEntityService
+                ),
+                new AchievementListener(
+                        achievementService,
+                        catKey,
+                        ownerKey
                 ),
                 new CatFoodListener(
                         catFoodManager,

@@ -19,7 +19,7 @@ dependencies {
 }
 
 group = "mizukichou"
-version = "0.6.2-alpha"
+version = "0.7.0-alpha"
 
 base {
     archivesName.set("NekoNYume")

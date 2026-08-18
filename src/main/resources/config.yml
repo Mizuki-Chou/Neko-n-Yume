@@ -198,6 +198,63 @@ gift:
         amount: 1
         weight: 6
 
+# 成就（0.6.3）
+#
+# 进度持久化于 players.yml（data-version v5），
+# 重启不丢进度。
+#
+# 成就清单（16 个）：
+#   相遇即是缘 / 三日之约 / 百日同行
+#   摸摸头 / 撸猫大师
+#   投喂员 / 干饭王
+#   初露锋芒 / 登峰造极
+#   喵光初现 / 喵力全开
+#   技惊四座 / 刷新狂魔
+#   蜕变之日 / 小惊喜 / 护主骑士
+#
+# 奖励：大部分成就奖励猫咪经验；
+# 七个里程碑成就奖励喵力。
+# 下方每个成就可覆盖奖励数值：
+#   xp          = 经验奖励
+#   meow-power  = 喵力奖励
+# 未配置的成就使用内置默认值。
+
+achievements:
+  enabled: true
+  rewards:
+    first-claim:
+      xp: 50
+    companion-days-3:
+      xp: 50
+    companion-days-100:
+      meow-power: 50
+    pet-total-10:
+      xp: 30
+    pet-total-200:
+      meow-power: 10
+    feed-total-10:
+      xp: 30
+    feed-total-100:
+      meow-power: 10
+    level-10:
+      xp: 100
+    level-60:
+      meow-power: 30
+    meow-rank-5:
+      xp: 100
+    meow-rank-30:
+      meow-power: 30
+    skill-activate-20:
+      xp: 100
+    skill-refresh-10:
+      meow-power: 30
+    tier-upgrade-1:
+      xp: 150
+    gift-1:
+      xp: 80
+    monster-kill-50:
+      meow-power: 5
+
 # 技能
 #
 # 刷新消耗接口：

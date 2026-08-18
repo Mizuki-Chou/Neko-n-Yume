@@ -349,6 +349,36 @@ public class PlayerDataManager implements CatStore {
     }
 
     @Override
+    public List<String> getAchievementsUnlockedList(UUID playerUUID) {
+        return delegate.getAchievementsUnlockedList(playerUUID);
+    }
+
+    @Override
+    public boolean isAchievementUnlocked(UUID playerUUID, String id) {
+        return delegate.isAchievementUnlocked(playerUUID, id);
+    }
+
+    @Override
+    public void addAchievementUnlocked(UUID playerUUID, String id) {
+        delegate.addAchievementUnlocked(playerUUID, id);
+    }
+
+    @Override
+    public int getAchievementProgress(UUID playerUUID, String key) {
+        return delegate.getAchievementProgress(playerUUID, key);
+    }
+
+    @Override
+    public void setAchievementProgress(UUID playerUUID, String key, int value) {
+        delegate.setAchievementProgress(playerUUID, key, value);
+    }
+
+    @Override
+    public void addAchievementProgress(UUID playerUUID, String key, int amount) {
+        delegate.addAchievementProgress(playerUUID, key, amount);
+    }
+
+    @Override
     public Set<UUID> getCatPlayers() {
         return delegate.getCatPlayers();
     }

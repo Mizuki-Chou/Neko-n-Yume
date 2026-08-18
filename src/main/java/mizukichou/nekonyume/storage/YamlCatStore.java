@@ -43,7 +43,7 @@ public class YamlCatStore extends AbstractCatStore {
 
     private static final String PLAYERS_PATH = "players";
 
-    private static final int DATA_VERSION = 4;
+    private static final int DATA_VERSION = 5;
 
     private final CatStoreEnv env;
 
@@ -827,6 +827,10 @@ public class YamlCatStore extends AbstractCatStore {
                 migrateV3ToV4();
             }
 
+            if (version < 5) {
+                migrateV4ToV5();
+            }
+
             data.set("data-version", DATA_VERSION);
 
             /*
@@ -1051,6 +1055,56 @@ public class YamlCatStore extends AbstractCatStore {
 
                 data.set(
                         path + ".skills",
+                        new java.util.ArrayList<String>()
+                );
+            }
+        }
+    }
+
+    /*
+     * v4 → v5（0.6.3）：
+     * 成就系统字段。
+     *
+     * achievements-unlocked / achievements-progress
+     * 缺省为空列表；
+     * 成就解锁与计数由 AchievementService
+     * 在游戏过程中渐进写入。
+     */
+    private void migrateV4ToV5() {
+
+        ConfigurationSection playersSection =
+                data.getConfigurationSection(PLAYERS_PATH);
+
+        if (playersSection == null) {
+            return;
+        }
+
+        for (String key : playersSection.getKeys(false)) {
+
+            UUID playerUUID = parseUUID(key);
+
+            if (playerUUID == null) {
+                continue;
+            }
+
+            String path = catPath(playerUUID);
+
+            if (!data.contains(path)) {
+                continue;
+            }
+
+            if (!data.contains(path + ".achievements-unlocked")) {
+
+                data.set(
+                        path + ".achievements-unlocked",
+                        new java.util.ArrayList<String>()
+                );
+            }
+
+            if (!data.contains(path + ".achievements-progress")) {
+
+                data.set(
+                        path + ".achievements-progress",
                         new java.util.ArrayList<String>()
                 );
             }

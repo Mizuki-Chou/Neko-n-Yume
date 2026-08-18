@@ -209,6 +209,22 @@ public interface CatStore {
     );
 
     /*
+     * ---------- 成就 ----------
+     */
+
+    List<String> getAchievementsUnlockedList(UUID playerUUID);
+
+    boolean isAchievementUnlocked(UUID playerUUID, String id);
+
+    void addAchievementUnlocked(UUID playerUUID, String id);
+
+    int getAchievementProgress(UUID playerUUID, String key);
+
+    void setAchievementProgress(UUID playerUUID, String key, int value);
+
+    void addAchievementProgress(UUID playerUUID, String key, int amount);
+
+    /*
      * ---------- 集合 ----------
      */
 
