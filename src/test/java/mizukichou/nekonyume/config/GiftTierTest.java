@@ -9,23 +9,23 @@ class GiftTierTest {
     @Test
     void tierBoundariesEveryFiveRanks() {
 
-        assertEquals(1, PluginConfig.computeGiftTier(0));
-        assertEquals(1, PluginConfig.computeGiftTier(4));
-        assertEquals(1, PluginConfig.computeGiftTier(5));
+        assertEquals(1, ConfigSnapshot.Gift.computeTier(0));
+        assertEquals(1, ConfigSnapshot.Gift.computeTier(4));
+        assertEquals(1, ConfigSnapshot.Gift.computeTier(5));
 
-        assertEquals(2, PluginConfig.computeGiftTier(6));
-        assertEquals(2, PluginConfig.computeGiftTier(10));
+        assertEquals(2, ConfigSnapshot.Gift.computeTier(6));
+        assertEquals(2, ConfigSnapshot.Gift.computeTier(10));
 
-        assertEquals(3, PluginConfig.computeGiftTier(11));
-        assertEquals(3, PluginConfig.computeGiftTier(15));
+        assertEquals(3, ConfigSnapshot.Gift.computeTier(11));
+        assertEquals(3, ConfigSnapshot.Gift.computeTier(15));
 
-        assertEquals(4, PluginConfig.computeGiftTier(16));
-        assertEquals(4, PluginConfig.computeGiftTier(20));
+        assertEquals(4, ConfigSnapshot.Gift.computeTier(16));
+        assertEquals(4, ConfigSnapshot.Gift.computeTier(20));
 
-        assertEquals(5, PluginConfig.computeGiftTier(21));
-        assertEquals(5, PluginConfig.computeGiftTier(25));
+        assertEquals(5, ConfigSnapshot.Gift.computeTier(21));
+        assertEquals(5, ConfigSnapshot.Gift.computeTier(25));
 
-        assertEquals(6, PluginConfig.computeGiftTier(26));
+        assertEquals(6, ConfigSnapshot.Gift.computeTier(26));
     }
 
     @Test
@@ -33,7 +33,7 @@ class GiftTierTest {
 
         assertEquals(
                 1,
-                PluginConfig.computeGiftTier(
+                ConfigSnapshot.Gift.computeTier(
                         -100
                 )
         );
@@ -44,7 +44,7 @@ class GiftTierTest {
 
         assertEquals(
                 20,
-                PluginConfig.computeGiftTier(
+                ConfigSnapshot.Gift.computeTier(
                         100
                 )
         );

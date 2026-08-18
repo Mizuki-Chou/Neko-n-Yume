@@ -2,7 +2,9 @@ package mizukichou.nekonyume.muma;
 
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.MeowDanQuality;
-import net.kyori.adventure.text.minimessage.MiniMessage;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
+import mizukichou.nekonyume.lang.Lang;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -34,21 +36,11 @@ import java.util.logging.Logger;
  * <p>
  * 0.6.2：监守者与 Boss 不强化；
  * 掉落分布 80/16/3/1/0。
+ * 0.7.0：配置改走 ConfigManager 快照；广播文案改走 Lang。
+ * 0.7.1：广播按每个玩家的客户端语言分流。
  * </p>
  */
 public class MumaNightManager {
-
-    private static final String CONFIG_CHANCE =
-            "muma-night.chance";
-
-    private static final String CONFIG_HEALTH_MULT =
-            "muma-night.health-multiplier";
-
-    private static final String CONFIG_DAMAGE_MULT =
-            "muma-night.damage-multiplier";
-
-    private static final String CONFIG_DROP_CHANCE =
-            "muma-night.meowdan-drop-chance";
 
     private final NamespacedKey buffedKey;
     private final NamespacedKey origHealthKey;
@@ -58,9 +50,8 @@ public class MumaNightManager {
     private final JavaPlugin plugin;
     private final Logger logger;
     private final CatFoodManager foodManager;
-
-    private final MiniMessage mm =
-            MiniMessage.miniMessage();
+    private final ConfigManager configManager;
+    private final Lang lang;
 
     private final Random random =
             new Random();
@@ -76,12 +67,16 @@ public class MumaNightManager {
     public MumaNightManager(
             JavaPlugin plugin,
             Logger logger,
-            CatFoodManager foodManager
+            CatFoodManager foodManager,
+            ConfigManager configManager,
+            Lang lang
     ) {
 
         this.plugin = plugin;
         this.logger = logger;
         this.foodManager = foodManager;
+        this.configManager = configManager;
+        this.lang = lang;
 
         this.buffedKey =
                 new NamespacedKey(
@@ -180,6 +175,10 @@ public class MumaNightManager {
             }
         }
 
+        ConfigSnapshot.MumaNight mumaConfig =
+                configManager.snapshot()
+                        .getMumaNight();
+
         for (World world :
                 Bukkit.getWorlds()) {
 
@@ -230,14 +229,8 @@ public class MumaNightManager {
                         world.getUID()
                 );
 
-                double chance =
-                        plugin.getConfig()
-                                .getDouble(
-                                        CONFIG_CHANCE,
-                                        0.2
-                                );
-
-                if (random.nextDouble() < chance) {
+                if (random.nextDouble()
+                        < mumaConfig.getChance()) {
 
                     activate(
                             world
@@ -297,19 +290,15 @@ public class MumaNightManager {
             return;
         }
 
+        ConfigSnapshot.MumaNight mumaConfig =
+                configManager.snapshot()
+                        .getMumaNight();
+
         double healthMult =
-                plugin.getConfig()
-                        .getDouble(
-                                CONFIG_HEALTH_MULT,
-                                4.0
-                        );
+                mumaConfig.getHealthMultiplier();
 
         double damageMult =
-                plugin.getConfig()
-                        .getDouble(
-                                CONFIG_DAMAGE_MULT,
-                                2.5
-                        );
+                mumaConfig.getDamageMultiplier();
 
         AttributeInstance maxHealth =
                 monster.getAttribute(
@@ -484,11 +473,9 @@ public class MumaNightManager {
         }
 
         double chance =
-                plugin.getConfig()
-                        .getDouble(
-                                CONFIG_DROP_CHANCE,
-                                0.15
-                        );
+                configManager.snapshot()
+                        .getMumaNight()
+                        .getMeowdanDropChance();
 
         if (random.nextDouble() >= chance) {
             return;
@@ -506,7 +493,8 @@ public class MumaNightManager {
                         monster.getLocation(),
                         foodManager.createMeowDan(
                                 quality,
-                                1
+                                1,
+                                null
                         )
                 );
     }
@@ -601,12 +589,12 @@ public class MumaNightManager {
 
         broadcast(
                 world,
-                "<dark_red><bold>🌑 梦魔之夜降临了……</bold></dark_red>"
+                "muma.night-start-1"
         );
 
         broadcast(
                 world,
-                "<red>野外怪物变得极度危险——但击杀它们有机会获得喵丹!</red>"
+                "muma.night-start-2"
         );
     }
 
@@ -624,7 +612,7 @@ public class MumaNightManager {
 
         broadcast(
                 world,
-                "<gold><bold>☀ 黎明到来，梦魔之夜结束了。</bold></gold>"
+                "muma.dawn"
         );
     }
 
@@ -663,15 +651,17 @@ public class MumaNightManager {
 
     private void broadcast(
             World world,
-            String message
+            String key
     ) {
 
         for (Player player :
                 world.getPlayers()) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            message
+                    lang.forPlayer(
+                            player
+                    ).message(
+                            key
                     )
             );
         }

@@ -1,5 +1,7 @@
 package mizukichou.nekonyume.event;
 
+import lombok.Getter;
+
 import mizukichou.nekonyume.cat.Cat;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
@@ -16,6 +18,7 @@ import java.util.List;
  * 属于事后通知，不可取消。
  * </p>
  */
+@Getter
 public class CatGiftEvent extends Event {
 
     private static final HandlerList handlers =
@@ -48,22 +51,6 @@ public class CatGiftEvent extends Event {
                         gifts
                 );
         this.meowRank = meowRank;
-    }
-
-    public Player getPlayer() {
-        return player;
-    }
-
-    public Cat getCat() {
-        return cat;
-    }
-
-    public List<ItemStack> getGifts() {
-        return gifts;
-    }
-
-    public int getMeowRank() {
-        return meowRank;
     }
 
     @Override

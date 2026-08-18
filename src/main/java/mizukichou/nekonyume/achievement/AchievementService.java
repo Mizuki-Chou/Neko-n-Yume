@@ -3,11 +3,11 @@ package mizukichou.nekonyume.achievement;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatProgressionService;
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.event.CatAchievementUnlockedEvent;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.storage.CatStore;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -41,30 +41,35 @@ import java.util.logging.Logger;
  * - 先持久化解锁，再发放奖励（防重入重复发放）；
  * - 全部逻辑运行在主线程（事件回调 / 命令）。
  * </p>
+ *
+ * <p>
+ * 0.7.0：配置改走 ConfigManager 快照；
+ * 玩家文案改走 Lang（achievement.* 节）。
+ * </p>
  */
 public class AchievementService {
 
     private final CatStore store;
     private final CatCache cache;
     private final CatProgressionService progression;
-    private final PluginConfig config;
+    private final ConfigManager configManager;
+    private final Lang lang;
     private final Logger logger;
-
-    private final MiniMessage mm =
-            MiniMessage.miniMessage();
 
     public AchievementService(
             CatStore store,
             CatCache cache,
             CatProgressionService progression,
-            PluginConfig config,
+            ConfigManager configManager,
+            Lang lang,
             Logger logger
     ) {
 
         this.store = store;
         this.cache = cache;
         this.progression = progression;
-        this.config = config;
+        this.configManager = configManager;
+        this.lang = lang;
         this.logger = logger;
     }
 
@@ -165,7 +170,7 @@ public class AchievementService {
      */
     public void onMonsterKill(UUID ownerUuid) {
 
-        if (!config.isAchievementsEnabled()) {
+        if (!isEnabled()) {
             return;
         }
 
@@ -197,24 +202,35 @@ public class AchievementService {
      * ============================================================
      */
 
+    private boolean isEnabled() {
+
+        return configManager.snapshot()
+                .getAchievements()
+                .isEnabled();
+    }
+
     public int rewardXp(CatAchievement achievement) {
 
-        return config.getAchievementRewardXp(
-                achievement,
-                achievement == null
-                        ? 0
-                        : achievement.getDefaultRewardXp()
-        );
+        return configManager.snapshot()
+                .getAchievements()
+                .rewardXp(
+                        achievement,
+                        achievement == null
+                                ? 0
+                                : achievement.getDefaultRewardXp()
+                );
     }
 
     public int rewardMeowPower(CatAchievement achievement) {
 
-        return config.getAchievementRewardMeowPower(
-                achievement,
-                achievement == null
-                        ? 0
-                        : achievement.getDefaultRewardMeowPower()
-        );
+        return configManager.snapshot()
+                .getAchievements()
+                .rewardMeowPower(
+                        achievement,
+                        achievement == null
+                                ? 0
+                                : achievement.getDefaultRewardMeowPower()
+                );
     }
 
     /**
@@ -249,7 +265,7 @@ public class AchievementService {
 
     private boolean enabled(Player player) {
 
-        return config.isAchievementsEnabled() &&
+        return isEnabled() &&
                 player != null &&
                 player.isOnline();
     }
@@ -452,8 +468,16 @@ public class AchievementService {
          * title 大字提示。
          */
         player.sendTitle(
-                "§e🏆 成就解锁!",
-                "§6§l" + achievement.getDisplayName(),
+                lang.forPlayer(player).text(
+                        "achievement.unlock-title"
+                ),
+                lang.forPlayer(player).text(
+                        "achievement.unlock-subtitle",
+                        lang.forPlayer(player).text(
+                                "achievement-name."
+                                        + achievement.getConfigId()
+                        )
+                ),
                 10,
                 60,
                 10
@@ -470,19 +494,15 @@ public class AchievementService {
          * 成就名与描述是枚举固定文本，安全拼接。
          */
         player.sendMessage(
-                mm.deserialize(
-                        "<gradient:#fde68a:#f59e0b>🏆 成就解锁: </gradient>"
-                ).append(
-                        Component.text(
-                                achievement.getDisplayName()
-                        )
-                ).append(
-                        mm.deserialize(
-                                "<white> · </white>"
-                        )
-                ).append(
-                        Component.text(
-                                achievement.getDescription()
+                lang.forPlayer(player).message(
+                        "achievement.unlocked",
+                        lang.forPlayer(player).text(
+                                "achievement-name."
+                                        + achievement.getConfigId()
+                        ),
+                        lang.forPlayer(player).text(
+                                "achievement-desc."
+                                        + achievement.getConfigId()
                         )
                 )
         );
@@ -492,29 +512,33 @@ public class AchievementService {
         if (xp > 0 && meow > 0) {
 
             rewardText =
-                    "+" + xp
-                            + " 经验, +"
-                            + meow
-                            + " 喵力";
+                    lang.forPlayer(player).text(
+                            "achievement-gui.reward-both",
+                            String.valueOf(xp),
+                            String.valueOf(meow)
+                    );
 
         } else if (meow > 0) {
 
             rewardText =
-                    "+" + meow + " 喵力";
+                    lang.forPlayer(player).text(
+                            "achievement-gui.reward-meow",
+                            String.valueOf(meow)
+                    );
 
         } else {
 
             rewardText =
-                    "+" + xp + " 经验";
+                    lang.forPlayer(player).text(
+                            "achievement-gui.reward-xp",
+                            String.valueOf(xp)
+                    );
         }
 
         player.sendMessage(
-                mm.deserialize(
-                        "<gold>🎁 成就奖励: </gold>"
-                ).append(
-                        Component.text(
-                                rewardText
-                        )
+                lang.forPlayer(player).message(
+                        "achievement.reward",
+                        rewardText
                 )
         );
 

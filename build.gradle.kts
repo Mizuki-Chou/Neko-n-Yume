@@ -16,10 +16,20 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     testImplementation("io.papermc.paper:paper-api:26.2.build.+")
+
+    /*
+     * 0.7.0：Lombok（仅 @Getter / @Setter）。
+     * 构造器保持手写（装配链可读性）。
+     * Java 25 需要 1.18.46+。
+     */
+    compileOnly("org.projectlombok:lombok:1.18.46")
+    annotationProcessor("org.projectlombok:lombok:1.18.46")
+    testCompileOnly("org.projectlombok:lombok:1.18.46")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.46")
 }
 
 group = "mizukichou"
-version = "0.7.0-alpha"
+version = "0.7.1-alpha"
 
 base {
     archivesName.set("NekoNYume")

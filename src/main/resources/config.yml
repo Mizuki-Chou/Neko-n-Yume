@@ -1,3 +1,5 @@
+language: zh_cn
+
 join-message:
   enabled: true
 

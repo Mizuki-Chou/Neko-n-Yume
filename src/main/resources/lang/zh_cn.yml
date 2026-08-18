@@ -1,0 +1,453 @@
+#
+# Neko n' Yume 语言文件（简体中文）
+#
+# 聊天消息使用 MiniMessage 模板；
+# {0} {1} … 为参数占位符（解析后安全替换，玩家文本不会被解析为标签）。
+# 纯字符串（GUI 物品名 / lore / title）使用 § 色码。
+# 服务器端覆盖文件：plugins/NekoNYume/lang/zh_cn.yml
+# /nekoyumeadmin reload 热重载。
+
+#
+# ---------- 命令 ----------
+#
+command:
+  no-cat: "<red>🐱 你还没有猫咪!</red>"
+  unknown: "<yellow>用法: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|language|achievements></yellow>"
+  help: |
+    <gradient:#ff9de2:#a78bfa>
+    🐱 Neko n' Yume Commands
+    </gradient>
+
+    <gray>/nekoyume claim</gray> - 领取你的第一只猫
+    <gray>/nekoyume cat</gray> - 查看你的猫
+    <gray>/nekoyume rename &lt;名字&gt;</gray> - 重命名你的猫
+    <gray>/nekoyume summon</gray> - 召唤你的猫
+    <gray>/nekoyume mode &lt;follow|sit|free&gt;</gray> - 设置行为模式
+    <gray>/nekoyume gui</gray> - 打开猫咪面板
+    <gray>/nekoyume skill</gray> - 打开技能面板
+    <gray>/nekoyume tool</gray> - 领取快捷逗猫棒
+    <gray>/nekoyume language &lt;auto|zh_cn|en_us|ja_jp&gt;</gray> - 设置插件语言
+    <gray>/nekoyume achievements</gray> - 查看成就殿堂
+    <gray>/nekoyume help</gray> - 显示帮助
+
+  claim:
+    already-has: "<red>🐱 你已经拥有猫咪了!</red>"
+    first-cat: "<gradient:#ff9de2:#a78bfa>🐱 恭喜！你获得了第一只猫 </gradient>{0}!"
+    here: "<gradient:#ff9de2:#a78bfa>🐱 </gradient>{0}已经来到了你身边!"
+
+  cat:
+    data-error: "<red>🐱 你的猫咪数据异常，请联系管理员。</red>"
+    header: "<gradient:#ff9de2:#a78bfa>🐱 你的猫</gradient>"
+    name: "名字: {0}"
+    days: "<white>陪伴: <aqua>第 {0} 天</aqua>"
+    level: "<white>等级: <yellow>{0}</yellow> <gray>(经验 {1}/{2})</gray>"
+    meow: "<white>喵阶: <light_purple>{0}</light_purple> <gray>(喵力 {1}/{2})</gray>"
+    mood: "<white>心情: <yellow>{0} {1}</yellow>"
+    personality: "<white>性格: <aqua>{0}</aqua>"
+    tier: "<white>底蕴: <aqua>{0}</aqua>"
+    behavior: "<white>行为: <aqua>{0}</aqua>"
+
+  mode:
+    usage: "<yellow>用法: /nekoyume mode <follow|sit|free></yellow>"
+    unknown: "<red>❌ 未知模式: {0}</red>"
+    changed: "<gradient:#ff9de2:#a78bfa>🐱 行为模式已切换为 </gradient>{0}"
+
+  rename:
+    usage: "<yellow>用法: /nekoyume rename <名字></yellow>"
+    empty: "<red>❌ 猫咪名字不能为空!</red>"
+    too-long: "<red>❌ 猫咪名字不能超过 16 个字符!</red>"
+    done: "<gradient:#ff9de2:#a78bfa>🐱 你的猫现在叫 </gradient>{0}了!"
+
+  summon:
+    spawned: "<gradient:#ff9de2:#a78bfa>🐱 </gradient>{0}出现在你身边!"
+    here: "<gradient:#ff9de2:#a78bfa>🐱 </gradient>{0}来到你身边啦!"
+
+  tool:
+    received: "<gradient:#ff9de2:#a78bfa>🐱 你获得了一根逗猫棒，右键使用!</gradient>"
+    inventory-full: "<yellow>🐱 背包已满，逗猫棒掉在了你的脚边。</yellow>"
+
+  language:
+    usage: "<yellow>用法: /nekoyume language <auto|zh_cn|en_us|ja_jp></yellow>"
+    set: "<gradient:#ff9de2:#a78bfa>🐱 插件语言已切换为 </gradient>{0}！"
+    reset: "<gradient:#ff9de2:#a78bfa>🐱 插件语言现在跟随你的 Minecraft 语言设置。</gradient>"
+    unknown: "<red>❌ 未知语言: {0}</red>"
+
+  achievements:
+    disabled: "<red>🏆 成就系统未开启。</red>"
+
+#
+# ---------- 管理命令 ----------
+#
+admin:
+  no-permission: "<red>❌ 你没有权限执行此命令!</red>"
+  usage: "<yellow>用法: /nekoyumeadmin <meowdan|cat|skill|mumanight|reload></yellow>"
+  reload-done: "<gradient:#a7f3d0:#60a5fa>✔ Neko n' Yume 配置重载成功!</gradient>"
+
+  meowdan-usage: "<yellow>用法: /nekoyumeadmin meowdan give <玩家> <品质> [数量]</yellow>"
+  meowdan-quality-hint: "<gray>品质: 平凡 / 精良 / 独特 / 卓越 / 至极</gray>"
+  player-offline: "<red>❌ 玩家不在线!</red>"
+  unknown-quality: "<red>❌ 未知品质: {0}</red>"
+  invalid-amount: "<red>❌ 无效数量!</red>"
+  amount-positive: "<red>❌ 数量必须大于 0!</red>"
+  give-cap: "<yellow>⚠ 单次最多发放 {0} 个，已按上限处理。</yellow>"
+  give-sender: "<gradient:#a7f3d0:#60a5fa>✔ 已给予 </gradient>{0} {1} 个 {2}"
+  give-target: "<gradient:#c4b5fd:#a78bfa>✨ 你收到了 </gradient>{0}"
+
+  cat-usage: "<yellow>用法: /nekoyumeadmin cat <remove> <玩家> [confirm]</yellow>"
+  player-not-found: "<red>❌ 找不到该玩家。</red>"
+  no-cat-data: "<red>❌ 该玩家没有猫咪数据。</red>"
+  remove-warning: "<red>⚠ 该操作会删除猫咪的全部数据，且不可恢复!</red>"
+  remove-confirm: "<yellow>确认请执行: /nekoyumeadmin cat remove {0} confirm</yellow>"
+  remove-done: "<red>✔ 已删除 {0} 的猫咪数据。</red>"
+  remove-fail: "<red>❌ 删除失败：该玩家没有猫咪数据。</red>"
+
+  skill-usage: "<yellow>用法: /nekoyumeadmin skill give <玩家> <技能ID></yellow>"
+  skill-hint: "<gray>可用技能: SHARP_CLAW LIGHT_STEP LIGHT_FUR ALERT WARMTH SMALL_APPETITE IRON_WALL HUNTER_SENSE GUARDIAN FORAGER HEALING_PURR SWIFT_PAWS HUNTING_INSTINCT SPIRIT_SHOT SHADOW_STRIKE DRAIN STAR_DUST NINE_LIVES MEOW_GUARD FLASH_OF_SPIRIT DREAM_AWAKEN STARFALL MOONLIGHT ETERNITY TIME_ECHO RESONANCE DREAM_WEAVER</gray>"
+  unknown-skill: "<red>❌ 未知技能: {0}</red>"
+  skill-granted: "<green>✔ 已授予 </green>{0} 技能 {1}"
+  skill-granted-target: "<gradient:#fde68a:#f59e0b>🎉 你的猫咪学会了新技能：</gradient>{0}"
+  skill-grant-fail: "<red>❌ 该玩家已经拥有这个技能。</red>"
+
+  mumanight-player-only: "<red>❌ 该命令只能由玩家执行。</red>"
+  mumanight-status: "<yellow>🌑 梦魔之夜（当前世界）：</yellow> {0} <gray>用法: /nekoyumeadmin mumanight <on|off></gray>"
+  mumanight-on: "<dark_red>✔ 已开启梦魔之夜。</dark_red>"
+  mumanight-off: "<gold>✔ 已关闭梦魔之夜。</gold>"
+  mumanight-usage: "<yellow>用法: /nekoyumeadmin mumanight <on|off></yellow>"
+
+#
+# ---------- 喂食 ----------
+#
+feed:
+  full: "<yellow>🐱 你的猫咪已经吃饱了!</yellow>"
+  ate-food: "<light_purple>🐱 </light_purple>{0}吃掉了 <yellow>{1}</yellow>!"
+  hunger-up: "<gold>🍖 饱食度 <green>+{0} <gray>({1}/100)</gray>"
+  affection-up: "<red>❤ 好感度 <green>+{0} <gray>({1}/100)</gray>"
+  meowdan-eat: "<gradient:#c4b5fd:#a78bfa>✨ </gradient>{0}吃下了 {1}!"
+  meowdan-affection: "<red>❤ 好感度 <green>+{0} <gray>({1}/100)</gray>"
+  meowdan-lore-use: "右键你的猫咪使用"
+  meowdan-lore-values: "喵力 +{0} · 好感 +{1} · 经验 +{2}"
+  tier-upgrade: "<gradient:#c4b5fd:#a78bfa>🌟 底蕴升华!</gradient> {0}的底蕴提升到了 {1}"
+  tier-upgrade-fail: "<gray>喵丹的力量在体内流转，但底蕴没有变化…</gray>"
+  not-your-cat: "<red>🐱 这不是你的猫咪。</red>"
+  meowdan-expired: "<red>🐱 这颗喵丹已经过期，无法使用了。</red>"
+
+#
+# ---------- 抚摸 ----------
+#
+pet:
+  limit-reached: "<yellow>🐱 今天已经摸过猫咪 {0} 次啦！</yellow>"
+  petted: "<light_purple>🐱 </light_purple>{0}<white>蹭了蹭你！</white>"
+  affection-up: "<red>❤ 好感度 <green>+{0} <gray>({1}/100)</gray>"
+  affection-max: "<red>❤ 好感度 <gray>已经达到最大值 ({0}/100)</gray>"
+  progress: "<yellow>🐾 今日抚摸：{0}/{1} <gray>| 剩余 {2} 次</gray>"
+
+#
+# ---------- 成长 ----------
+#
+progression:
+  level-up: "<gradient:#fde68a:#f59e0b>🎉 </gradient>{0}升级到了 <yellow>{1} 级</yellow>!"
+  meow-power: "<gradient:#c4b5fd:#a78bfa>✨ 喵光一闪!</gradient>{0}获得了 <light_purple>{1} 点喵力</light_purple>!"
+  meow-rank-up: "<gradient:#c4b5fd:#a78bfa>🌟 喵阶提升!</gradient>{0}提升到了 <light_purple>喵阶 {1}</light_purple>!"
+  new-skill: "<gradient:#fde68a:#f59e0b>🎉 </gradient>{0}学会了新技能：{1}"
+  refresh-cant-afford: "<red>❌ {0}不足，无法刷新。</red>"
+  refresh-no-pool: "<yellow>没有可抽取的新技能了。</yellow>"
+  refresh-charge-fail: "<red>❌ 扣除{0}失败。</red>"
+  refresh-done: "<gradient:#c4b5fd:#a78bfa>✨ 技能槽刷新成功：</gradient>{0} → {1}"
+
+#
+# ---------- 礼物 ----------
+#
+gift:
+  received: "<gradient:#fde68a:#f59e0b>🎁 </gradient>{0}叼来了一份礼物，放进了你的背包!"
+  content: "<gray>礼物内容: <white>{0} × {1}</white></gray>"
+
+#
+# ---------- 技能 ----------
+#
+skill:
+  missing: "<red>🐱 你的猫咪还没有这个技能。</red>"
+  recovering: "<red>🐱 猫咪受伤了，暂时无法使用技能。</red>"
+  cooldown: "<yellow>⏳ 技能冷却中，剩余 <white>{0} 秒</white></yellow>"
+  effect-healing: "<green>❤ 「治愈呼噜」生效，恢复了 {0} 点生命。</green>"
+  effect-swift: "<aqua>💨 「灵猫迅捷」生效，速度提升。</aqua>"
+  effect-hunting: "<red>⚔ 「狩猎觉醒」生效，攻击提升。</red>"
+  effect-guard: "<light_purple>🛡 「喵之守护」生效，抗性提升。</light_purple>"
+  effect-dream: "<gradient:#c4b5fd:#a78bfa>🌙 「梦醒」降临，敌人应声而倒。</gradient>"
+  effect-starfall: "<gradient:#fde68a:#f59e0b>⭐ 「星坠」发动，群星为之坠落!</gradient>"
+  effect-time-echo: "<gradient:#c4b5fd:#f59e0b>⏳ 「时间回响」发动，时间在这一刻为你们倒流。</gradient>"
+
+#
+# ---------- 战斗 ----------
+#
+battle:
+  recovering: "<red>🐱 </red>{0}受伤了，<red>{1} 秒内无法继续活动…</red>"
+
+#
+# ---------- 实体 ----------
+#
+entity:
+  summoning: "<yellow>🐱 正在寻找你的猫咪，请稍等一下!</yellow>"
+  summon-error: "<red>🐱 召唤猫咪时发生错误，请查看服务器日志。</red>"
+  teleport-fail: "<red>🐱 猫咪暂时无法传送，请稍后再试。</red>"
+  chunk-fail: "<red>🐱 猫咪目标区块加载失败，请稍后再试。</red>"
+  restored-new: "<yellow>🐱 原猫咪实体无法找到，<gray>已经恢复了一只相同的猫咪。</gray></yellow>"
+
+#
+# ---------- 梦魔之夜 ----------
+#
+muma:
+  night-start-1: "<dark_red><bold>🌑 梦魔之夜降临了……</bold></dark_red>"
+  night-start-2: "<red>野外怪物变得极度危险——但击杀它们有机会获得喵丹!</red>"
+  dawn: "<gold><bold>☀ 黎明到来，梦魔之夜结束了。</bold></gold>"
+
+#
+# ---------- 逗猫棒 ----------
+#
+tool:
+  wand-name: "§d🐱 逗猫棒"
+  wand-lore: "§7右键打开猫咪面板"
+  claim-title: "§d🎉 你获得了猫咪!"
+  claim-subtitle: "§7§o欢迎来到 猫と夢 · Neko n' Yume"
+
+#
+# ---------- 入门书 ----------
+#
+book:
+  title: "§d🐱 猫と夢 入门指南"
+  author: "Mizuki Chou"
+  page-1: "§l§1🐱 欢迎来到 猫と夢!\n\n§r§7这里是属于你和猫咪的小世界。\n§7这只小猫会一直陪在你身边。"
+  page-2: "§l§2🐾 基础操作\n\n§r§7逗猫棒右键打开猫咪面板。\n§7面板里可以查看猫咪状态，\n§7切换到技能界面。\n§7潜行并右键可以抚摸猫咪。"
+  page-3: "§l§3🍖 喂食\n\n§r§7拿着食物右键猫咪即可喂食。\n§7喂食增加饱食度与好感度。\n§7饥饿时猫咪会变瘦，\n§7记得常喂好吃的。"
+  page-4: "§l§4💖 好感度\n\n§r§7抚摸与喂食都会增加好感。\n§7好感度影响光环与礼物。\n§7每天前 3 次互动效果最好。"
+  page-5: "§l§5📈 成长\n\n§r§7互动获得经验升级，\n§7喂食有概率获得喵力。\n§7喵力提升喵阶，解锁技能槽，\n§7战斗中猫咪会主动保护你。"
+  page-6: "§l§6⚔ 战斗\n\n§r§7跟随模式下猫咪会攻击\n§7主人附近的敌对生物。\n§7猫咪受伤后会休息 90 秒恢复，\n§7不会死亡。"
+  page-7: "§l§8🏆 成就\n\n§r§7与猫咪的每一次互动\n§7都可能解锁成就。\n§7输入 /nekoyume achievements\n§7查看成就殿堂。"
+  page-8: "§l§d🌙 梦魔之夜\n\n§r§7每个夜晚都有概率降临。\n§7梦魔之夜中怪物更强，\n§7但击杀有机会掉落喵丹。\n§7🐱 祝你和猫咪冒险愉快!"
+
+#
+# ---------- 猫咪面板（§ 纯字符串） ----------
+#
+gui:
+  title: "🐱 Neko n' Yume"
+  close: "§c关闭"
+  head-mood: "§7心情: {0} {1}"
+  head-days: "§7陪伴: 第 {0} 天"
+  head-enter-skill: "§9✦ 点此进入技能界面"
+  level-name: "§e等级"
+  level-value: "§7等级: §f{0}"
+  level-xp: "§7经验: §f{0} / {1}"
+  meow-name: "§d喵阶"
+  meow-value: "§7喵阶: §f{0}"
+  meow-power: "§7喵力: §f{0} / {1}"
+  personality-name: "§b性格"
+  personality-value: "§7{0}"
+  hunger-name: "§6饥饿"
+  hunger-value: "§7{0} /100"
+  affection-name: "§c好感"
+  affection-value: "§7{0} /100"
+  health-name: "§a健康"
+  health-value: "§7{0} /100"
+  mode-follow: "§a🐾 跟随"
+  mode-sit: "§e🪑 坐下"
+  mode-free: "§7🌿 自由"
+  mode-current: "§7✔ 当前模式"
+  click-passive: "<yellow>「{0}」是被动技能，会自动生效。</yellow>"
+
+#
+# ---------- 技能面板（§ 纯字符串） ----------
+#
+skill-gui:
+  title: "🐱 技能面板"
+  close: "§c关闭"
+  head-lore: "§7技能面板"
+  tier-name: "§e底蕴: {0}"
+  tier-lore: "§7技能槽成长随底蕴提升"
+  growth-name: "§a成长"
+  growth-level: "§7等级: {0}"
+  growth-rank: "§7喵阶: {0}"
+  progress-name: "§d技能槽"
+  progress-count: "§7{0} / {1} 槽"
+  hint-name: "§6操作说明"
+  hint-cast: "§7左键: 施放主动技能"
+  hint-refresh: "§7右键: 刷新技能（花费 {0}）"
+  hint-dream-multiplier: "§7梦槽刷新消耗 ×{0}"
+  slot-empty: "§7空槽"
+  slot-index: "§8槽位 #{0}"
+  quality: "§7品质: {0}"
+  type-active: "§7类型: §e主动"
+  type-passive: "§7类型: §b被动"
+  cooldown: "§c⏳ 冷却中: {0} 秒"
+  ready: "§a✔ 已就绪"
+  dream-slot: "§d✦ 梦槽 ✦"
+  cast-refresh: "§8左键施放 · 右键刷新（{0}）"
+  passive-refresh: "§8被动自动生效 · 右键刷新（{0}）"
+  max-reached: "§c已达上限"
+  max-reached-tier: "§7{0}底蕴的猫咪"
+  max-reached-slots: "§7最多拥有 {0} 个技能槽"
+  locked-name: "§8未解锁技能槽"
+  locked-hint: "§7解锁条件:"
+
+#
+# ---------- 成就 ----------
+#
+achievement:
+  unlock-title: "§e🏆 成就解锁!"
+  unlock-subtitle: "§6§l{0}"
+  unlocked: "<gradient:#fde68a:#f59e0b>🏆 成就解锁: </gradient>{0} · {1}"
+  reward: "<gold>🎁 成就奖励: </gold>{0}"
+
+achievement-gui:
+  title: "🏆 成就殿堂"
+  close: "§c关闭"
+  info-name: "§e成就殿堂"
+  info-lore-1: "§7与猫咪的每一次互动，"
+  info-lore-2: "§7都会成为值得纪念的成就。"
+  info-count: "§7已解锁: §f{0} / {1}"
+  head-days: "§7陪伴: 第 {0} 天"
+  unlocked-name: "§e🏆 §6{0}"
+  unlocked-mark: "§a✔ 已解锁"
+  reward-label: "§7奖励: {0}"
+  locked-name: "§8🏆 {0}"
+  progress: "§7进度: §f{0} / {1}"
+  locked-reward: "§8奖励: {0}"
+  reward-xp: "+{0} 经验"
+  reward-meow: "+{0} 喵力"
+  reward-both: "+{0} 经验, +{1} 喵力"
+
+#
+# ---------- 枚举名称本地化（0.7.1） ----------
+#
+achievement-name.first-claim: "相遇即是缘"
+achievement-desc.first-claim: "领取你的第一只猫咪"
+achievement-name.companion-days-3: "三日之约"
+achievement-desc.companion-days-3: "与猫咪互相陪伴 3 天"
+achievement-name.companion-days-100: "百日同行"
+achievement-desc.companion-days-100: "与猫咪互相陪伴 100 天"
+achievement-name.pet-total-10: "摸摸头"
+achievement-desc.pet-total-10: "累计抚摸猫咪 10 次"
+achievement-name.pet-total-200: "撸猫大师"
+achievement-desc.pet-total-200: "累计抚摸猫咪 200 次"
+achievement-name.feed-total-10: "投喂员"
+achievement-desc.feed-total-10: "累计喂食猫咪 10 次"
+achievement-name.feed-total-100: "干饭王"
+achievement-desc.feed-total-100: "累计喂食猫咪 100 次"
+achievement-name.level-10: "初露锋芒"
+achievement-desc.level-10: "猫咪达到 10 级"
+achievement-name.level-60: "登峰造极"
+achievement-desc.level-60: "猫咪达到 60 级"
+achievement-name.meow-rank-5: "喵光初现"
+achievement-desc.meow-rank-5: "猫咪达到喵阶 5"
+achievement-name.meow-rank-30: "喵力全开"
+achievement-desc.meow-rank-30: "猫咪达到喵阶 30"
+achievement-name.skill-activate-20: "技惊四座"
+achievement-desc.skill-activate-20: "累计施放主动技能 20 次"
+achievement-name.skill-refresh-10: "刷新狂魔"
+achievement-desc.skill-refresh-10: "累计刷新技能槽 10 次"
+achievement-name.tier-upgrade-1: "蜕变之日"
+achievement-desc.tier-upgrade-1: "猫咪底蕴升阶 1 次"
+achievement-name.gift-1: "小惊喜"
+achievement-desc.gift-1: "收到猫咪的礼物 1 次"
+achievement-name.monster-kill-50: "护主骑士"
+achievement-desc.monster-kill-50: "猫咪击杀 50 只怪物"
+skill-name.sharp_claw: "锐爪"
+skill-desc.sharp_claw: "猫的近战伤害 +2"
+skill-name.light_step: "灵步"
+skill-desc.light_step: "猫的攻击间隔 -20%"
+skill-name.light_fur: "轻毛"
+skill-desc.light_fur: "猫受到的伤害 -10%"
+skill-name.alert: "警觉"
+skill-desc.alert: "光环范围扩大到 12 格"
+skill-name.warmth: "暖意"
+skill-desc.warmth: "光环额外给予速度 I"
+skill-name.small_appetite: "小胃口"
+skill-desc.small_appetite: "饥饿下降 -10%"
+skill-name.iron_wall: "铁壁"
+skill-desc.iron_wall: "猫受到的伤害 -25%"
+skill-name.hunter_sense: "狩猎直觉"
+skill-desc.hunter_sense: "光环范围扩大到 15 格"
+skill-name.guardian: "守护者"
+skill-desc.guardian: "主人受伤时猫分担 20%"
+skill-name.forager: "觅食"
+skill-desc.forager: "礼物判定概率 +10%"
+skill-name.healing_purr: "治愈呼噜"
+skill-desc.healing_purr: "立即为主人治疗生命值"
+skill-name.swift_paws: "灵猫迅捷"
+skill-desc.swift_paws: "主人获得速度 II 20 秒"
+skill-name.hunting_instinct: "狩猎觉醒"
+skill-desc.hunting_instinct: "主人获得力量 II 30 秒"
+skill-name.spirit_shot: "灵弹"
+skill-desc.spirit_shot: "猫改用远程魔法弹攻击"
+skill-name.shadow_strike: "影袭"
+skill-desc.shadow_strike: "猫每 5 次攻击必定 3 倍暴击"
+skill-name.drain: "汲取"
+skill-desc.drain: "猫造成的伤害 20% 治疗主人"
+skill-name.star_dust: "星屑"
+skill-desc.star_dust: "猫攻击 20% 概率溅射 50% 范围伤害"
+skill-name.nine_lives: "九命"
+skill-desc.nine_lives: "致死保护后虚弱更短、恢复更快"
+skill-name.meow_guard: "喵之守护"
+skill-desc.meow_guard: "主人获得抗性 II 10 秒"
+skill-name.flash_of_spirit: "灵光一现"
+skill-desc.flash_of_spirit: "抚摸与喂食的喵力概率 +5%"
+skill-name.dream_awaken: "梦醒"
+skill-desc.dream_awaken: "梦醒时分：大范围伤害并减速敌人"
+skill-name.starfall: "星坠"
+skill-desc.starfall: "群星坠落：对超大范围造成巨大伤害"
+skill-name.moonlight: "月华"
+skill-desc.moonlight: "日月交替：夜晚强化攻击，白昼持续再生"
+skill-name.eternity: "永恒"
+skill-desc.eternity: "致死保护升级为满血重生"
+skill-name.time_echo: "时间回响"
+skill-desc.time_echo: "时间倒流：主人与猫同时获得强大增益"
+skill-name.resonance: "共鸣"
+skill-desc.resonance: "心意相通：光环内双方攻击提升"
+skill-name.dream_weaver: "梦境编织"
+skill-desc.dream_weaver: "梦会保护你：濒死时自动救援"
+tier-name.common: "普通"
+tier-name.rare: "稀有"
+tier-name.unique: "独特"
+tier-name.dream: "梦幻"
+mood-name.ecstatic: "非常开心"
+mood-name.happy: "开心"
+mood-name.calm: "平静"
+mood-name.low: "低落"
+mood-name.sad: "难过"
+personality-name.gourmand: "贪吃"
+personality-name.lazy: "悠闲"
+personality-name.clingy: "粘人"
+personality-name.independent: "独立"
+personality-name.picky: "挑食"
+personality-name.sunny: "阳光"
+behavior-name.follow: "跟随"
+behavior-name.sit: "坐下"
+behavior-name.free: "自由"
+meowdan-name.common: "§7✨ 平凡喵丹"
+meowdan-name.uncommon: "§a✨ 精良喵丹"
+meowdan-name.rare: "§9✨ 独特喵丹"
+meowdan-name.epic: "§5✨ 卓越喵丹"
+meowdan-name.legendary: "§6✨ 至极喵丹"
+food-name.cod: "生鳕鱼"
+food-name.salmon: "生鲑鱼"
+food-name.cooked_cod: "熟鳕鱼"
+food-name.cooked_salmon: "熟鲑鱼"
+food-name.chicken: "生鸡肉"
+food-name.cooked_chicken: "熟鸡肉"
+food-name.beef: "生牛肉"
+food-name.cooked_beef: "牛排"
+food-name.porkchop: "生猪排"
+food-name.cooked_porkchop: "熟猪排"
+food-name.mutton: "生羊肉"
+food-name.cooked_mutton: "熟羊肉"
+food-name.rabbit: "生兔肉"
+food-name.cooked_rabbit: "熟兔肉"
+food-name.golden_carrot: "金胡萝卜"
+food-name.apple: "苹果"
+food-name.bread: "面包"
+food-name.cake: "蛋糕"
+checkpoint.hint-0: "天生梦槽"
+checkpoint.hint-1: "喵阶 1"
+checkpoint.hint-2: "喵阶 10 且等级 30"
+checkpoint.hint-3: "喵阶 30 且等级 60"
+checkpoint.unknown: "未知"
+entity.name-normal: "§d🐱 {0} {1}"
+entity.name-recovering: "§c❤ {0} 受伤了 · {1}s 后恢复"

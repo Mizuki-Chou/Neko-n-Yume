@@ -9,11 +9,10 @@ import mizukichou.nekonyume.cat.CatProgressionService;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.gui.CatGuiHolder;
 import mizukichou.nekonyume.gui.CatGuiManager;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.skill.CatSkillManager;
 import mizukichou.nekonyume.skill.SkillGuiHolder;
 import mizukichou.nekonyume.skill.SkillGuiManager;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -24,6 +23,13 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
 
+/**
+ * GUI 点击处理。
+ *
+ * <p>
+ * 0.7.0：玩家文案改走 Lang（gui-click.* 节）。
+ * </p>
+ */
 public class CatGuiListener implements Listener {
 
     /*
@@ -37,9 +43,7 @@ public class CatGuiListener implements Listener {
     private final CatCache cache;
     private final CatProgressionService progression;
     private final CatSkillManager skillManager;
-
-    private final MiniMessage mm =
-            MiniMessage.miniMessage();
+    private final Lang lang;
 
     public CatGuiListener(
             JavaPlugin plugin,
@@ -48,7 +52,8 @@ public class CatGuiListener implements Listener {
             SkillGuiManager skillGuiManager,
             CatCache cache,
             CatProgressionService progression,
-            CatSkillManager skillManager
+            CatSkillManager skillManager,
+            Lang lang
     ) {
 
         this.plugin = plugin;
@@ -58,6 +63,7 @@ public class CatGuiListener implements Listener {
         this.cache = cache;
         this.progression = progression;
         this.skillManager = skillManager;
+        this.lang = lang;
     }
 
     @EventHandler
@@ -309,15 +315,14 @@ public class CatGuiListener implements Listener {
         } else {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<yellow>「</yellow>"
-                    ).append(
-                            Component.text(
-                                    skill.getDisplayName()
-                            )
-                    ).append(
-                            mm.deserialize(
-                                    "<yellow>」是被动技能，会自动生效。</yellow>"
+                    lang.forPlayer(player).message(
+                            "gui.click-passive",
+                            lang.forPlayer(player).text(
+                                    "skill-name."
+                                            + skill.name()
+                                            .toLowerCase(
+                                                    java.util.Locale.ROOT
+                                            )
                             )
                     )
             );

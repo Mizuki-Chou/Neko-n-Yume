@@ -1,5 +1,7 @@
 package mizukichou.nekonyume.event;
 
+import lombok.Getter;
+
 import mizukichou.nekonyume.cat.Cat;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
@@ -13,6 +15,7 @@ import org.bukkit.event.HandlerList;
  * 属于事后通知，不可取消。
  * </p>
  */
+@Getter
 public class CatPettedEvent extends Event {
 
     private static final HandlerList handlers =
@@ -20,9 +23,25 @@ public class CatPettedEvent extends Event {
 
     private final Player player;
     private final Cat cat;
+
+    /*
+     * 被抚摸的 Bukkit 猫实体。
+     */
     private final org.bukkit.entity.Cat entityCat;
+
+    /*
+     * 本次实际增加的好感度。
+     */
     private final int affectionGain;
+
+    /*
+     * 本次获得的经验。
+     */
     private final int xpGain;
+
+    /*
+     * 本次获得的喵力（0 或 1）。
+     */
     private final int meowGain;
 
     public CatPettedEvent(
@@ -40,42 +59,6 @@ public class CatPettedEvent extends Event {
         this.affectionGain = affectionGain;
         this.xpGain = xpGain;
         this.meowGain = meowGain;
-    }
-
-    public Player getPlayer() {
-        return player;
-    }
-
-    public Cat getCat() {
-        return cat;
-    }
-
-    /**
-     * 被抚摸的 Bukkit 猫实体。
-     */
-    public org.bukkit.entity.Cat getEntityCat() {
-        return entityCat;
-    }
-
-    /**
-     * 本次实际增加的好感度。
-     */
-    public int getAffectionGain() {
-        return affectionGain;
-    }
-
-    /**
-     * 本次获得的经验。
-     */
-    public int getXpGain() {
-        return xpGain;
-    }
-
-    /**
-     * 本次获得的喵力（0 或 1）。
-     */
-    public int getMeowGain() {
-        return meowGain;
     }
 
     @Override

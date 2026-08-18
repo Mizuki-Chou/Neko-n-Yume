@@ -1,5 +1,7 @@
 package mizukichou.nekonyume.cat;
 
+import lombok.Getter;
+
 import java.util.UUID;
 
 /**
@@ -17,6 +19,7 @@ import java.util.UUID;
  * 技能池权重（getWeight）保持不变。
  * </p>
  */
+@Getter
 public enum CatTier {
 
     /*
@@ -233,18 +236,6 @@ public enum CatTier {
         }
 
         return tier;
-    }
-
-    public int getWeight() {
-        return weight;
-    }
-
-    public int getBaseSlots() {
-        return baseSlots;
-    }
-
-    public String getDisplayName() {
-        return displayName;
     }
 
     /*

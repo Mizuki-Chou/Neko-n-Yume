@@ -1,7 +1,9 @@
 package mizukichou.nekonyume.util;
 
+import mizukichou.nekonyume.lang.Lang;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -14,6 +16,9 @@ import java.util.List;
  * <p>
  * 统一入口：命令发放与工作台合成共用，
  * 保证 PDC 标记与外观完全一致。
+ * 0.7.0：物品名与 lore 改走 Lang（tool.wand-name / tool.wand-lore）。
+ * 0.7.1：物品文案按接收者语言生成
+ * （player 为 null 时使用默认语言，用于配方结果）。
  * </p>
  */
 public final class CatToolItem {
@@ -22,7 +27,9 @@ public final class CatToolItem {
     }
 
     public static ItemStack create(
-            NamespacedKey toolKey
+            NamespacedKey toolKey,
+            Lang lang,
+            Player player
     ) {
 
         ItemStack tool =
@@ -37,12 +44,16 @@ public final class CatToolItem {
         if (meta != null) {
 
             meta.setDisplayName(
-                    "§d🐱 逗猫棒"
+                    lang.forPlayer(player).text(
+                            "tool.wand-name"
+                    )
             );
 
             meta.setLore(
                     List.of(
-                            "§7右键打开猫咪面板"
+                            lang.forPlayer(player).text(
+                                    "tool.wand-lore"
+                            )
                     )
             );
 

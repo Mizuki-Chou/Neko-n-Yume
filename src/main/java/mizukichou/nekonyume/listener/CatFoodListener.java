@@ -1,7 +1,7 @@
 package mizukichou.nekonyume.listener;
 
 import mizukichou.nekonyume.cat.CatFoodManager;
-import net.kyori.adventure.text.minimessage.MiniMessage;
+import mizukichou.nekonyume.lang.Lang;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.Cat;
@@ -13,25 +13,33 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
+/**
+ * 右键喂食监听。
+ *
+ * <p>
+ * 0.7.0：文案改走 Lang（feed.not-your-cat / feed.meowdan-expired）。
+ * 0.7.1：消息按玩家客户端语言解析。
+ * </p>
+ */
 public class CatFoodListener implements Listener {
 
     private final CatFoodManager foodManager;
+    private final Lang lang;
 
     private final NamespacedKey catKey;
     private final NamespacedKey ownerKey;
 
-    private final MiniMessage mm =
-            MiniMessage.miniMessage();
-
     public CatFoodListener(
             CatFoodManager foodManager,
             NamespacedKey catKey,
-            NamespacedKey ownerKey
+            NamespacedKey ownerKey,
+            Lang lang
     ) {
 
         this.foodManager = foodManager;
         this.catKey = catKey;
         this.ownerKey = ownerKey;
+        this.lang = lang;
     }
 
     @EventHandler
@@ -104,8 +112,8 @@ public class CatFoodListener implements Listener {
             );
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<red>🐱 这不是你的猫咪。</red>"
+                    lang.forPlayer(player).message(
+                            "feed.not-your-cat"
                     )
             );
 
@@ -188,8 +196,8 @@ public class CatFoodListener implements Listener {
             event.setCancelled(true);
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<red>🐱 这颗喵丹已经过期，无法使用了。</red>"
+                    lang.forPlayer(player).message(
+                            "feed.meowdan-expired"
                     )
             );
 

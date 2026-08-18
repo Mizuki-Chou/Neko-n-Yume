@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.event;
 
+import lombok.Getter;
 import mizukichou.nekonyume.achievement.CatAchievement;
 import mizukichou.nekonyume.cat.Cat;
 import org.bukkit.entity.Player;
@@ -14,6 +15,7 @@ import org.bukkit.event.HandlerList;
  * 属于事后通知，不可取消。
  * </p>
  */
+@Getter
 public class CatAchievementUnlockedEvent extends Event {
 
     private static final HandlerList handlers =
@@ -42,26 +44,6 @@ public class CatAchievementUnlockedEvent extends Event {
         this.achievement = achievement;
         this.rewardXp = rewardXp;
         this.rewardMeowPower = rewardMeowPower;
-    }
-
-    public Player getPlayer() {
-        return player;
-    }
-
-    public Cat getCat() {
-        return cat;
-    }
-
-    public CatAchievement getAchievement() {
-        return achievement;
-    }
-
-    public int getRewardXp() {
-        return rewardXp;
-    }
-
-    public int getRewardMeowPower() {
-        return rewardMeowPower;
     }
 
     @Override

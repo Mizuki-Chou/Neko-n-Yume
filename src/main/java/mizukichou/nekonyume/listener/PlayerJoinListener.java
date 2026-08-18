@@ -2,6 +2,8 @@ package mizukichou.nekonyume.listener;
 
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEntityService;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.gift.GiftManager;
 import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
@@ -17,6 +19,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 
+/**
+ * 玩家登录监听。
+ *
+ * <p>
+ * 0.7.0：入服欢迎消息改从 ConfigManager 快照读取。
+ * </p>
+ */
 public class PlayerJoinListener implements Listener {
 
     /*
@@ -27,7 +36,7 @@ public class PlayerJoinListener implements Listener {
             60L;
 
     /*
-     * plugin 仅用于调度器与原始 config（join-message）。
+     * plugin 仅用于调度器。
      */
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -35,6 +44,7 @@ public class PlayerJoinListener implements Listener {
     private final CatCache cache;
     private final CatEntityService entityService;
     private final GiftManager giftManager;
+    private final ConfigManager configManager;
 
     private final MiniMessage mm =
             MiniMessage.miniMessage();
@@ -57,7 +67,8 @@ public class PlayerJoinListener implements Listener {
             CatStore store,
             CatCache cache,
             CatEntityService entityService,
-            GiftManager giftManager
+            GiftManager giftManager,
+            ConfigManager configManager
     ) {
 
         this.plugin = plugin;
@@ -66,6 +77,7 @@ public class PlayerJoinListener implements Listener {
         this.cache = cache;
         this.entityService = entityService;
         this.giftManager = giftManager;
+        this.configManager = configManager;
 
         reload();
     }
@@ -80,20 +92,16 @@ public class PlayerJoinListener implements Listener {
 
         joinMessages.clear();
 
-        if (!plugin.getConfig()
-                .getBoolean(
-                        "join-message.enabled",
-                        true
-                )) {
+        ConfigSnapshot.JoinMessage joinMessage =
+                configManager.snapshot()
+                        .getJoinMessage();
 
+        if (!joinMessage.isEnabled()) {
             return;
         }
 
         for (String msg :
-                plugin.getConfig()
-                        .getStringList(
-                                "join-message.messages"
-                        )) {
+                joinMessage.getMessages()) {
 
             if (msg == null ||
                     msg.isBlank()) {

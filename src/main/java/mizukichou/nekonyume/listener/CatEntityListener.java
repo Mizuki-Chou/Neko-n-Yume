@@ -4,12 +4,12 @@ import com.destroystokyo.paper.event.entity.EntityAddToWorldEvent;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.CatSkill;
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.storage.CatStore;
 import mizukichou.nekonyume.util.TargetGuard;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
@@ -35,6 +35,14 @@ import org.bukkit.potion.PotionEffectType;
 import java.util.UUID;
 import java.util.logging.Logger;
 
+/**
+ * 猫实体监听。
+ *
+ * <p>
+ * 0.7.0：配置改走 ConfigManager 快照；文案改走 Lang。
+ * 0.7.1：恢复期提示按主人客户端语言解析。
+ * </p>
+ */
 public class CatEntityListener implements Listener {
 
     /*
@@ -47,14 +55,12 @@ public class CatEntityListener implements Listener {
     private final CatStore store;
     private final CatCache cache;
     private final CatEntityService entityService;
-    private final PluginConfig config;
+    private final ConfigManager configManager;
     private final CatBattleState battleState;
+    private final Lang lang;
 
     private final NamespacedKey catKey;
     private final NamespacedKey ownerKey;
-
-    private final MiniMessage mm =
-            MiniMessage.miniMessage();
 
     public CatEntityListener(
             JavaPlugin plugin,
@@ -62,10 +68,11 @@ public class CatEntityListener implements Listener {
             CatStore store,
             CatCache cache,
             CatEntityService entityService,
-            PluginConfig config,
+            ConfigManager configManager,
             CatBattleState battleState,
             NamespacedKey catKey,
-            NamespacedKey ownerKey
+            NamespacedKey ownerKey,
+            Lang lang
     ) {
 
         this.plugin = plugin;
@@ -73,10 +80,11 @@ public class CatEntityListener implements Listener {
         this.store = store;
         this.cache = cache;
         this.entityService = entityService;
-        this.config = config;
+        this.configManager = configManager;
         this.battleState = battleState;
         this.catKey = catKey;
         this.ownerKey = ownerKey;
+        this.lang = lang;
     }
 
     /*
@@ -198,7 +206,10 @@ public class CatEntityListener implements Listener {
             EntityDamageByEntityEvent event
     ) {
 
-        if (!config.isBattleEnabled()) {
+        if (!configManager.snapshot()
+                .getBattle()
+                .isEnabled()) {
+
             return;
         }
 
@@ -343,7 +354,9 @@ public class CatEntityListener implements Listener {
             return;
         }
 
-        if (!config.isBattleEnabled()) {
+        if (!configManager.snapshot()
+                .getBattle()
+                .isEnabled()) {
 
             event.setCancelled(
                     true
@@ -459,13 +472,17 @@ public class CatEntityListener implements Listener {
                                 CatSkill.ETERNITY
                         );
 
+        ConfigSnapshot.Battle battleConfig =
+                configManager.snapshot()
+                        .getBattle();
+
         /*
          * 永恒：满血重生。
          */
         if (hasEternity) {
 
             long cooldownMs =
-                    config.getBattleEternityRebirthSeconds()
+                    battleConfig.getEternityRebirthSeconds()
                             * 1000L;
 
             if (battleState.tryRebirth(
@@ -536,7 +553,7 @@ public class CatEntityListener implements Listener {
         );
 
         long recoveryMillis =
-                config.getBattleRecoverySeconds()
+                battleConfig.getRecoverySeconds()
                         * 1000L;
 
         /*
@@ -593,17 +610,11 @@ public class CatEntityListener implements Listener {
                     owner.isOnline()) {
 
                 owner.sendMessage(
-                        mm.deserialize(
-                                "<red>🐱 </red>"
-                        ).append(
-                                Component.text(
-                                        logicalCat.getName()
-                                )
-                        ).append(
-                                mm.deserialize(
-                                        "<white> 受伤了，<red>"
-                                                + recoverySeconds
-                                                + "</red> 秒内无法继续活动…</white>"
+                        lang.forPlayer(owner).message(
+                                "battle.recovering",
+                                logicalCat.getName(),
+                                String.valueOf(
+                                        recoverySeconds
                                 )
                         )
                 );

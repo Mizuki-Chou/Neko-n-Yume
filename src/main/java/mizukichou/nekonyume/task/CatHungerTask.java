@@ -3,13 +3,21 @@ package mizukichou.nekonyume.task;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatPersonality;
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.util.UUID;
 
+/**
+ * 饥饿结算任务。
+ *
+ * <p>
+ * 0.7.0：配置改走 ConfigManager 快照。
+ * 本任务无玩家消息（纯后台结算）。
+ * </p>
+ */
 public class CatHungerTask implements Runnable {
 
     /*
@@ -46,17 +54,17 @@ public class CatHungerTask implements Runnable {
     private static final int MAX_HUNGER_DECREASE =
             100;
 
-    private final PluginConfig config;
+    private final ConfigManager configManager;
     private final CatStore store;
     private final CatCache cache;
 
     public CatHungerTask(
-            PluginConfig config,
+            ConfigManager configManager,
             CatStore store,
             CatCache cache
     ) {
 
-        this.config = config;
+        this.configManager = configManager;
         this.store = store;
         this.cache = cache;
     }
@@ -68,7 +76,9 @@ public class CatHungerTask implements Runnable {
                 System.currentTimeMillis();
 
         long baseInterval =
-                config.getHungerIntervalMillis();
+                configManager.snapshot()
+                        .getHunger()
+                        .getIntervalMillis();
 
         /*
          * ========================================================

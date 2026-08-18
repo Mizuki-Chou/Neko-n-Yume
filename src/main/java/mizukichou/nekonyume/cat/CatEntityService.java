@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.cat;
 
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.attribute.Attribute;
@@ -50,6 +51,7 @@ public class CatEntityService {
     private final CatProgressionService progression;
     private final CatVariantService variantService;
     private final CatBattleState battleState;
+    private final Lang lang;
 
     private final NamespacedKey catKey;
     private final NamespacedKey ownerKey;
@@ -79,7 +81,8 @@ public class CatEntityService {
             CatVariantService variantService,
             NamespacedKey catKey,
             NamespacedKey ownerKey,
-            CatBattleState battleState
+            CatBattleState battleState,
+            Lang lang
     ) {
 
         this.plugin = plugin;
@@ -91,6 +94,7 @@ public class CatEntityService {
         this.catKey = catKey;
         this.ownerKey = ownerKey;
         this.battleState = battleState;
+        this.lang = lang;
     }
 
     /*
@@ -785,8 +789,8 @@ public class CatEntityService {
         if (!summoning.add(playerUUID)) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<yellow>🐱 正在寻找你的猫咪，请稍等一下!</yellow>"
+                    lang.forPlayer(player).message(
+                            "entity.summoning"
                     )
             );
 
@@ -830,8 +834,8 @@ public class CatEntityService {
             );
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<red>🐱 召唤猫咪时发生错误，请查看服务器日志。</red>"
+                    lang.forPlayer(player).message(
+                            "entity.summon-error"
                     )
             );
         }
@@ -1439,8 +1443,8 @@ public class CatEntityService {
                                             if (!success) {
 
                                                 player.sendMessage(
-                                                        mm.deserialize(
-                                                                "<red>🐱 猫咪暂时无法传送，请稍后再试。</red>"
+                                                        lang.forPlayer(player).message(
+                                                                "entity.teleport-fail"
                                                         )
                                                 );
 
@@ -1499,8 +1503,8 @@ public class CatEntityService {
                                         try {
 
                                             player.sendMessage(
-                                                    mm.deserialize(
-                                                            "<red>🐱 猫咪目标区块加载失败，请稍后再试。</red>"
+                                                    lang.forPlayer(player).message(
+                                                            "entity.chunk-fail"
                                                     )
                                             );
 
@@ -1659,8 +1663,8 @@ public class CatEntityService {
                 );
 
         player.sendMessage(
-                mm.deserialize(
-                        "<yellow>🐱 原猫咪实体无法找到，<gray>已经恢复了一只相同的猫咪。</gray></yellow>"
+                lang.forPlayer(player).message(
+                        "entity.restored-new"
                 )
         );
 
@@ -2022,6 +2026,11 @@ public class CatEntityService {
                 logicalCat.getName()
                         .replace("§", "");
 
+        Player owner =
+                Bukkit.getPlayer(
+                        logicalCat.getOwnerUuid()
+                );
+
         /*
          * 受伤恢复期：悬浮字显示倒计时。
          */
@@ -2035,20 +2044,23 @@ public class CatEntityService {
                     );
 
             entity.setCustomName(
-                    "§c❤ "
-                            + safeName
-                            + " 受伤了 · "
-                            + seconds
-                            + "s 后恢复"
+                    lang.forPlayer(owner).text(
+                            "entity.name-recovering",
+                            safeName,
+                            String.valueOf(
+                                    seconds
+                            )
+                    )
             );
 
         } else {
 
             entity.setCustomName(
-                    "§d🐱 "
-                            + safeName
-                            + " "
-                            + logicalCat.getMood().getHeadIcon()
+                    lang.forPlayer(owner).text(
+                            "entity.name-normal",
+                            safeName,
+                            logicalCat.getMood().getHeadIcon()
+                    )
             );
         }
 
@@ -2088,3 +2100,4 @@ public class CatEntityService {
         );
     }
 }
+

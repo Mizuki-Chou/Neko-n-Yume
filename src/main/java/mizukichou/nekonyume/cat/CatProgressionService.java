@@ -1,14 +1,15 @@
 package mizukichou.nekonyume.cat;
 
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.event.CatLevelUpEvent;
 import mizukichou.nekonyume.event.CatMeowRankUpEvent;
 import mizukichou.nekonyume.event.CatSkillRollEvent;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.skill.CatSkillManager;
 import mizukichou.nekonyume.skill.SkillRefreshCostProvider;
 import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -27,17 +28,17 @@ import java.util.UUID;
  *
  * <p>
  * 0.6.2：升级时同步猫实体最大生命（10 + 等级/4）。
+ * 0.7.0：配置改走 ConfigManager 快照；
+ * 玩家文案改走 Lang。
  * </p>
  */
 public class CatProgressionService {
 
     private final CatStore store;
     private final CatCache cache;
-    private final PluginConfig config;
+    private final ConfigManager configManager;
     private final CatSkillManager skillManager;
-
-    private final MiniMessage mm =
-            MiniMessage.miniMessage();
+    private final Lang lang;
 
     private final Random random =
             new Random();
@@ -45,14 +46,16 @@ public class CatProgressionService {
     public CatProgressionService(
             CatStore store,
             CatCache cache,
-            PluginConfig config,
-            CatSkillManager skillManager
+            ConfigManager configManager,
+            CatSkillManager skillManager,
+            Lang lang
     ) {
 
         this.store = store;
         this.cache = cache;
-        this.config = config;
+        this.configManager = configManager;
         this.skillManager = skillManager;
+        this.lang = lang;
     }
 
     public void gainExperience(
@@ -68,12 +71,16 @@ public class CatProgressionService {
             return;
         }
 
+        ConfigSnapshot config =
+                configManager.snapshot();
+
         int fromLevel = cat.getLevel();
 
         int gained =
                 cat.addExperience(
                         amount,
-                        config.getLevelCurveBase()
+                        config.getGrowth()
+                                .getLevelCurveBase()
                 );
 
         store.setCatExperience(
@@ -91,15 +98,11 @@ public class CatProgressionService {
         }
 
         player.sendMessage(
-                mm.deserialize(
-                        "<gradient:#fde68a:#f59e0b>🎉 </gradient>"
-                ).append(
-                        Component.text(cat.getName())
-                ).append(
-                        mm.deserialize(
-                                "<white> 升级到了 <yellow>"
-                                        + cat.getLevel()
-                                        + " 级</yellow>!</white>"
+                lang.forPlayer(player).message(
+                        "progression.level-up",
+                        cat.getName(),
+                        String.valueOf(
+                                cat.getLevel()
                         )
                 )
         );
@@ -150,7 +153,9 @@ public class CatProgressionService {
         int gained =
                 cat.addMeowPower(
                         amount,
-                        config.getMeowRankCurveOffset()
+                        configManager.snapshot()
+                                .getMeow()
+                                .getRankCurveOffset()
                 );
 
         store.setCatMeowPower(
@@ -164,15 +169,11 @@ public class CatProgressionService {
         );
 
         player.sendMessage(
-                mm.deserialize(
-                        "<gradient:#c4b5fd:#a78bfa>✨ 喵光一闪!</gradient>"
-                ).append(
-                        Component.text(" " + cat.getName())
-                ).append(
-                        mm.deserialize(
-                                "<white> 获得了 <light_purple>"
-                                        + amount
-                                        + " 点喵力</light_purple>!</white>"
+                lang.forPlayer(player).message(
+                        "progression.meow-power",
+                        cat.getName(),
+                        String.valueOf(
+                                amount
                         )
                 )
         );
@@ -189,15 +190,11 @@ public class CatProgressionService {
         }
 
         player.sendMessage(
-                mm.deserialize(
-                        "<gradient:#c4b5fd:#a78bfa>🌟 喵阶提升!</gradient>"
-                ).append(
-                        Component.text(" " + cat.getName())
-                ).append(
-                        mm.deserialize(
-                                "<white> 提升到了 <light_purple>喵阶 "
-                                        + cat.getMeowRank()
-                                        + "</light_purple>!</white>"
+                lang.forPlayer(player).message(
+                        "progression.meow-rank-up",
+                        cat.getName(),
+                        String.valueOf(
+                                cat.getMeowRank()
                         )
                 )
         );
@@ -274,17 +271,15 @@ public class CatProgressionService {
                 cat.addSkill(rolled);
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<gradient:#fde68a:#f59e0b>🎉 </gradient>"
-                        ).append(
-                                Component.text(cat.getName())
-                        ).append(
-                                mm.deserialize(
-                                        "<white> 学会了新技能：</white>"
-                                )
-                        ).append(
-                                Component.text(
-                                        rolled.getDisplayName()
+                        lang.forPlayer(player).message(
+                                "progression.new-skill",
+                                cat.getName(),
+                                lang.forPlayer(player).text(
+                                        "skill-name."
+                                                + rolled.name()
+                                                .toLowerCase(
+                                                        java.util.Locale.ROOT
+                                                )
                                 )
                         )
                 );
@@ -400,10 +395,11 @@ public class CatProgressionService {
         if (!provider.canAfford(player, cost)) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<red>❌ "
-                                    + skillManager.getRefreshCostDisplay(dreamSlot)
-                                    + " 不足，无法刷新。</red>"
+                    lang.forPlayer(player).message(
+                            "progression.refresh-cant-afford",
+                            skillManager.getRefreshCostDisplay(
+                                    dreamSlot
+                            )
                     )
             );
 
@@ -435,8 +431,8 @@ public class CatProgressionService {
         if (pool.isEmpty()) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<yellow>没有可抽取的新技能了。</yellow>"
+                    lang.forPlayer(player).message(
+                            "progression.refresh-no-pool"
                     )
             );
 
@@ -446,10 +442,9 @@ public class CatProgressionService {
         if (!provider.charge(player, cost)) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<red>❌ 扣除"
-                                    + provider.getDisplayName()
-                                    + "失败。</red>"
+                    lang.forPlayer(player).message(
+                            "progression.refresh-charge-fail",
+                            provider.getDisplayName()
                     )
             );
 
@@ -480,14 +475,22 @@ public class CatProgressionService {
                 );
 
         player.sendMessage(
-                mm.deserialize(
-                        "<gradient:#c4b5fd:#a78bfa>✨ 技能槽刷新成功：</gradient>"
-                ).append(
-                        Component.text(oldSkill.getDisplayName())
-                ).append(
-                        mm.deserialize("<white> → </white>")
-                ).append(
-                        Component.text(newSkill.getDisplayName())
+                lang.forPlayer(player).message(
+                        "progression.refresh-done",
+                        lang.forPlayer(player).text(
+                                "skill-name."
+                                        + oldSkill.name()
+                                        .toLowerCase(
+                                                java.util.Locale.ROOT
+                                        )
+                        ),
+                        lang.forPlayer(player).text(
+                                "skill-name."
+                                        + newSkill.name()
+                                        .toLowerCase(
+                                                java.util.Locale.ROOT
+                                        )
+                        )
                 )
         );
 

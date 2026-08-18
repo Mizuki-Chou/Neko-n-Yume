@@ -40,8 +40,16 @@ class MemoryCatStoreLifecycleTest {
         store.createCat(player);
 
         assertTrue(store.hasCat(player));
-        assertEquals("Mikan", store.getCatName(player));
+        assertTrue(
+                java.util.Arrays.asList(
+                                AbstractCatStore.CAT_NAME_POOL
+                        )
+                        .contains(
+                                store.getCatName(player)
+                        )
+        );
         assertEquals(1, store.getCatLevel(player));
+
         assertEquals(50, store.getCatAffection(player));
         assertEquals(100, store.getCatHunger(player));
         assertEquals(100, store.getCatHealth(player));

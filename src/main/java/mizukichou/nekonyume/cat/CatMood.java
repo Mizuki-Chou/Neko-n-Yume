@@ -1,13 +1,17 @@
 package mizukichou.nekonyume.cat;
 
+import lombok.Getter;
+
 /**
  * 猫咪心情。
  *
  * <p>
  * 心情不存储、不迁移。
  * 由饥饿 / 好感 / 健康 / 时间实时推导。
+ * 0.7.0：纯 accessor 由 Lombok @Getter 生成。
  * </p>
  */
+@Getter
 public enum CatMood {
 
     ECSTATIC(
@@ -90,24 +94,12 @@ public enum CatMood {
         this.maxScore = maxScore;
     }
 
-    public String getDisplayName() {
-        return displayName;
-    }
-
     public String getIcon() {
         return icon;
     }
 
     public String getHeadIcon() {
         return headIcon;
-    }
-
-    public int getMinScore() {
-        return minScore;
-    }
-
-    public int getMaxScore() {
-        return maxScore;
     }
 
     /*

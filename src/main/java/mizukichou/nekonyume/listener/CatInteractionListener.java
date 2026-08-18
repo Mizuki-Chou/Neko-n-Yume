@@ -2,11 +2,11 @@ package mizukichou.nekonyume.listener;
 
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatProgressionService;
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.event.CatPettedEvent;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.storage.CatStore;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
@@ -25,6 +25,14 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 
+/**
+ * 抚摸交互监听。
+ *
+ * <p>
+ * 0.7.0：配置改走 ConfigManager 快照；文案改走 Lang（pet.* 节）。
+ * 0.7.1：消息按玩家客户端语言解析。
+ * </p>
+ */
 public class CatInteractionListener implements Listener {
 
     /*
@@ -43,20 +51,11 @@ public class CatInteractionListener implements Listener {
     private final CatCache cache;
     private final CatProgressionService progression;
     private final CatStore store;
-    private final PluginConfig config;
+    private final ConfigManager configManager;
+    private final Lang lang;
 
     private final NamespacedKey catKey;
     private final NamespacedKey ownerKey;
-
-    /*
-     * MiniMessage 实例。
-     *
-     * 全局消息格式统一为 MiniMessage；
-     * 玩家可控文本一律用 Component.text 拼接，
-     * 避免标签注入。
-     */
-    private final MiniMessage mm =
-            MiniMessage.miniMessage();
 
     /*
      * 喵力 / 经验随机源。
@@ -77,17 +76,19 @@ public class CatInteractionListener implements Listener {
             CatCache cache,
             CatProgressionService progression,
             CatStore store,
-            PluginConfig config,
+            ConfigManager configManager,
             NamespacedKey catKey,
-            NamespacedKey ownerKey
+            NamespacedKey ownerKey,
+            Lang lang
     ) {
 
         this.cache = cache;
         this.progression = progression;
         this.store = store;
-        this.config = config;
+        this.configManager = configManager;
         this.catKey = catKey;
         this.ownerKey = ownerKey;
+        this.lang = lang;
     }
 
     /*
@@ -179,6 +180,9 @@ public class CatInteractionListener implements Listener {
             return;
         }
 
+        ConfigSnapshot config =
+                configManager.snapshot();
+
         /*
          * ========================================================
          * 每日抚摸次数
@@ -188,7 +192,8 @@ public class CatInteractionListener implements Listener {
          */
 
         int dailyPetLimit =
-                config.getDailyPetLimit();
+                config.getDaily()
+                        .getPetLimit();
 
         int petCount =
                 store.getCatPetCount(
@@ -198,10 +203,11 @@ public class CatInteractionListener implements Listener {
         if (petCount >= dailyPetLimit) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<yellow>🐱 今天已经摸过猫咪 "
-                                    + dailyPetLimit
-                                    + " 次啦！</yellow>"
+                    lang.forPlayer(player).message(
+                            "pet.limit-reached",
+                            String.valueOf(
+                                    dailyPetLimit
+                            )
                     )
             );
 
@@ -263,8 +269,8 @@ public class CatInteractionListener implements Listener {
                 Math.min(
                         100,
                         oldAffection
-                                + config
-                                .getPetAffectionBase()
+                                + config.getAffection()
+                                .getPetBase()
                 );
 
         int actualAffectionGain =
@@ -320,10 +326,12 @@ public class CatInteractionListener implements Listener {
          */
 
         int petXpMin =
-                config.getPetXpMin();
+                config.getGrowth()
+                        .getPetXpMin();
 
         int petXpMax =
-                config.getPetXpMax();
+                config.getGrowth()
+                        .getPetXpMax();
 
         int xpGain =
                 petXpMin
@@ -351,7 +359,8 @@ public class CatInteractionListener implements Listener {
         int meowGain = 0;
 
         int chance =
-                config.getPetMeowChance()
+                config.getMeow()
+                        .getPetChance()
                         + logicalCat.getPersonality()
                         .getPetMeowChanceBonus();
 
@@ -423,21 +432,14 @@ public class CatInteractionListener implements Listener {
          * ========================================================
          *
          * 名字是玩家可控文本，
-         * 用 Component.text 拼接，
+         * 经 Lang 占位符包装为纯文本，
          * 避免 MiniMessage 标签注入。
          */
 
         player.sendMessage(
-                mm.deserialize(
-                        "<light_purple>🐱 </light_purple>"
-                ).append(
-                        Component.text(
-                                logicalCat.getName()
-                        )
-                ).append(
-                        mm.deserialize(
-                                " <white>蹭了蹭你！</white>"
-                        )
+                lang.forPlayer(player).message(
+                        "pet.petted",
+                        logicalCat.getName()
                 )
         );
 
@@ -448,35 +450,41 @@ public class CatInteractionListener implements Listener {
         if (actualAffectionGain > 0) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<red>❤ 好感度 <green>+"
-                                    + actualAffectionGain
-                                    + " <gray>("
-                                    + logicalCat.getAffection()
-                                    + "/100)</gray>"
+                    lang.forPlayer(player).message(
+                            "pet.affection-up",
+                            String.valueOf(
+                                    actualAffectionGain
+                            ),
+                            String.valueOf(
+                                    logicalCat.getAffection()
+                            )
                     )
             );
 
         } else {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<red>❤ 好感度 <gray>已经达到最大值 ("
-                                    + logicalCat.getAffection()
-                                    + "/100)</gray>"
+                    lang.forPlayer(player).message(
+                            "pet.affection-max",
+                            String.valueOf(
+                                    logicalCat.getAffection()
+                            )
                     )
             );
         }
 
         player.sendMessage(
-                mm.deserialize(
-                        "<yellow>🐾 今日抚摸："
-                                + currentPetCount
-                                + "/"
-                                + dailyPetLimit
-                                + " <gray>| 剩余 "
-                                + remaining
-                                + " 次</gray>"
+                lang.forPlayer(player).message(
+                        "pet.progress",
+                        String.valueOf(
+                                currentPetCount
+                        ),
+                        String.valueOf(
+                                dailyPetLimit
+                        ),
+                        String.valueOf(
+                                remaining
+                        )
                 )
         );
     }

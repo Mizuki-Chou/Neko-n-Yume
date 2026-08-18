@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * CatStore 的共享实现骨架。
@@ -69,6 +70,25 @@ public abstract class AbstractCatStore implements CatStore {
     protected static final int DEFAULT_CAT_AFFECTION = 50;
     protected static final int DEFAULT_CAT_HUNGER = 100;
     protected static final int DEFAULT_CAT_HEALTH = 100;
+
+    /*
+     * 建档名字池（0.7.1）：
+     * createCat 时随机抽取一个，持久化后永不改变。
+     */
+    protected static final String[] CAT_NAME_POOL = {
+            "Marisa", "Eleven", "Undecim", "Mikan",
+            "Sora", "Nikki", "Orange", "Lemon"
+    };
+
+    protected static String randomCatName() {
+
+        return CAT_NAME_POOL[
+                ThreadLocalRandom.current()
+                        .nextInt(
+                                CAT_NAME_POOL.length
+                        )
+                ];
+    }
 
     /*
      * ============================================================
@@ -367,7 +387,7 @@ public abstract class AbstractCatStore implements CatStore {
                 new HashMap<>();
 
         fields.put(FIELD_ID, newCatId.toString());
-        fields.put(FIELD_NAME, DEFAULT_CAT_NAME);
+        fields.put(FIELD_NAME, randomCatName());
         fields.put(FIELD_LEVEL, DEFAULT_CAT_LEVEL);
         fields.put(FIELD_AFFECTION, DEFAULT_CAT_AFFECTION);
         fields.put(FIELD_HUNGER, DEFAULT_CAT_HUNGER);

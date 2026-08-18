@@ -24,13 +24,14 @@ import mizukichou.nekonyume.cat.CatProgressionService;
 import mizukichou.nekonyume.cat.CatVariantService;
 import mizukichou.nekonyume.command.NekoYumeAdminCommand;
 import mizukichou.nekonyume.command.NekoYumeCommand;
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.craft.CraftingRecipes;
 import mizukichou.nekonyume.data.PlayerDataManager;
 import mizukichou.nekonyume.gift.GiftManager;
 import mizukichou.nekonyume.gui.CatGuiManager;
-import mizukichou.nekonyume.listener.CatEntityListener;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.listener.AchievementListener;
+import mizukichou.nekonyume.listener.CatEntityListener;
 import mizukichou.nekonyume.listener.CatFoodListener;
 import mizukichou.nekonyume.listener.CatGuiListener;
 import mizukichou.nekonyume.listener.CatInteractionListener;
@@ -66,20 +67,27 @@ import java.util.logging.Level;
  * Neko n' Yume 主类（组合根）。
  *
  * <p>
- * 架构（Step 3 ~ Step 5B）：
+ * 架构（Step 3 ~ Step 5B，0.7.0）：
  * 本类只负责装配：创建全部组件并构造注入，
  * 不再被内部组件当作 Service Locator 使用。
  * </p>
  *
  * <p>
  * 装配顺序（依赖链，无环）：
- * CatStore → CatCache → CatBattleState / CatVariantService
- * → CatSkillManager → CatProgressionService → CatEntityService
- * → CatManager（门面，对外 API）
+ * ConfigManager → Lang → CatStore → CatCache
+ * → CatBattleState / CatVariantService
+ * → CatSkillManager → CatProgressionService
+ * → CatEntityService → CatManager（门面，对外 API）
  * → CatFoodManager → MumaNightManager → CraftingRecipes
  * → CatGuiManager → GiftManager → SkillGuiManager
  * → AchievementService → AchievementGuiManager
  * → 命令 → 监听器 → 任务
+ * </p>
+ *
+ * <p>
+ * 0.7.0：
+ * - 配置管理（ConfigManager）与数据定义（ConfigSnapshot）分离；
+ * - 玩家文案全部走 Lang（lang/zh_cn.yml）。
  * </p>
  *
  * <p>
@@ -89,8 +97,14 @@ import java.util.logging.Level;
  */
 public final class NekoNYume extends JavaPlugin {
 
-    private PluginConfig pluginConfig;
+    /*
+     * 配置管理（生命周期）与语言文本。
+     */
+    private ConfigManager configManager;
+    private Lang lang;
+
     private PlayerDataManager dataManager;
+
     /*
      * Step 3：存储抽象层。
      * YamlCatStore 是磁盘实现；PlayerDataManager 是其适配器。
@@ -126,7 +140,7 @@ public final class NekoNYume extends JavaPlugin {
     private SkillGuiManager skillGuiManager;
 
     /*
-     * 成就系统（0.6.3）。
+     * 成就系统（0.7.0）。
      */
     private AchievementService achievementService;
     private AchievementGuiManager achievementGuiManager;
@@ -152,8 +166,12 @@ public final class NekoNYume extends JavaPlugin {
     private BukkitTask mumaNightTask;
     private BukkitTask autosaveTask;
 
-    public PluginConfig getPluginConfig() {
-        return pluginConfig;
+    public ConfigManager getConfigManager() {
+        return configManager;
+    }
+
+    public Lang getLang() {
+        return lang;
     }
 
     public PlayerDataManager getDataManager() {
@@ -219,9 +237,14 @@ public final class NekoNYume extends JavaPlugin {
 
         reloadConfig();
 
-        if (pluginConfig != null) {
+        if (configManager != null) {
 
-            pluginConfig.reload();
+            configManager.reload();
+        }
+
+        if (lang != null) {
+
+            lang.reload();
         }
 
         if (catFoodManager != null) {
@@ -256,15 +279,22 @@ public final class NekoNYume extends JavaPlugin {
 
         /*
          * ========================================================
-         * 数值配置
+         * 配置管理与语言文本
          * ========================================================
          *
          * 必须先于数据系统与食物系统创建。
          */
 
-        pluginConfig =
-                new PluginConfig(
+        configManager =
+                new ConfigManager(
                         this
+                );
+
+        lang =
+                new Lang(
+                        this,
+                        configManager,
+                        getLogger()
                 );
 
         /*
@@ -280,7 +310,8 @@ public final class NekoNYume extends JavaPlugin {
         catStore =
                 new YamlCatStore(
                         new PluginCatStoreEnv(
-                                this
+                                this,
+                                configManager.snapshot()
                         )
                 );
 
@@ -349,16 +380,18 @@ public final class NekoNYume extends JavaPlugin {
                         getLogger(),
                         catStore,
                         catCache,
-                        pluginConfig,
-                        battleState
+                        configManager,
+                        battleState,
+                        lang
                 );
 
         catProgressionService =
                 new CatProgressionService(
                         catStore,
                         catCache,
-                        pluginConfig,
-                        catSkillManager
+                        configManager,
+                        catSkillManager,
+                        lang
                 );
 
         catEntityService =
@@ -371,7 +404,8 @@ public final class NekoNYume extends JavaPlugin {
                         catVariantService,
                         catKey,
                         ownerKey,
-                        battleState
+                        battleState,
+                        lang
                 );
 
         catManager =
@@ -392,8 +426,9 @@ public final class NekoNYume extends JavaPlugin {
                         this,
                         catStore,
                         catCache,
-                        pluginConfig,
-                        catProgressionService
+                        configManager,
+                        catProgressionService,
+                        lang
                 );
 
         /*
@@ -409,7 +444,9 @@ public final class NekoNYume extends JavaPlugin {
                 new MumaNightManager(
                         this,
                         getLogger(),
-                        catFoodManager
+                        catFoodManager,
+                        configManager,
+                        lang
                 );
 
         /*
@@ -426,7 +463,8 @@ public final class NekoNYume extends JavaPlugin {
                 new CraftingRecipes(
                         this,
                         catFoodManager,
-                        toolKey
+                        toolKey,
+                        lang
                 );
 
         craftingRecipes.registerAll();
@@ -441,7 +479,8 @@ public final class NekoNYume extends JavaPlugin {
                 new CatGuiManager(
                         catStore,
                         catCache,
-                        pluginConfig
+                        configManager,
+                        lang
                 );
 
         /*
@@ -454,8 +493,9 @@ public final class NekoNYume extends JavaPlugin {
                 new GiftManager(
                         catStore,
                         catCache,
-                        pluginConfig,
-                        catFoodManager
+                        configManager,
+                        catFoodManager,
+                        lang
                 );
 
         /*
@@ -472,12 +512,13 @@ public final class NekoNYume extends JavaPlugin {
                         catStore,
                         catCache,
                         catSkillManager,
-                        pluginConfig
+                        configManager,
+                        lang
                 );
 
         /*
          * ========================================================
-         * 成就系统（0.6.3）
+         * 成就系统（0.7.0）
          * ========================================================
          *
          * AchievementService：进度推进 + 解锁判定 + 奖励发放；
@@ -490,7 +531,8 @@ public final class NekoNYume extends JavaPlugin {
                         catStore,
                         catCache,
                         catProgressionService,
-                        pluginConfig,
+                        configManager,
+                        lang,
                         getLogger()
                 );
 
@@ -498,7 +540,8 @@ public final class NekoNYume extends JavaPlugin {
                 new AchievementGuiManager(
                         catStore,
                         catCache,
-                        achievementService
+                        achievementService,
+                        lang
                 );
 
         /*
@@ -515,13 +558,14 @@ public final class NekoNYume extends JavaPlugin {
                 new NekoYumeCommand(
                         catStore,
                         catCache,
-                        pluginConfig,
+                        configManager,
                         catEntityService,
                         catGuiManager,
                         skillGuiManager,
                         achievementGuiManager,
                         achievementService,
-                        toolKey
+                        toolKey,
+                        lang
                 )
         )) {
 
@@ -537,7 +581,8 @@ public final class NekoNYume extends JavaPlugin {
                         catEntityService,
                         catProgressionService,
                         catFoodManager,
-                        mumaNightManager
+                        mumaNightManager,
+                        lang
                 )
         )) {
 
@@ -557,7 +602,8 @@ public final class NekoNYume extends JavaPlugin {
                         catStore,
                         catCache,
                         catEntityService,
-                        giftManager
+                        giftManager,
+                        configManager
                 );
 
         registerListeners(
@@ -575,7 +621,8 @@ public final class NekoNYume extends JavaPlugin {
                 new CatFoodListener(
                         catFoodManager,
                         catKey,
-                        ownerKey
+                        ownerKey,
+                        lang
                 ),
                 new CatEntityListener(
                         this,
@@ -583,18 +630,20 @@ public final class NekoNYume extends JavaPlugin {
                         catStore,
                         catCache,
                         catEntityService,
-                        pluginConfig,
+                        configManager,
                         battleState,
                         catKey,
-                        ownerKey
+                        ownerKey,
+                        lang
                 ),
                 new CatInteractionListener(
                         catCache,
                         catProgressionService,
                         catStore,
-                        pluginConfig,
+                        configManager,
                         catKey,
-                        ownerKey
+                        ownerKey,
+                        lang
                 ),
                 new CatGuiListener(
                         this,
@@ -603,13 +652,15 @@ public final class NekoNYume extends JavaPlugin {
                         skillGuiManager,
                         catCache,
                         catProgressionService,
-                        catSkillManager
+                        catSkillManager,
+                        lang
                 ),
                 new CatToolListener(
                         catGuiManager,
                         catStore,
                         catEntityService,
-                        toolKey
+                        toolKey,
+                        lang
                 ),
                 new MumaNightListener(
                         mumaNightManager
@@ -617,7 +668,6 @@ public final class NekoNYume extends JavaPlugin {
                 new MeowDanCraftListener(
                         catFoodManager
                 )
-
         );
 
         /*
@@ -634,7 +684,7 @@ public final class NekoNYume extends JavaPlugin {
                         .runTaskTimer(
                                 this,
                                 new CatHungerTask(
-                                        pluginConfig,
+                                        configManager,
                                         catStore,
                                         catCache
                                 ),
@@ -700,10 +750,11 @@ public final class NekoNYume extends JavaPlugin {
                                 this,
                                 new CatBattleTask(
                                         getLogger(),
-                                        pluginConfig,
+                                        configManager,
                                         catCache,
                                         battleState,
-                                        catEntityService
+                                        catEntityService,
+                                        lang
                                 ),
                                 10L,
                                 10L
@@ -723,7 +774,7 @@ public final class NekoNYume extends JavaPlugin {
                         .runTaskTimer(
                                 this,
                                 new CatAuraTask(
-                                        pluginConfig,
+                                        configManager,
                                         catCache,
                                         battleState
                                 ),

@@ -7,13 +7,14 @@ import mizukichou.nekonyume.cat.CatBehaviorMode;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.GrowthMath;
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.gui.CatGuiManager;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.skill.SkillGuiManager;
 import mizukichou.nekonyume.storage.CatStore;
 import mizukichou.nekonyume.util.CatToolItem;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.NamespacedKey;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -24,43 +25,53 @@ import org.bukkit.inventory.ItemStack;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
+/**
+ * 主命令。
+ *
+ * <p>
+ * 0.7.0：玩家文案改走 Lang（command.* 节）；
+ * 配置改走 ConfigManager 快照。
+ * </p>
+ */
 public class NekoYumeCommand
         implements CommandExecutor, TabCompleter {
 
     private final CatStore store;
     private final CatCache cache;
-    private final PluginConfig config;
+    private final ConfigManager configManager;
     private final CatEntityService entityService;
     private final CatGuiManager guiManager;
     private final SkillGuiManager skillGuiManager;
     private final AchievementGuiManager achievementGuiManager;
     private final AchievementService achievementService;
     private final NamespacedKey toolKey;
-
-    private final MiniMessage mm = MiniMessage.miniMessage();
+    private final Lang lang;
 
     public NekoYumeCommand(
             CatStore store,
             CatCache cache,
-            PluginConfig config,
+            ConfigManager configManager,
             CatEntityService entityService,
             CatGuiManager guiManager,
             SkillGuiManager skillGuiManager,
             AchievementGuiManager achievementGuiManager,
             AchievementService achievementService,
-            NamespacedKey toolKey
+            NamespacedKey toolKey,
+            Lang lang
     ) {
 
         this.store = store;
         this.cache = cache;
-        this.config = config;
+        this.configManager = configManager;
         this.entityService = entityService;
         this.guiManager = guiManager;
         this.skillGuiManager = skillGuiManager;
         this.achievementGuiManager = achievementGuiManager;
         this.achievementService = achievementService;
         this.toolKey = toolKey;
+        this.lang = lang;
     }
 
     @Override
@@ -78,23 +89,8 @@ public class NekoYumeCommand
                 args[0].equalsIgnoreCase("help")) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            """
-                            <gradient:#ff9de2:#a78bfa>
-                            🐱 Neko n' Yume Commands
-                            </gradient>
-
-                            <gray>/nekoyume claim</gray> - Claim your first cat
-                            <gray>/nekoyume cat</gray> - View your cat
-                            <gray>/nekoyume rename &lt;名字&gt;</gray> - Rename your cat
-                            <gray>/nekoyume summon</gray> - Summon your cat
-                            <gray>/nekoyume mode &lt;follow|sit|free&gt;</gray> - Set cat behavior
-                            <gray>/nekoyume gui</gray> - Open cat panel
-                            <gray>/nekoyume skill</gray> - Open skill panel
-                            <gray>/nekoyume tool</gray> - Get quick-access cat wand
-                            <gray>/nekoyume achievements</gray> - View your achievements
-                            <gray>/nekoyume help</gray> - Show help
-                            """
+                    lang.forSender(sender).message(
+                            "command.help"
                     )
             );
 
@@ -124,8 +120,8 @@ public class NekoYumeCommand
             )) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>🐱 你已经拥有猫咪了!</red>"
+                        lang.forSender(sender).message(
+                                "command.claim.already-has"
                         )
                 );
 
@@ -142,8 +138,11 @@ public class NekoYumeCommand
             /*
              * 获取猫咪名字
              *
-             * 新猫默认是 Mikan
+             * 建档时从名字池随机抽取
+             * （Marisa / Eleven / Undecim / Mikan /
+             *   Sora / Nikki / Orange / Lemon）
              */
+
             String name =
                     store.getCatName(
                             player.getUniqueId()
@@ -182,28 +181,22 @@ public class NekoYumeCommand
 
                             /*
                              * 名字是玩家可控文本，
-                             * 使用 Component.text 拼接，
+                             * 经 Lang 占位符包装为纯文本，
                              * 避免 MiniMessage 标签注入。
                              */
                             player.sendMessage(
-                                    mm.deserialize(
-                                            "<gradient:#ff9de2:#a78bfa>🐱 恭喜！你获得了第一只猫 </gradient>"
-                                    ).append(
-                                            Component.text(name)
-                                    ).append(
-                                            Component.text("!")
+                                    lang.forSender(sender).message(
+                                            "command.claim.first-cat",
+                                            name
                                     )
                             );
 
                         } else {
 
                             player.sendMessage(
-                                    mm.deserialize(
-                                            "<gradient:#ff9de2:#a78bfa>🐱 </gradient>"
-                                    ).append(
-                                            Component.text(name)
-                                    ).append(
-                                            Component.text(" 已经来到了你身边!")
+                                    lang.forSender(sender).message(
+                                            "command.claim.here",
+                                            name
                                     )
                             );
                         }
@@ -233,8 +226,8 @@ public class NekoYumeCommand
             )) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>🐱 你还没有猫咪!</red>"
+                        lang.forSender(sender).message(
+                                "command.no-cat"
                         )
                 );
 
@@ -255,20 +248,20 @@ public class NekoYumeCommand
             if (cat == null) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>🐱 你的猫咪数据异常，请联系管理员。</red>"
+                        lang.forSender(sender).message(
+                                "command.cat.data-error"
                         )
                 );
 
                 return true;
             }
 
+            ConfigSnapshot config =
+                    configManager.snapshot();
+
             /*
              * 经验进度：
              * 当前累计经验 / 下一级所需累计经验。
-             *
-             * cumXp(L) = base × L × (L-1) / 2
-             * （base 来自 config: growth.level-curve-base）
              */
             int level =
                     cat.getLevel();
@@ -276,15 +269,13 @@ public class NekoYumeCommand
             long nextLevelXp =
                     GrowthMath.xpRequiredForLevel(
                             level + 1,
-                            config.getLevelCurveBase()
+                            config.getGrowth()
+                                    .getLevelCurveBase()
                     );
 
             /*
              * 喵力进度：
              * 当前喵力 / 下一阶所需累计喵力。
-             *
-             * cumMeow(N) = N × (N + offset) / 2
-             * （offset 来自 config: meow.rank-curve-offset）
              */
             int meowRank =
                     cat.getMeowRank();
@@ -292,94 +283,114 @@ public class NekoYumeCommand
             long nextRankPower =
                     GrowthMath.meowRequiredForRank(
                             meowRank + 1,
-                            config.getMeowRankCurveOffset()
+                            config.getMeow()
+                                    .getRankCurveOffset()
                     );
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<gradient:#ff9de2:#a78bfa>🐱 你的猫</gradient>"
-                    )
-            );
-
-            /*
-             * 名字是玩家可控文本，
-             * 使用 Component.text 拼接，
-             * 避免 MiniMessage 标签注入。
-             */
-            player.sendMessage(
-                    Component.text(
-                            "名字: " + cat.getName()
+                    lang.forSender(sender).message(
+                            "command.cat.header"
                     )
             );
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<white>陪伴: <aqua>第 "
-                                    + cat.getCompanionDays(
-                                    System.currentTimeMillis()
+                    lang.forSender(sender).message(
+                            "command.cat.name",
+                            cat.getName()
+                    )
+            );
+
+            player.sendMessage(
+                    lang.forSender(sender).message(
+                            "command.cat.days",
+                            String.valueOf(
+                                    cat.getCompanionDays(
+                                            System.currentTimeMillis()
+                                    )
                             )
-                                    + " 天</aqua>"
                     )
             );
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<white>等级: <yellow>"
-                                    + level
-                                    + "</yellow> <gray>(经验 "
-                                    + cat.getExperience()
-                                    + "/"
-                                    + nextLevelXp
-                                    + ")</gray>"
+                    lang.forSender(sender).message(
+                            "command.cat.level",
+                            String.valueOf(level),
+                            String.valueOf(
+                                    cat.getExperience()
+                            ),
+                            String.valueOf(
+                                    nextLevelXp
+                            )
                     )
             );
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<white>喵阶: <light_purple>"
-                                    + meowRank
-                                    + "</light_purple> <gray>(喵力 "
-                                    + cat.getMeowPower()
-                                    + "/"
-                                    + nextRankPower
-                                    + ")</gray>"
+                    lang.forSender(sender).message(
+                            "command.cat.meow",
+                            String.valueOf(meowRank),
+                            String.valueOf(
+                                    cat.getMeowPower()
+                            ),
+                            String.valueOf(
+                                    nextRankPower
+                            )
                     )
             );
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<white>心情: <yellow>"
-                                    + cat.getMood().getIcon()
-                                    + " "
-                                    + cat.getMood().getDisplayName()
-                                    + "</yellow>"
+                    lang.forSender(sender).message(
+                            "command.cat.mood",
+                            cat.getMood().getIcon(),
+                            lang.forSender(sender).text(
+                                    "mood-name."
+                                            + cat.getMood()
+                                            .name()
+                                            .toLowerCase(
+                                                    java.util.Locale.ROOT
+                                            )
+                            )
                     )
             );
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<white>性格: <aqua>"
-                                    + cat.getPersonality()
-                                    .getDisplayName()
-                                    + "</aqua>"
+                    lang.forSender(sender).message(
+                            "command.cat.personality",
+                            lang.forSender(sender).text(
+                                    "personality-name."
+                                            + cat.getPersonality()
+                                            .name()
+                                            .toLowerCase(
+                                                    java.util.Locale.ROOT
+                                            )
+                            )
                     )
             );
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<white>底蕴: <aqua>"
-                                    + cat.getTier()
-                                    .getDisplayName()
-                                    + "</aqua>"
+                    lang.forSender(sender).message(
+                            "command.cat.tier",
+                            lang.forSender(sender).text(
+                                    "tier-name."
+                                            + cat.getTier()
+                                            .name()
+                                            .toLowerCase(
+                                                    java.util.Locale.ROOT
+                                            )
+                            )
                     )
             );
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<white>行为: <aqua>"
-                                    + cat.getBehaviorMode()
-                                    .getDisplayName()
-                                    + "</aqua>"
+                    lang.forSender(sender).message(
+                            "command.cat.behavior",
+                            lang.forSender(sender).text(
+                                    "behavior-name."
+                                            + cat.getBehaviorMode()
+                                            .name()
+                                            .toLowerCase(
+                                                    java.util.Locale.ROOT
+                                            )
+                            )
                     )
             );
 
@@ -406,8 +417,8 @@ public class NekoYumeCommand
             )) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>🐱 你还没有猫!</red>"
+                        lang.forSender(sender).message(
+                                "command.no-cat"
                         )
                 );
 
@@ -417,8 +428,8 @@ public class NekoYumeCommand
             if (args.length < 2) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<yellow>用法: /nekoyume mode <follow|sit|free></yellow>"
+                        lang.forSender(sender).message(
+                                "command.mode.usage"
                         )
                 );
 
@@ -429,8 +440,6 @@ public class NekoYumeCommand
              * 解析模式。
              * 无效输入不静默回退，
              * 而是给出明确错误。
-             * （args[1] 是玩家输入，
-             *   用 Component.text 拼接防注入）
              */
             CatBehaviorMode mode;
 
@@ -448,12 +457,9 @@ public class NekoYumeCommand
                 default -> {
 
                     player.sendMessage(
-                            mm.deserialize(
-                                    "<red>❌ 未知模式: </red>"
-                            ).append(
-                                    Component.text(
-                                            args[1]
-                                    )
+                            lang.forSender(sender).message(
+                                    "command.mode.unknown",
+                                    args[1]
                             )
                     );
 
@@ -467,11 +473,14 @@ public class NekoYumeCommand
             );
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<gradient:#ff9de2:#a78bfa>🐱 行为模式已切换为 </gradient>"
-                    ).append(
-                            Component.text(
-                                    mode.getDisplayName()
+                    lang.forSender(sender).message(
+                            "command.mode.changed",
+                            lang.forSender(sender).text(
+                                    "behavior-name."
+                                            + mode.name()
+                                            .toLowerCase(
+                                                    java.util.Locale.ROOT
+                                            )
                             )
                     )
             );
@@ -499,8 +508,8 @@ public class NekoYumeCommand
             )) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>🐱 你还没有猫咪!</red>"
+                        lang.forSender(sender).message(
+                                "command.no-cat"
                         )
                 );
 
@@ -534,8 +543,8 @@ public class NekoYumeCommand
             )) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>🐱 你还没有猫咪!</red>"
+                        lang.forSender(sender).message(
+                                "command.no-cat"
                         )
                 );
 
@@ -569,19 +578,21 @@ public class NekoYumeCommand
             )) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>🐱 你还没有猫咪!</red>"
+                        lang.forSender(sender).message(
+                                "command.no-cat"
                         )
                 );
 
                 return true;
             }
 
-            if (!config.isAchievementsEnabled()) {
+            if (!configManager.snapshot()
+                    .getAchievements()
+                    .isEnabled()) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>🏆 成就系统未开启。</red>"
+                        lang.forSender(sender).message(
+                                "command.achievements.disabled"
                         )
                 );
 
@@ -591,6 +602,93 @@ public class NekoYumeCommand
             achievementGuiManager.open(
                     player
             );
+
+            return true;
+        }
+
+        /*
+         * /nekoyume language <auto|zh_cn|en_us|ja_jp>
+         *
+         * 个人语言覆盖（仅内存，重启后回到 auto）。
+         */
+        if (args.length > 0 &&
+                args[0].equalsIgnoreCase("language")) {
+
+            if (!(sender instanceof Player player)) {
+
+                sender.sendMessage(
+                        "Only players can use this command."
+                );
+
+                return true;
+            }
+
+            if (args.length < 2) {
+
+                player.sendMessage(
+                        lang.forSender(
+                                sender
+                        ).message(
+                                "command.language.usage"
+                        )
+                );
+
+                return true;
+            }
+
+            String code =
+                    args[1].toLowerCase(
+                            Locale.ROOT
+                    );
+
+            switch (code) {
+
+                case "auto", "zh_cn", "en_us", "ja_jp" -> {
+                }
+
+                default -> {
+
+                    player.sendMessage(
+                            lang.forSender(
+                                    sender
+                            ).message(
+                                    "command.language.unknown",
+                                    args[1]
+                            )
+                    );
+
+                    return true;
+                }
+            }
+
+            lang.setOverride(
+                    player.getUniqueId(),
+                    code
+            );
+
+            if ("auto".equals(
+                    code
+            )) {
+
+                player.sendMessage(
+                        lang.forSender(
+                                sender
+                        ).message(
+                                "command.language.reset"
+                        )
+                );
+
+            } else {
+
+                player.sendMessage(
+                        lang.forSender(
+                                sender
+                        ).message(
+                                "command.language.set",
+                                code
+                        )
+                );
+            }
 
             return true;
         }
@@ -619,8 +717,8 @@ public class NekoYumeCommand
             )) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>🐱 你还没有猫咪!</red>"
+                        lang.forSender(sender).message(
+                                "command.no-cat"
                         )
                 );
 
@@ -633,7 +731,9 @@ public class NekoYumeCommand
              */
             ItemStack tool =
                     CatToolItem.create(
-                            toolKey
+                            toolKey,
+                            lang,
+                            player
                     );
 
             if (player.getInventory()
@@ -641,8 +741,8 @@ public class NekoYumeCommand
                     .isEmpty()) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<gradient:#ff9de2:#a78bfa>🐱 你获得了一根逗猫棒，右键使用!</gradient>"
+                        lang.forSender(sender).message(
+                                "command.tool.received"
                         )
                 );
 
@@ -658,8 +758,8 @@ public class NekoYumeCommand
                         );
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<yellow>🐱 背包已满，逗猫棒掉在了你的脚边。</yellow>"
+                        lang.forSender(sender).message(
+                                "command.tool.inventory-full"
                         )
                 );
             }
@@ -687,8 +787,8 @@ public class NekoYumeCommand
             )) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>🐱 你还没有猫咪!</red>"
+                        lang.forSender(sender).message(
+                                "command.no-cat"
                         )
                 );
 
@@ -698,8 +798,8 @@ public class NekoYumeCommand
             if (args.length < 2) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<yellow>用法: /nekoyume rename <名字></yellow>"
+                        lang.forSender(sender).message(
+                                "command.rename.usage"
                         )
                 );
 
@@ -729,8 +829,8 @@ public class NekoYumeCommand
             if (newName.isEmpty()) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>❌ 猫咪名字不能为空!</red>"
+                        lang.forSender(sender).message(
+                                "command.rename.empty"
                         )
                 );
 
@@ -740,8 +840,8 @@ public class NekoYumeCommand
             if (newName.length() > 16) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>❌ 猫咪名字不能超过 16 个字符!</red>"
+                        lang.forSender(sender).message(
+                                "command.rename.too-long"
                         )
                 );
 
@@ -766,12 +866,9 @@ public class NekoYumeCommand
             );
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<gradient:#ff9de2:#a78bfa>🐱 你的猫现在叫 </gradient>"
-                    ).append(
-                            Component.text(newName)
-                    ).append(
-                            Component.text(" 了!")
+                    lang.forSender(sender).message(
+                            "command.rename.done",
+                            newName
                     )
             );
 
@@ -798,8 +895,8 @@ public class NekoYumeCommand
             )) {
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>🐱 你还没有猫!</red>"
+                        lang.forSender(sender).message(
+                                "command.no-cat"
                         )
                 );
 
@@ -829,24 +926,18 @@ public class NekoYumeCommand
                         if (summoned) {
 
                             player.sendMessage(
-                                    mm.deserialize(
-                                            "<gradient:#ff9de2:#a78bfa>🐱 </gradient>"
-                                    ).append(
-                                            Component.text(name)
-                                    ).append(
-                                            Component.text(" 出现在你身边!")
+                                    lang.forSender(sender).message(
+                                            "command.summon.spawned",
+                                            name
                                     )
                             );
 
                         } else {
 
                             player.sendMessage(
-                                    mm.deserialize(
-                                            "<gradient:#ff9de2:#a78bfa>🐱 </gradient>"
-                                    ).append(
-                                            Component.text(name)
-                                    ).append(
-                                            Component.text(" 来到你身边啦!")
+                                    lang.forSender(sender).message(
+                                            "command.summon.here",
+                                            name
                                     )
                             );
                         }
@@ -860,8 +951,8 @@ public class NekoYumeCommand
          * unknown command
          */
         sender.sendMessage(
-                mm.deserialize(
-                        "<yellow>用法: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|achievements></yellow>"
+                lang.forSender(sender).message(
+                        "command.unknown"
                 )
         );
 
@@ -895,7 +986,20 @@ public class NekoYumeCommand
                     "gui",
                     "skill",
                     "tool",
+                    "language",
                     "achievements"
+            );
+        }
+
+        if (args.length == 2 &&
+                args[0].equalsIgnoreCase("language")) {
+
+            return filter(
+                    args[1],
+                    "auto",
+                    "zh_cn",
+                    "en_us",
+                    "ja_jp"
             );
         }
 

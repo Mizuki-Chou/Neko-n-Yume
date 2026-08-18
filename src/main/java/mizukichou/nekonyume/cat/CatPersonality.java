@@ -1,5 +1,7 @@
 package mizukichou.nekonyume.cat;
 
+import lombok.Getter;
+
 import java.util.UUID;
 
 /**
@@ -15,6 +17,7 @@ import java.util.UUID;
  * 与其"身份永恒"的理念一致。
  * </p>
  */
+@Getter
 public enum CatPersonality {
 
     /*
@@ -169,38 +172,6 @@ public enum CatPersonality {
         this.petCooldownMillis = petCooldownMillis;
         this.foodValueMultiplier = foodValueMultiplier;
         this.moodBonus = moodBonus;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public double getHungerRate() {
-        return hungerRate;
-    }
-
-    public int getFeedAffectionBonus() {
-        return feedAffectionBonus;
-    }
-
-    public int getFeedMeowChanceBonus() {
-        return feedMeowChanceBonus;
-    }
-
-    public int getPetMeowChanceBonus() {
-        return petMeowChanceBonus;
-    }
-
-    public long getPetCooldownMillis() {
-        return petCooldownMillis;
-    }
-
-    public double getFoodValueMultiplier() {
-        return foodValueMultiplier;
-    }
-
-    public int getMoodBonus() {
-        return moodBonus;
     }
 
     /*

@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.skill;
 
+import lombok.Getter;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 
@@ -13,6 +14,7 @@ import java.util.UUID;
  * 只有主人可以操作面板。
  * </p>
  */
+@Getter
 public final class SkillGuiHolder implements InventoryHolder {
 
     private final UUID ownerUuid;
@@ -22,10 +24,6 @@ public final class SkillGuiHolder implements InventoryHolder {
     ) {
 
         this.ownerUuid = ownerUuid;
-    }
-
-    public UUID getOwnerUuid() {
-        return ownerUuid;
     }
 
     @Override

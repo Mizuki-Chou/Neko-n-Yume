@@ -4,11 +4,14 @@ import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.CatMood;
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
+import mizukichou.nekonyume.config.GiftItemEntry;
 import mizukichou.nekonyume.event.CatGiftEvent;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -26,21 +29,26 @@ import java.util.UUID;
  * <p>
  * 每天登录后判定一次（由 PlayerJoinListener 延迟调用）。
  * 所有数值与礼物池来自 config.yml 的 gift 节。
- * </p>
- *
- * <p>
- * Step 5A-2：构造注入（CatStore / CatCache / PluginConfig / CatFoodManager）。
+ * 0.7.0：配置改走 ConfigManager 快照；文案改走 Lang。
+ * 0.7.1：消息按玩家客户端语言解析；
+ * 含 § 色码的喵丹名进聊天消息前经 LegacyComponentSerializer 转换。
  * </p>
  */
 public class GiftManager {
 
     private final CatStore store;
     private final CatCache cache;
-    private final PluginConfig config;
+    private final ConfigManager configManager;
     private final CatFoodManager foodManager;
+    private final Lang lang;
 
-    private final MiniMessage mm =
-            MiniMessage.miniMessage();
+    /*
+     * 含 § 色码的文本（喵丹名）进聊天组件前
+     * 必须经 LegacyComponentSerializer 转换，
+     * 避免 LegacyFormattingDetected 警告。
+     */
+    private final LegacyComponentSerializer legacySerializer =
+            LegacyComponentSerializer.legacySection();
 
     private final Random random =
             new Random();
@@ -48,14 +56,16 @@ public class GiftManager {
     public GiftManager(
             CatStore store,
             CatCache cache,
-            PluginConfig config,
-            CatFoodManager foodManager
+            ConfigManager configManager,
+            CatFoodManager foodManager,
+            Lang lang
     ) {
 
         this.store = store;
         this.cache = cache;
-        this.config = config;
+        this.configManager = configManager;
         this.foodManager = foodManager;
+        this.lang = lang;
     }
 
     /*
@@ -74,7 +84,13 @@ public class GiftManager {
             return;
         }
 
-        if (!config.isGiftEnabled()) {
+        ConfigSnapshot config =
+                configManager.snapshot();
+
+        ConfigSnapshot.Gift giftConfig =
+                config.getGift();
+
+        if (!giftConfig.isEnabled()) {
             return;
         }
 
@@ -108,7 +124,7 @@ public class GiftManager {
                 cat.getMood();
 
         if (mood.ordinal() >
-                config.getGiftMoodMin()
+                giftConfig.getMoodMin()
                         .ordinal()) {
 
             store.markGiftChecked(
@@ -123,14 +139,14 @@ public class GiftManager {
          * base + per-rank × 喵阶，封顶 max。
          */
         int chance =
-                config.getGiftBaseChance()
-                        + config.getGiftChancePerRank()
+                giftConfig.getBaseChance()
+                        + giftConfig.getChancePerRank()
                         * cat.getMeowRank();
 
         chance =
                 Math.min(
                         chance,
-                        config.getGiftMaxChance()
+                        giftConfig.getMaxChance()
                 );
 
         /*
@@ -150,8 +166,9 @@ public class GiftManager {
         /*
          * 抽取礼物。
          */
-        PluginConfig.GiftItemEntry entry =
+        GiftItemEntry entry =
                 rollEntry(
+                        giftConfig,
                         cat.getMeowRank()
                 );
 
@@ -161,7 +178,8 @@ public class GiftManager {
 
         ItemStack gift =
                 buildItem(
-                        entry
+                        entry,
+                        player
                 );
 
         if (gift == null) {
@@ -193,28 +211,26 @@ public class GiftManager {
          * 消息 + 音效 + 粒子。
          */
         player.sendMessage(
-                mm.deserialize(
-                        "<gradient:#fde68a:#f59e0b>🎁 </gradient>"
-                ).append(
-                        Component.text(
-                                cat.getName()
-                        )
-                ).append(
-                        mm.deserialize(
-                                "<white> 叼来了一份礼物，放进了你的背包!</white>"
-                        )
+                lang.forPlayer(player).message(
+                        "gift.received",
+                        cat.getName()
                 )
         );
 
         player.sendMessage(
-                mm.deserialize(
-                        "<gray>礼物内容: <white>"
-                                + gift.getAmount()
-                                + " × "
-                                + giftDisplayName(
-                                entry
+                lang.forPlayer(player).messageComponents(
+                        "gift.content",
+                        Component.text(
+                                String.valueOf(
+                                        gift.getAmount()
+                                )
+                        ),
+                        legacySerializer.deserialize(
+                                giftDisplayName(
+                                        entry,
+                                        player
+                                )
                         )
-                                + "</white></gray>"
                 )
         );
 
@@ -254,19 +270,20 @@ public class GiftManager {
      * 保证配置不完整时仍有礼物可抽。
      */
 
-    private PluginConfig.GiftItemEntry rollEntry(
+    private GiftItemEntry rollEntry(
+            ConfigSnapshot.Gift giftConfig,
             int meowRank
     ) {
 
         int tier =
-                config.giftTierForRank(
+                ConfigSnapshot.Gift.computeTier(
                         meowRank
                 );
 
         while (tier >= 1) {
 
-            List<PluginConfig.GiftItemEntry> entries =
-                    config.getGiftTierExact(
+            List<GiftItemEntry> entries =
+                    giftConfig.tierExact(
                             tier
                     );
 
@@ -283,13 +300,13 @@ public class GiftManager {
         return null;
     }
 
-    private PluginConfig.GiftItemEntry weightedRoll(
-            List<PluginConfig.GiftItemEntry> entries
+    private GiftItemEntry weightedRoll(
+            List<GiftItemEntry> entries
     ) {
 
         int totalWeight = 0;
 
-        for (PluginConfig.GiftItemEntry entry :
+        for (GiftItemEntry entry :
                 entries) {
 
             totalWeight += entry.getWeight();
@@ -304,7 +321,7 @@ public class GiftManager {
                         totalWeight
                 );
 
-        for (PluginConfig.GiftItemEntry entry :
+        for (GiftItemEntry entry :
                 entries) {
 
             roll -= entry.getWeight();
@@ -326,7 +343,8 @@ public class GiftManager {
      */
 
     private ItemStack buildItem(
-            PluginConfig.GiftItemEntry entry
+            GiftItemEntry entry,
+            Player player
     ) {
 
         int amount =
@@ -348,7 +366,8 @@ public class GiftManager {
 
             return foodManager.createMeowDan(
                     entry.getMeowDanQuality(),
-                    amount
+                    amount,
+                    player
             );
         }
 
@@ -359,13 +378,20 @@ public class GiftManager {
     }
 
     private String giftDisplayName(
-            PluginConfig.GiftItemEntry entry
+            GiftItemEntry entry,
+            Player player
     ) {
 
         if (entry.isMeowDan()) {
 
-            return entry.getMeowDanQuality()
-                    .getFullDisplayName();
+            return lang.forPlayer(player).text(
+                    "meowdan-name."
+                            + entry.getMeowDanQuality()
+                            .name()
+                            .toLowerCase(
+                                    java.util.Locale.ROOT
+                            )
+            );
         }
 
         return entry.getMaterial()

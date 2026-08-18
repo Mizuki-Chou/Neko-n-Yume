@@ -1,5 +1,7 @@
 package mizukichou.nekonyume.event;
 
+import lombok.Getter;
+
 import mizukichou.nekonyume.cat.Cat;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
@@ -13,6 +15,7 @@ import org.bukkit.event.HandlerList;
  * 属于事后通知，不可取消。
  * </p>
  */
+@Getter
 public class CatLevelUpEvent extends Event {
 
     private static final HandlerList handlers =
@@ -34,22 +37,6 @@ public class CatLevelUpEvent extends Event {
         this.cat = cat;
         this.fromLevel = fromLevel;
         this.toLevel = toLevel;
-    }
-
-    public Player getPlayer() {
-        return player;
-    }
-
-    public Cat getCat() {
-        return cat;
-    }
-
-    public int getFromLevel() {
-        return fromLevel;
-    }
-
-    public int getToLevel() {
-        return toLevel;
     }
 
     @Override

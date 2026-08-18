@@ -1,5 +1,8 @@
 package mizukichou.nekonyume.cat;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -25,6 +28,8 @@ import java.util.UUID;
  * Cat 只保留状态持有与合法的领域查询。
  * </p>
  */
+@Getter
+@Setter
 public class Cat {
 
     /*
@@ -452,18 +457,6 @@ public class Cat {
      * ============================================================
      */
 
-    public UUID getId() {
-        return id;
-    }
-
-    public UUID getOwnerUuid() {
-        return ownerUuid;
-    }
-
-    public String getName() {
-        return name;
-    }
-
     public void setName(
             String name
     ) {
@@ -479,23 +472,9 @@ public class Cat {
 
     /*
      * ============================================================
-     * 性格
-     * ============================================================
-     */
-
-    public CatPersonality getPersonality() {
-        return personality;
-    }
-
-    /*
-     * ============================================================
      * 底蕴
      * ============================================================
      */
-
-    public CatTier getTier() {
-        return tier;
-    }
 
     public void setTier(
             CatTier tier
@@ -511,10 +490,6 @@ public class Cat {
      * 等级 / 经验
      * ============================================================
      */
-
-    public int getLevel() {
-        return level;
-    }
 
     public void setLevel(
             int level
@@ -534,10 +509,6 @@ public class Cat {
         setLevel(
                 this.level + amount
         );
-    }
-
-    public int getExperience() {
-        return experience;
     }
 
     public void setExperience(
@@ -620,10 +591,6 @@ public class Cat {
      * ============================================================
      */
 
-    public int getMeowPower() {
-        return meowPower;
-    }
-
     public void setMeowPower(
             int meowPower
     ) {
@@ -633,10 +600,6 @@ public class Cat {
                         0,
                         meowPower
                 );
-    }
-
-    public int getMeowRank() {
-        return meowRank;
     }
 
     public void setMeowRank(
@@ -717,10 +680,6 @@ public class Cat {
      * 行为模式
      * ============================================================
      */
-
-    public CatBehaviorMode getBehaviorMode() {
-        return behaviorMode;
-    }
 
     public void setBehaviorMode(
             CatBehaviorMode behaviorMode
@@ -852,10 +811,6 @@ public class Cat {
      * ============================================================
      */
 
-    public int getHunger() {
-        return hunger;
-    }
-
     public void setHunger(
             int hunger
     ) {
@@ -891,10 +846,6 @@ public class Cat {
      * 好感度
      * ============================================================
      */
-
-    public int getAffection() {
-        return affection;
-    }
 
     public void setAffection(
             int affection
@@ -932,10 +883,6 @@ public class Cat {
      * ============================================================
      */
 
-    public int getHealth() {
-        return health;
-    }
-
     public void setHealth(
             int health
     ) {
@@ -972,10 +919,6 @@ public class Cat {
      * ============================================================
      */
 
-    public String getVariant() {
-        return variant;
-    }
-
     public void setVariant(
             String variant
     ) {
@@ -1001,108 +944,9 @@ public class Cat {
 
     /*
      * ============================================================
-     * 位置
-     * ============================================================
-     */
-
-    public String getWorldName() {
-        return worldName;
-    }
-
-    public void setWorldName(
-            String worldName
-    ) {
-
-        this.worldName =
-                worldName;
-    }
-
-    public double getX() {
-        return x;
-    }
-
-    public void setX(
-            double x
-    ) {
-
-        this.x = x;
-    }
-
-    public double getY() {
-        return y;
-    }
-
-    public void setY(
-            double y
-    ) {
-
-        this.y = y;
-    }
-
-    public double getZ() {
-        return z;
-    }
-
-    public void setZ(
-            double z
-    ) {
-
-        this.z = z;
-    }
-
-    public float getYaw() {
-        return yaw;
-    }
-
-    public void setYaw(
-            float yaw
-    ) {
-
-        this.yaw = yaw;
-    }
-
-    public float getPitch() {
-        return pitch;
-    }
-
-    public void setPitch(
-            float pitch
-    ) {
-
-        this.pitch = pitch;
-    }
-
-    /*
-     * ============================================================
-     * Bukkit Entity UUID
-     * ============================================================
-     */
-
-    public UUID getEntityUuid() {
-        return entityUuid;
-    }
-
-    public void setEntityUuid(
-            UUID entityUuid
-    ) {
-
-        this.entityUuid =
-                entityUuid;
-    }
-
-    /*
-     * ============================================================
      * 时间
      * ============================================================
      */
-
-    public long getCreatedAt() {
-        return createdAt;
-    }
-
-    public long getLastFedAt() {
-        return lastFedAt;
-    }
 
     public void setLastFedAt(
             long timestamp
@@ -1120,10 +964,6 @@ public class Cat {
 
         this.lastFedAt =
                 System.currentTimeMillis();
-    }
-
-    public long getLastInteractionAt() {
-        return lastInteractionAt;
     }
 
     public void setLastInteractionAt(

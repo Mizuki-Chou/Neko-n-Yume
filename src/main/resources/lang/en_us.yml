@@ -1,0 +1,441 @@
+#
+# Neko n' Yume language file (English, US)
+#
+# Chat messages use MiniMessage templates;
+# {0} {1} … are argument placeholders (replaced safely after parsing).
+# Plain strings (GUI item names / lore / titles) use § color codes.
+# Server-side override file: plugins/NekoNYume/lang/en_us.yml
+# Hot-reloaded by /nekoyumeadmin reload.
+
+#
+# ---------- Commands ----------
+#
+command:
+  no-cat: "<red>🐱 You don't have a cat yet!</red>"
+  unknown: "<yellow>Usage: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|language|achievements></yellow>"
+  help: |
+    <gradient:#ff9de2:#a78bfa>
+    🐱 Neko n' Yume Commands
+    </gradient>
+
+    <gray>/nekoyume claim</gray> - Claim your first cat
+    <gray>/nekoyume cat</gray> - View your cat
+    <gray>/nekoyume rename &lt;name&gt;</gray> - Rename your cat
+    <gray>/nekoyume summon</gray> - Summon your cat
+    <gray>/nekoyume mode &lt;follow|sit|free&gt;</gray> - Set behavior mode
+    <gray>/nekoyume gui</gray> - Open the cat panel
+    <gray>/nekoyume skill</gray> - Open the skill panel
+    <gray>/nekoyume tool</gray> - Get a quick-access cat wand
+    <gray>/nekoyume language &lt;auto|zh_cn|en_us|ja_jp&gt;</gray> - Set your language
+    <gray>/nekoyume achievements</gray> - View the achievement hall
+    <gray>/nekoyume help</gray> - Show this help
+  claim:
+    already-has: "<red>🐱 You already have a cat!</red>"
+    first-cat: "<gradient:#ff9de2:#a78bfa>🐱 Congratulations! You received your first cat, </gradient>{0}!"
+    here: "<gradient:#ff9de2:#a78bfa>🐱 </gradient>{0} has already come to your side!"
+  cat:
+    data-error: "<red>🐱 Your cat data is corrupted. Please contact an administrator.</red>"
+    header: "<gradient:#ff9de2:#a78bfa>🐱 Your Cat</gradient>"
+    name: "Name: {0}"
+    days: "<white>Together: <aqua>Day {0}</aqua>"
+    level: "<white>Level: <yellow>{0}</yellow> <gray>(EXP {1}/{2})</gray>"
+    meow: "<white>Meow Rank: <light_purple>{0}</light_purple> <gray>(Meow Power {1}/{2})</gray>"
+    mood: "<white>Mood: <yellow>{0} {1}</yellow>"
+    personality: "<white>Personality: <aqua>{0}</aqua>"
+    tier: "<white>Heritage: <aqua>{0}</aqua>"
+    behavior: "<white>Behavior: <aqua>{0}</aqua>"
+  mode:
+    usage: "<yellow>Usage: /nekoyume mode <follow|sit|free></yellow>"
+    unknown: "<red>❌ Unknown mode: {0}</red>"
+    changed: "<gradient:#ff9de2:#a78bfa>🐱 Behavior mode changed to </gradient>{0}"
+  rename:
+    usage: "<yellow>Usage: /nekoyume rename <name></yellow>"
+    empty: "<red>❌ The cat's name cannot be empty!</red>"
+    too-long: "<red>❌ The name cannot be longer than 16 characters!</red>"
+    done: "<gradient:#ff9de2:#a78bfa>🐱 Your cat is now called </gradient>{0}!"
+  summon:
+    spawned: "<gradient:#ff9de2:#a78bfa>🐱 </gradient>{0} appeared by your side!"
+    here: "<gradient:#ff9de2:#a78bfa>🐱 </gradient>{0} came to you!"
+  tool:
+    received: "<gradient:#ff9de2:#a78bfa>🐱 You received a cat wand. Right-click to use it!</gradient>"
+    inventory-full: "<yellow>🐱 Your inventory is full, so the wand dropped at your feet.</yellow>"
+  language:
+    usage: "<yellow>Usage: /nekoyume language <auto|zh_cn|en_us|ja_jp></yellow>"
+    set: "<gradient:#ff9de2:#a78bfa>🐱 Plugin language set to </gradient>{0}!"
+    reset: "<gradient:#ff9de2:#a78bfa>🐱 Plugin language will now follow your Minecraft language.</gradient>"
+    unknown: "<red>❌ Unknown language: {0}</red>"
+  achievements:
+    disabled: "<red>🏆 The achievement system is disabled.</red>"
+
+#
+# ---------- Admin commands ----------
+#
+admin:
+  no-permission: "<red>❌ You don't have permission to run this command!</red>"
+  usage: "<yellow>Usage: /nekoyumeadmin <meowdan|cat|skill|mumanight|reload></yellow>"
+  reload-done: "<gradient:#a7f3d0:#60a5fa>✔ Neko n' Yume configuration reloaded!</gradient>"
+  meowdan-usage: "<yellow>Usage: /nekoyumeadmin meowdan give <player> <quality> [amount]</yellow>"
+  meowdan-quality-hint: "<gray>Qualities: COMMON / UNCOMMON / RARE / EPIC / LEGENDARY</gray>"
+  player-offline: "<red>❌ The player is offline!</red>"
+  unknown-quality: "<red>❌ Unknown quality: {0}</red>"
+  invalid-amount: "<red>❌ Invalid amount!</red>"
+  amount-positive: "<red>❌ The amount must be greater than 0!</red>"
+  give-cap: "<yellow>⚠ Capped to {0} items per command.</yellow>"
+  give-sender: "<gradient:#a7f3d0:#60a5fa>✔ Gave </gradient>{0} {1}× {2}"
+  give-target: "<gradient:#c4b5fd:#a78bfa>✨ You received </gradient>{0}"
+  cat-usage: "<yellow>Usage: /nekoyumeadmin cat <remove> <player> [confirm]</yellow>"
+  player-not-found: "<red>❌ Player not found.</red>"
+  no-cat-data: "<red>❌ That player has no cat data.</red>"
+  remove-warning: "<red>⚠ This permanently deletes the cat's data and cannot be undone!</red>"
+  remove-confirm: "<yellow>Confirm with: /nekoyumeadmin cat remove {0} confirm</yellow>"
+  remove-done: "<red>✔ Deleted {0}'s cat data.</red>"
+  remove-fail: "<red>❌ Deletion failed: that player has no cat data.</red>"
+  skill-usage: "<yellow>Usage: /nekoyumeadmin skill give <player> <skillId></yellow>"
+  skill-hint: "<gray>Available skills: SHARP_CLAW LIGHT_STEP LIGHT_FUR ALERT WARMTH SMALL_APPETITE IRON_WALL HUNTER_SENSE GUARDIAN FORAGER HEALING_PURR SWIFT_PAWS HUNTING_INSTINCT SPIRIT_SHOT SHADOW_STRIKE DRAIN STAR_DUST NINE_LIVES MEOW_GUARD FLASH_OF_SPIRIT DREAM_AWAKEN STARFALL MOONLIGHT ETERNITY TIME_ECHO RESONANCE DREAM_WEAVER</gray>"
+  unknown-skill: "<red>❌ Unknown skill: {0}</red>"
+  skill-granted: "<green>✔ Granted </green>{0} the skill {1}"
+  skill-granted-target: "<gradient:#fde68a:#f59e0b>🎉 Your cat learned a new skill: </gradient>{0}"
+  skill-grant-fail: "<red>❌ That player already has this skill.</red>"
+  mumanight-player-only: "<red>❌ This command can only be run by players.</red>"
+  mumanight-status: "<yellow>🌑 Muma's Night (current world): </yellow> {0} <gray>Usage: /nekoyumeadmin mumanight <on|off></gray>"
+  mumanight-on: "<dark_red>✔ Muma's Night enabled.</dark_red>"
+  mumanight-off: "<gold>✔ Muma's Night disabled.</gold>"
+  mumanight-usage: "<yellow>Usage: /nekoyumeadmin mumanight <on|off></yellow>"
+
+#
+# ---------- Feeding ----------
+#
+feed:
+  full: "<yellow>🐱 Your cat is already full!</yellow>"
+  ate-food: "<light_purple>🐱 </light_purple>{0} ate <yellow>{1}</yellow>!"
+  hunger-up: "<gold>🍖 Hunger <green>+{0} <gray>({1}/100)</gray>"
+  affection-up: "<red>❤ Affection <green>+{0} <gray>({1}/100)</gray>"
+  meowdan-eat: "<gradient:#c4b5fd:#a78bfa>✨ </gradient>{0} ate {1}!"
+  meowdan-affection: "<red>❤ Affection <green>+{0} <gray>({1}/100)</gray>"
+  meowdan-lore-use: "Right-click your cat to use"
+  meowdan-lore-values: "Meow Power +{0} · Affection +{1} · EXP +{2}"
+  tier-upgrade: "<gradient:#c4b5fd:#a78bfa>🌟 Heritage Ascended!</gradient> {0}'s heritage advanced to {1}"
+  tier-upgrade-fail: "<gray>The meow dan's power swirled inside, but the heritage did not change…</gray>"
+  not-your-cat: "<red>🐱 This isn't your cat.</red>"
+  meowdan-expired: "<red>🐱 This meow dan has expired and can no longer be used.</red>"
+
+#
+# ---------- Petting ----------
+#
+pet:
+  limit-reached: "<yellow>🐱 You've already petted your cat {0} times today!</yellow>"
+  petted: "<light_purple>🐱 </light_purple>{0}<white> nuzzled you!</white>"
+  affection-up: "<red>❤ Affection <green>+{0} <gray>({1}/100)</gray>"
+  affection-max: "<red>❤ Affection <gray>is already at maximum ({0}/100)</gray>"
+  progress: "<yellow>🐾 Pets today: {0}/{1} <gray>| {2} remaining</gray>"
+
+#
+# ---------- Progression ----------
+#
+progression:
+  level-up: "<gradient:#fde68a:#f59e0b>🎉 </gradient>{0} reached <yellow>level {1}</yellow>!"
+  meow-power: "<gradient:#c4b5fd:#a78bfa>✨ Meow flash!</gradient>{0} gained <light_purple>{1} meow power</light_purple>!"
+  meow-rank-up: "<gradient:#c4b5fd:#a78bfa>🌟 Meow Rank Up!</gradient>{0} reached <light_purple>meow rank {1}</light_purple>!"
+  new-skill: "<gradient:#fde68a:#f59e0b>🎉 </gradient>{0} learned a new skill: {1}"
+  refresh-cant-afford: "<red>❌ Not enough {0} to refresh.</red>"
+  refresh-no-pool: "<yellow>There are no new skills left to draw.</yellow>"
+  refresh-charge-fail: "<red>❌ Failed to deduct {0}.</red>"
+  refresh-done: "<gradient:#c4b5fd:#a78bfa>✨ Skill slot refreshed: </gradient>{0} → {1}"
+
+#
+# ---------- Gifts ----------
+#
+gift:
+  received: "<gradient:#fde68a:#f59e0b>🎁 </gradient>{0} brought you a gift and put it in your inventory!"
+  content: "<gray>Gift contents: <white>{0} × {1}</white></gray>"
+
+#
+# ---------- Skills ----------
+#
+skill:
+  missing: "<red>🐱 Your cat doesn't have this skill.</red>"
+  recovering: "<red>🐱 Your cat is injured and can't use skills right now.</red>"
+  cooldown: "<yellow>⏳ Skill on cooldown, <white>{0}s</white> remaining</yellow>"
+  effect-healing: "<green>❤ 「Healing Purr」 took effect and restored {0} health.</green>"
+  effect-swift: "<aqua>💨 「Swift Paws」 took effect, speed increased.</aqua>"
+  effect-hunting: "<red>⚔ 「Hunting Instinct」 took effect, attack increased.</red>"
+  effect-guard: "<light_purple>🛡 「Meow Guard」 took effect, resistance increased.</light_purple>"
+  effect-dream: "<gradient:#c4b5fd:#a78bfa>🌙 「Dream Awaken」 descends — enemies crumble before you.</gradient>"
+  effect-starfall: "<gradient:#fde68a:#f59e0b>⭐ 「Starfall」 unleashed — the stars come crashing down!</gradient>"
+  effect-time-echo: "<gradient:#c4b5fd:#f59e0b>⏳ 「Time Echo」 triggered — time flows backward for you both.</gradient>"
+
+#
+# ---------- Battle ----------
+#
+battle:
+  recovering: "<red>🐱 </red>{0} is injured and can't move for <red>{1} seconds</red>…"
+
+#
+# ---------- Entities ----------
+#
+entity:
+  summoning: "<yellow>🐱 Looking for your cat, please wait a moment!</yellow>"
+  summon-error: "<red>🐱 Something went wrong while summoning your cat. Please check the server log.</red>"
+  teleport-fail: "<red>🐱 Your cat can't teleport right now. Please try again later.</red>"
+  chunk-fail: "<red>🐱 Failed to load your cat's destination chunk. Please try again later.</red>"
+  restored-new: "<yellow>🐱 The original cat entity was nowhere to be found, <gray>so an identical cat has been restored.</gray></yellow>"
+
+#
+# ---------- Muma's Night ----------
+#
+muma:
+  night-start-1: "<dark_red><bold>🌑 The Muma's Night has descended…</bold></dark_red>"
+  night-start-2: "<red>Monsters in the wild have become extremely dangerous — but slaying them may drop Meow Dans!</red>"
+  dawn: "<gold><bold>☀ Dawn breaks, and the Muma's Night comes to an end.</bold></gold>"
+
+#
+# ---------- Cat wand ----------
+#
+tool:
+  wand-name: "§d🐱 Cat Wand"
+  wand-lore: "§7Right-click to open the cat panel"
+  claim-title: "§d🎉 You got a cat!"
+  claim-subtitle: "§7§oWelcome to Neko n' Yume · Cat & Dream"
+
+#
+# ---------- Beginner's book ----------
+#
+book:
+  title: "§d🐱 Neko n' Yume Beginner's Guide"
+  author: "Mizuki Chou"
+  page-1: "§l§1🐱 Welcome to Neko n' Yume!\n\n§r§7This is a little world that belongs to you and your cat.\n§7Your cat will always stay by your side."
+  page-2: "§l§2🐾 The Basics\n\n§r§7Right-click the cat wand to open the cat panel.\n§7Sneak and right-click your cat to pet it."
+  page-3: "§l§3🍖 Feeding\n\n§r§7Hold food and right-click your cat to feed it.\n§7Feeding restores hunger and affection.\n§7A hungry cat grows thin —\n§7remember to feed it well."
+  page-4: "§l§4💖 Affection\n\n§r§7Petting and feeding both raise affection.\n§7Affection affects the aura and gifts.\n§7The first 3 interactions each day are the most effective."
+  page-5: "§l§5📈 Growth\n\n§r§7Interactions grant EXP and levels.\n§7Feeding has a chance to grant meow power.\n§7Meow power raises your meow rank and unlocks skill slots,\n§7and in battle your cat will protect you."
+  page-6: "§l§6⚔ Battle\n\n§r§7In follow mode your cat attacks\n§7hostile mobs near its owner.\n§7When injured, your cat rests for 90 seconds to recover —\n§7it never dies."
+  page-7: "§l§8🏆 Achievements\n\n§r§7Every interaction with your cat\n§7may unlock achievements.\n§7Type /nekoyume achievements\n§7to open the achievement hall."
+  page-8: "§l§d🌙 Muma's Night\n\n§r§7It may descend on any night.\n§7During Muma's Night monsters are far stronger,\n§7but slaying them can drop Meow Dans.\n§7🐱 Good luck on your adventures!"
+
+#
+# ---------- Cat panel (§ plain strings) ----------
+#
+gui:
+  title: "🐱 Neko n' Yume"
+  close: "§cClose"
+  head-mood: "§7Mood: {0} {1}"
+  head-days: "§7Together: Day {0}"
+  head-enter-skill: "§9✦ Click to open the skill panel"
+  level-name: "§eLevel"
+  level-value: "§7Level: §f{0}"
+  level-xp: "§7EXP: §f{0} / {1}"
+  meow-name: "§dMeow Rank"
+  meow-value: "§7Meow Rank: §f{0}"
+  meow-power: "§7Meow Power: §f{0} / {1}"
+  personality-name: "§bPersonality"
+  personality-value: "§7{0}"
+  hunger-name: "§6Hunger"
+  hunger-value: "§7{0} /100"
+  affection-name: "§cAffection"
+  affection-value: "§7{0} /100"
+  health-name: "§aHealth"
+  health-value: "§7{0} /100"
+  mode-follow: "§a🐾 Follow"
+  mode-sit: "§e🪑 Sit"
+  mode-free: "§7🌿 Free"
+  mode-current: "§7✔ Current mode"
+  click-passive: "<yellow>「{0}」 is a passive skill and works automatically.</yellow>"
+
+#
+# ---------- Skill panel (§ plain strings) ----------
+#
+skill-gui:
+  title: "🐱 Skill Panel"
+  close: "§cClose"
+  head-lore: "§7Skill Panel"
+  tier-name: "§eHeritage: {0}"
+  tier-lore: "§7Skill slots grow with your heritage"
+  growth-name: "§aGrowth"
+  growth-level: "§7Level: {0}"
+  growth-rank: "§7Meow Rank: {0}"
+  progress-name: "§dSkill Slots"
+  progress-count: "§7{0} / {1} slots"
+  hint-name: "§6How to Use"
+  hint-cast: "§7Left-click: cast active skill"
+  hint-refresh: "§7Right-click: refresh skill (costs {0})"
+  hint-dream-multiplier: "§7Dream slot refresh cost ×{0}"
+  slot-empty: "§7Empty slot"
+  slot-index: "§8Slot #{0}"
+  quality: "§7Quality: {0}"
+  type-active: "§7Type: §eActive"
+  type-passive: "§7Type: §bPassive"
+  cooldown: "§c⏳ Cooldown: {0}s"
+  ready: "§a✔ Ready"
+  dream-slot: "§d✦ Dream Slot ✦"
+  cast-refresh: "§8Left-click to cast · Right-click to refresh ({0})"
+  passive-refresh: "§8Passive, works automatically · Right-click to refresh ({0})"
+  max-reached: "§cMax Reached"
+  max-reached-tier: "§7Cats of {0} heritage"
+  max-reached-slots: "§7can have at most {0} skill slots"
+  locked-name: "§8Locked skill slot"
+  locked-hint: "§7Unlock condition:"
+
+#
+# ---------- Achievements ----------
+#
+achievement:
+  unlock-title: "§e🏆 Achievement Unlocked!"
+  unlock-subtitle: "§6§l{0}"
+  unlocked: "<gradient:#fde68a:#f59e0b>🏆 Achievement unlocked: </gradient>{0} · {1}"
+  reward: "<gold>🎁 Achievement reward: </gold>{0}"
+
+achievement-gui:
+  title: "🏆 Achievement Hall"
+  close: "§cClose"
+  info-name: "§eAchievement Hall"
+  info-lore-1: "§7Every interaction with your cat"
+  info-lore-2: "§7becomes a memory worth celebrating."
+  info-count: "§7Unlocked: §f{0} / {1}"
+  head-days: "§7Together: Day {0}"
+  unlocked-name: "§e🏆 §6{0}"
+  unlocked-mark: "§a✔ Unlocked"
+  reward-label: "§7Reward: {0}"
+  locked-name: "§8🏆 {0}"
+  progress: "§7Progress: §f{0} / {1}"
+  locked-reward: "§8Reward: {0}"
+  reward-xp: "+{0} EXP"
+  reward-meow: "+{0} Meow Power"
+  reward-both: "+{0} EXP, +{1} Meow Power"
+
+#
+# ---------- Enum name localization (0.7.1) ----------
+#
+achievement-name.first-claim: "Fated Meeting"
+achievement-desc.first-claim: "Claim your first cat"
+achievement-name.companion-days-3: "Three-Day Promise"
+achievement-desc.companion-days-3: "Spend 3 days together with your cat"
+achievement-name.companion-days-100: "A Hundred Days Together"
+achievement-desc.companion-days-100: "Spend 100 days together with your cat"
+achievement-name.pet-total-10: "Pat on the Head"
+achievement-desc.pet-total-10: "Pet your cat 10 times in total"
+achievement-name.pet-total-200: "Master of Petting"
+achievement-desc.pet-total-200: "Pet your cat 200 times in total"
+achievement-name.feed-total-10: "The Feeder"
+achievement-desc.feed-total-10: "Feed your cat 10 times in total"
+achievement-name.feed-total-100: "The Food Lord"
+achievement-desc.feed-total-100: "Feed your cat 100 times in total"
+achievement-name.level-10: "First Glimmer"
+achievement-desc.level-10: "Reach level 10"
+achievement-name.level-60: "At the Peak"
+achievement-desc.level-60: "Reach level 60"
+achievement-name.meow-rank-5: "Meow Light"
+achievement-desc.meow-rank-5: "Reach meow rank 5"
+achievement-name.meow-rank-30: "Full Meow Power"
+achievement-desc.meow-rank-30: "Reach meow rank 30"
+achievement-name.skill-activate-20: "Stunning Skills"
+achievement-desc.skill-activate-20: "Cast active skills 20 times in total"
+achievement-name.skill-refresh-10: "Refresh Maniac"
+achievement-desc.skill-refresh-10: "Refresh skill slots 10 times in total"
+achievement-name.tier-upgrade-1: "Day of Metamorphosis"
+achievement-desc.tier-upgrade-1: "Ascend your cat's heritage once"
+achievement-name.gift-1: "Little Surprise"
+achievement-desc.gift-1: "Receive a gift from your cat once"
+achievement-name.monster-kill-50: "Knight Protector"
+achievement-desc.monster-kill-50: "Have your cat slay 50 monsters"
+skill-name.sharp_claw: "Sharp Claws"
+skill-desc.sharp_claw: "Cat melee damage +2"
+skill-name.light_step: "Nimble Step"
+skill-desc.light_step: "Cat attack interval -20%"
+skill-name.light_fur: "Light Fur"
+skill-desc.light_fur: "Cat damage taken -10%"
+skill-name.alert: "Alert"
+skill-desc.alert: "Aura radius expands to 12 blocks"
+skill-name.warmth: "Warmth"
+skill-desc.warmth: "Aura grants Speed I"
+skill-name.small_appetite: "Small Appetite"
+skill-desc.small_appetite: "Hunger drain -10%"
+skill-name.iron_wall: "Iron Wall"
+skill-desc.iron_wall: "Cat damage taken -25%"
+skill-name.hunter_sense: "Hunter's Sense"
+skill-desc.hunter_sense: "Aura radius expands to 15 blocks"
+skill-name.guardian: "Guardian"
+skill-desc.guardian: "Cat absorbs 20% of damage dealt to owner"
+skill-name.forager: "Forager"
+skill-desc.forager: "Gift chance +10%"
+skill-name.healing_purr: "Healing Purr"
+skill-desc.healing_purr: "Instantly heals the owner"
+skill-name.swift_paws: "Swift Paws"
+skill-desc.swift_paws: "Owner gains Speed II for 20s"
+skill-name.hunting_instinct: "Hunting Instinct"
+skill-desc.hunting_instinct: "Owner gains Strength II for 30s"
+skill-name.spirit_shot: "Spirit Shot"
+skill-desc.spirit_shot: "Cat switches to ranged magic attacks"
+skill-name.shadow_strike: "Shadow Strike"
+skill-desc.shadow_strike: "Every 5th attack is a guaranteed 3× crit"
+skill-name.drain: "Drain"
+skill-desc.drain: "20% of cat damage heals the owner"
+skill-name.star_dust: "Star Dust"
+skill-desc.star_dust: "Cat attacks have 20% chance to splash 50% area damage"
+skill-name.nine_lives: "Nine Lives"
+skill-desc.nine_lives: "Shorter weakness, faster recovery after death protection"
+skill-name.meow_guard: "Meow Guard"
+skill-desc.meow_guard: "Owner gains Resistance II for 10s"
+skill-name.flash_of_spirit: "Flash of Spirit"
+skill-desc.flash_of_spirit: "Meow power chance from petting & feeding +5%"
+skill-name.dream_awaken: "Dream Awaken"
+skill-desc.dream_awaken: "A dream descends: massive area damage and slows enemies"
+skill-name.starfall: "Starfall"
+skill-desc.starfall: "Stars fall: huge damage over a vast area"
+skill-name.moonlight: "Moonlight"
+skill-desc.moonlight: "Sun and moon: stronger attacks at night, constant regen by day"
+skill-name.eternity: "Eternity"
+skill-desc.eternity: "Death protection becomes full-health rebirth"
+skill-name.time_echo: "Time Echo"
+skill-desc.time_echo: "Time rewinds: owner and cat gain powerful buffs"
+skill-name.resonance: "Resonance"
+skill-desc.resonance: "Hearts as one: both sides deal more damage in the aura"
+skill-name.dream_weaver: "Dream Weaver"
+skill-desc.dream_weaver: "Dreams protect you: auto-rescue when near death"
+tier-name.common: "Common"
+tier-name.rare: "Rare"
+tier-name.unique: "Unique"
+tier-name.dream: "Dream"
+mood-name.ecstatic: "Ecstatic"
+mood-name.happy: "Happy"
+mood-name.calm: "Calm"
+mood-name.low: "Down"
+mood-name.sad: "Sad"
+personality-name.gourmand: "Gourmand"
+personality-name.lazy: "Lazy"
+personality-name.clingy: "Clingy"
+personality-name.independent: "Independent"
+personality-name.picky: "Picky"
+personality-name.sunny: "Sunny"
+behavior-name.follow: "Follow"
+behavior-name.sit: "Sit"
+behavior-name.free: "Free"
+meowdan-name.common: "§7✨ Common Meow Dan"
+meowdan-name.uncommon: "§a✨ Uncommon Meow Dan"
+meowdan-name.rare: "§9✨ Rare Meow Dan"
+meowdan-name.epic: "§5✨ Epic Meow Dan"
+meowdan-name.legendary: "§6✨ Legendary Meow Dan"
+food-name.cod: "Raw Cod"
+food-name.salmon: "Raw Salmon"
+food-name.cooked_cod: "Cooked Cod"
+food-name.cooked_salmon: "Cooked Salmon"
+food-name.chicken: "Raw Chicken"
+food-name.cooked_chicken: "Cooked Chicken"
+food-name.beef: "Raw Beef"
+food-name.cooked_beef: "Steak"
+food-name.porkchop: "Raw Porkchop"
+food-name.cooked_porkchop: "Cooked Porkchop"
+food-name.mutton: "Raw Mutton"
+food-name.cooked_mutton: "Cooked Mutton"
+food-name.rabbit: "Raw Rabbit"
+food-name.cooked_rabbit: "Cooked Rabbit"
+food-name.golden_carrot: "Golden Carrot"
+food-name.apple: "Apple"
+food-name.bread: "Bread"
+food-name.cake: "Cake"
+checkpoint.hint-0: "Innate dream slot"
+checkpoint.hint-1: "Meow rank 1"
+checkpoint.hint-2: "Meow rank 10 & level 30"
+checkpoint.hint-3: "Meow rank 30 & level 60"
+checkpoint.unknown: "Unknown"
+entity.name-normal: "§d🐱 {0} {1}"
+entity.name-recovering: "§c❤ {0} is injured · recovers in {1}s"

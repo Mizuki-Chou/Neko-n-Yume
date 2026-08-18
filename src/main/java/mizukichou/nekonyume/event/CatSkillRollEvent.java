@@ -1,5 +1,7 @@
 package mizukichou.nekonyume.event;
 
+import lombok.Getter;
+
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatSkill;
 import org.bukkit.entity.Player;
@@ -14,6 +16,7 @@ import org.bukkit.event.HandlerList;
  * 属于事后通知，不可取消。
  * </p>
  */
+@Getter
 public class CatSkillRollEvent extends Event {
 
     private static final HandlerList handlers =
@@ -52,30 +55,6 @@ public class CatSkillRollEvent extends Event {
         this.oldSkill = oldSkill;
         this.newSkill = newSkill;
         this.refreshed = refreshed;
-    }
-
-    public Player getPlayer() {
-        return player;
-    }
-
-    public Cat getCat() {
-        return cat;
-    }
-
-    public int getSlotIndex() {
-        return slotIndex;
-    }
-
-    public CatSkill getOldSkill() {
-        return oldSkill;
-    }
-
-    public CatSkill getNewSkill() {
-        return newSkill;
-    }
-
-    public boolean isRefreshed() {
-        return refreshed;
     }
 
     @Override

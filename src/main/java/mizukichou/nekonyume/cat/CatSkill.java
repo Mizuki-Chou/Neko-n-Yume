@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.cat;
 
+import lombok.Getter;
 import org.bukkit.Material;
 
 import java.util.ArrayList;
@@ -13,6 +14,7 @@ import java.util.List;
  * 代码只承载名称 / 品质 / 类型 / 图标 / 描述。
  * </p>
  */
+@Getter
 public enum CatSkill {
 
     /*
@@ -270,26 +272,6 @@ public enum CatSkill {
         this.type = type;
         this.icon = icon;
         this.description = description;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public CatTier getTier() {
-        return tier;
-    }
-
-    public SkillType getType() {
-        return type;
-    }
-
-    public Material getIcon() {
-        return icon;
-    }
-
-    public String getDescription() {
-        return description;
     }
 
     public boolean isActive() {

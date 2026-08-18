@@ -1,11 +1,13 @@
 package mizukichou.nekonyume.cat;
 
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.event.CatFedEvent;
 import mizukichou.nekonyume.event.CatTierUpgradeEvent;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
@@ -31,12 +33,16 @@ import java.util.UUID;
  * 猫咪食物与喵丹管理。
  *
  * <p>
- * plugin 仅用于 NamespacedKey 与原始 config 读取。
+ * plugin 仅用于 NamespacedKey；
+ * 数值全部来自 ConfigManager 快照；
+ * 玩家文案全部来自 Lang。
  * </p>
  *
  * <p>
  * 喵丹：PDC 品质 + 批次；批次不匹配即过期。
  * 0.6.2：吃喵丹有概率提升底蕴。
+ * 0.7.1：喵丹物品文案按接收者语言生成；
+ * 含 § 色码的喵丹名进聊天消息前经 LegacyComponentSerializer 转换。
  * </p>
  */
 public class CatFoodManager {
@@ -44,11 +50,6 @@ public class CatFoodManager {
     private static final int MAX_HUNGER = 100;
 
     private static final int MEOW_DAN_MAX_STACK = 64;
-
-    private static final int MEOW_DAN_DEFAULT_GENERATION = 1;
-
-    private final MiniMessage mm =
-            MiniMessage.miniMessage();
 
     private final Random random =
             new Random();
@@ -59,8 +60,17 @@ public class CatFoodManager {
     private final JavaPlugin plugin;
     private final CatStore store;
     private final CatCache cache;
-    private final PluginConfig config;
+    private final ConfigManager configManager;
     private final CatProgressionService progression;
+    private final Lang lang;
+
+    /*
+     * 含 § 色码的文本（喵丹名）进聊天组件前
+     * 必须经 LegacyComponentSerializer 转换，
+     * 避免 LegacyFormattingDetected 警告。
+     */
+    private final LegacyComponentSerializer legacySerializer =
+            LegacyComponentSerializer.legacySection();
 
     private final NamespacedKey meowDanKey;
     private final NamespacedKey meowDanGenKey;
@@ -69,15 +79,17 @@ public class CatFoodManager {
             JavaPlugin plugin,
             CatStore store,
             CatCache cache,
-            PluginConfig config,
-            CatProgressionService progression
+            ConfigManager configManager,
+            CatProgressionService progression,
+            Lang lang
     ) {
 
         this.plugin = plugin;
         this.store = store;
         this.cache = cache;
-        this.config = config;
+        this.configManager = configManager;
         this.progression = progression;
+        this.lang = lang;
 
         this.meowDanKey =
                 new NamespacedKey(
@@ -97,7 +109,9 @@ public class CatFoodManager {
     private void registerFoods() {
 
         foodValues.putAll(
-                config.getFoodValues()
+                configManager.snapshot()
+                        .getFood()
+                        .getValues()
         );
     }
 
@@ -177,9 +191,17 @@ public class CatFoodManager {
         return list;
     }
 
+    /*
+     * 生成喵丹物品。
+     *
+     * player 决定物品文案语言（null = 默认语言）：
+     * 命令发放传目标玩家；
+     * 配方预览 / 怪物掉落传 null。
+     */
     public ItemStack createMeowDan(
             MeowDanQuality quality,
-            int amount
+            int amount,
+            Player player
     ) {
 
         if (quality == null) {
@@ -207,32 +229,42 @@ public class CatFoodManager {
         if (meta != null) {
 
             meta.setDisplayName(
-                    quality.getFullDisplayName()
+                    lang.forPlayer(player).text(
+                            "meowdan-name."
+                                    + quality.name()
+                                    .toLowerCase(
+                                            java.util.Locale.ROOT
+                                    )
+                    )
             );
 
             meta.setLore(
                     Arrays.asList(
                             quality.getColorCode()
-                                    + "右键你的猫咪使用",
+                                    + lang.forPlayer(player).text(
+                                    "feed.meowdan-lore-use"
+                            ),
                             quality.getColorCode()
-                                    + "喵力 +"
-                                    + quality.getMeowPowerGain()
-                                    + " · 好感 +"
-                                    + quality.getAffectionGain()
-                                    + " · 经验 +"
-                                    + quality.getXpGain()
+                                    + lang.forPlayer(player).text(
+                                    "feed.meowdan-lore-values",
+                                    String.valueOf(
+                                            quality.getMeowPowerGain()
+                                    ),
+                                    String.valueOf(
+                                            quality.getAffectionGain()
+                                    ),
+                                    String.valueOf(
+                                            quality.getXpGain()
+                                    )
+                            )
                     )
             );
 
             meta.setCustomModelData(
-                    plugin.getConfig()
-                            .getInt(
-                                    "items.meowdan.custom-model-data."
-                                            + quality.name()
-                                            .toLowerCase(
-                                                    Locale.ROOT
-                                            ),
-                                    quality.getDefaultModelData()
+                    configManager.snapshot()
+                            .getItems()
+                            .meowdanCustomModelData(
+                                    quality
                             )
             );
 
@@ -322,11 +354,9 @@ public class CatFoodManager {
 
     private int currentMeowDanGeneration() {
 
-        return plugin.getConfig()
-                .getInt(
-                        "items.meowdan.generation",
-                        MEOW_DAN_DEFAULT_GENERATION
-                );
+        return configManager.snapshot()
+                .getItems()
+                .getMeowdanGeneration();
     }
 
     public MeowDanQuality getMeowDanQuality(
@@ -446,23 +476,19 @@ public class CatFoodManager {
         );
 
         player.sendMessage(
-                mm.deserialize(
-                        "<gradient:#c4b5fd:#a78bfa>✨ </gradient>"
-                ).append(
+                lang.forPlayer(player).messageComponents(
+                        "feed.meowdan-eat",
                         Component.text(
                                 cat.getName()
-                        )
-                ).append(
-                        mm.deserialize(
-                                "<white> 吃下了 </white>"
-                        )
-                ).append(
-                        Component.text(
-                                quality.getFullDisplayName()
-                        )
-                ).append(
-                        mm.deserialize(
-                                "<white>!</white>"
+                        ),
+                        legacySerializer.deserialize(
+                                lang.forPlayer(player).text(
+                                        "meowdan-name."
+                                                + quality.name()
+                                                .toLowerCase(
+                                                        java.util.Locale.ROOT
+                                                )
+                                )
                         )
                 )
         );
@@ -470,12 +496,14 @@ public class CatFoodManager {
         if (actualAffectionGain > 0) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<red>❤ 好感度 <green>+"
-                                    + actualAffectionGain
-                                    + " <gray>("
-                                    + cat.getAffection()
-                                    + "/100)</gray>"
+                    lang.forPlayer(player).message(
+                            "feed.meowdan-affection",
+                            String.valueOf(
+                                    actualAffectionGain
+                            ),
+                            String.valueOf(
+                                    cat.getAffection()
+                            )
                     )
             );
         }
@@ -577,8 +605,8 @@ public class CatFoodManager {
         if (!success) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<gray>喵丹的力量在体内流转，但底蕴没有变化…</gray>"
+                    lang.forPlayer(player).message(
+                            "feed.tier-upgrade-fail"
                     )
             );
 
@@ -603,19 +631,15 @@ public class CatFoodManager {
         );
 
         player.sendMessage(
-                mm.deserialize(
-                        "<gradient:#c4b5fd:#a78bfa>🌟 底蕴升华!</gradient>"
-                ).append(
-                        Component.text(
-                                " " + cat.getName()
-                        )
-                ).append(
-                        mm.deserialize(
-                                "<white> 的底蕴提升到了 </white>"
-                        )
-                ).append(
-                        Component.text(
-                                newTier.getDisplayName()
+                lang.forPlayer(player).message(
+                        "feed.tier-upgrade",
+                        cat.getName(),
+                        lang.forPlayer(player).text(
+                                "tier-name."
+                                        + newTier.name()
+                                        .toLowerCase(
+                                                java.util.Locale.ROOT
+                                        )
                         )
                 )
         );
@@ -709,8 +733,8 @@ public class CatFoodManager {
         if (currentHunger >= MAX_HUNGER) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<yellow>🐱 你的猫咪已经吃饱了!</yellow>"
+                    lang.forPlayer(player).message(
+                            "feed.full"
                     )
             );
 
@@ -762,8 +786,12 @@ public class CatFoodManager {
         int oldAffection =
                 cat.getAffection();
 
+        ConfigSnapshot config =
+                configManager.snapshot();
+
         cat.addAffection(
-                config.getFeedAffectionBase()
+                config.getAffection()
+                        .getFeedBase()
                         + personality
                         .getFeedAffectionBonus()
         );
@@ -824,11 +852,14 @@ public class CatFoodManager {
                         playerUUID
                 );
 
+        ConfigSnapshot.Meow meowConfig =
+                config.getMeow();
+
         if (feedCount <
-                config.getFeedMeowChanceLimit()) {
+                meowConfig.getFeedChanceLimit()) {
 
             int chance =
-                    config.getFeedMeowChance()
+                    meowConfig.getFeedChance()
                             + personality
                             .getFeedMeowChanceBonus();
 
@@ -862,117 +893,46 @@ public class CatFoodManager {
                         )
                 );
 
-        String catName =
-                cat.getName();
-
-        String foodName =
-                getFoodName(
-                        item.getType()
-                );
-
         player.sendMessage(
-                mm.deserialize(
-                        "<light_purple>🐱 </light_purple>"
-                ).append(
-                        Component.text(
-                                catName
-                        )
-                ).append(
-                        mm.deserialize(
-                                "<white> 吃掉了 <yellow>"
-                                        + foodName
-                                        + "</yellow>!</white>"
+                lang.forPlayer(player).message(
+                        "feed.ate-food",
+                        cat.getName(),
+                        lang.forPlayer(player).text(
+                                "food-name."
+                                        + item.getType()
+                                        .name()
+                                        .toLowerCase(
+                                                java.util.Locale.ROOT
+                                        )
                         )
                 )
         );
 
         player.sendMessage(
-                mm.deserialize(
-                        "<gold>🍖 饱食度 <green>+"
-                                + actualHungerGain
-                                + " <gray>("
-                                + cat.getHunger()
-                                + "/"
-                                + MAX_HUNGER
-                                + ")</gray>"
+                lang.forPlayer(player).message(
+                        "feed.hunger-up",
+                        String.valueOf(
+                                actualHungerGain
+                        ),
+                        String.valueOf(
+                                cat.getHunger()
+                        )
                 )
         );
 
         player.sendMessage(
-                mm.deserialize(
-                        "<red>❤ 好感度 <green>+"
-                                + actualAffectionGain
-                                + " <gray>("
-                                + cat.getAffection()
-                                + "/100)</gray>"
+                lang.forPlayer(player).message(
+                        "feed.affection-up",
+                        String.valueOf(
+                                actualAffectionGain
+                        ),
+                        String.valueOf(
+                                cat.getAffection()
+                        )
                 )
         );
 
         return true;
     }
 
-    private String getFoodName(
-            Material material
-    ) {
-
-        return switch (material) {
-
-            case COD ->
-                    "生鳕鱼";
-
-            case SALMON ->
-                    "生鲑鱼";
-
-            case COOKED_COD ->
-                    "熟鳕鱼";
-
-            case COOKED_SALMON ->
-                    "熟鲑鱼";
-
-            case CHICKEN ->
-                    "生鸡肉";
-
-            case COOKED_CHICKEN ->
-                    "熟鸡肉";
-
-            case BEEF ->
-                    "生牛肉";
-
-            case COOKED_BEEF ->
-                    "牛排";
-
-            case PORKCHOP ->
-                    "生猪排";
-
-            case COOKED_PORKCHOP ->
-                    "熟猪排";
-
-            case MUTTON ->
-                    "生羊肉";
-
-            case COOKED_MUTTON ->
-                    "熟羊肉";
-
-            case RABBIT ->
-                    "生兔肉";
-
-            case COOKED_RABBIT ->
-                    "熟兔肉";
-
-            case GOLDEN_CARROT ->
-                    "金胡萝卜";
-
-            case APPLE ->
-                    "苹果";
-
-            case BREAD ->
-                    "面包";
-
-            case CAKE ->
-                    "蛋糕";
-
-            default ->
-                    material.name();
-        };
-    }
 }

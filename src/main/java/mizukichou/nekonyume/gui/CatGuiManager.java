@@ -4,7 +4,9 @@ import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.GrowthMath;
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -24,8 +26,9 @@ import java.util.UUID;
  * </p>
  *
  * <p>
- * 构造注入（CatStore / CatCache / PluginConfig）；
+ * 构造注入（CatStore / CatCache / ConfigManager / Lang）；
  * 进度显示统一走 GrowthMath，与配置曲线一致。
+ * 0.7.0：物品文案改走 Lang（gui.* 节）。
  * </p>
  */
 public class CatGuiManager {
@@ -49,17 +52,20 @@ public class CatGuiManager {
 
     private final CatStore store;
     private final CatCache cache;
-    private final PluginConfig config;
+    private final ConfigManager configManager;
+    private final Lang lang;
 
     public CatGuiManager(
             CatStore store,
             CatCache cache,
-            PluginConfig config
+            ConfigManager configManager,
+            Lang lang
     ) {
 
         this.store = store;
         this.cache = cache;
-        this.config = config;
+        this.configManager = configManager;
+        this.lang = lang;
     }
 
     /*
@@ -90,6 +96,9 @@ public class CatGuiManager {
             return;
         }
 
+        ConfigSnapshot config =
+                configManager.snapshot();
+
         CatGuiHolder holder =
                 new CatGuiHolder(
                         playerUUID
@@ -99,7 +108,9 @@ public class CatGuiManager {
                 Bukkit.createInventory(
                         holder,
                         INVENTORY_SIZE,
-                        "🐱 Neko n' Yume"
+                        lang.forPlayer(player).text(
+                                "gui.title"
+                        )
                 );
 
         /*
@@ -130,16 +141,29 @@ public class CatGuiManager {
                         Material.CAT_SPAWN_EGG,
                         "§d🐱 "
                                 + cat.getName(),
-                        "§7心情: "
-                                + cat.getMood().getIcon()
-                                + " "
-                                + cat.getMood().getDisplayName(),
-                        "§7陪伴: 第 "
-                                + cat.getCompanionDays(
-                                System.currentTimeMillis()
+                        lang.forPlayer(player).text(
+                                "gui.head-mood",
+                                cat.getMood().getIcon(),
+                                lang.forPlayer(player).text(
+                                        "mood-name."
+                                                + cat.getMood()
+                                                .name()
+                                                .toLowerCase(
+                                                        java.util.Locale.ROOT
+                                                )
+                                )
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.head-days",
+                                String.valueOf(
+                                        cat.getCompanionDays(
+                                                System.currentTimeMillis()
+                                        )
+                                )
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.head-enter-skill"
                         )
-                                + " 天",
-                        "§9✦ 点此进入技能界面"
                 )
         );
 
@@ -152,20 +176,32 @@ public class CatGuiManager {
         long nextLevelXp =
                 GrowthMath.xpRequiredForLevel(
                         level + 1,
-                        config.getLevelCurveBase()
+                        config.getGrowth()
+                                .getLevelCurveBase()
                 );
 
         inventory.setItem(
                 SLOT_LEVEL,
                 item(
                         Material.EXPERIENCE_BOTTLE,
-                        "§e等级",
-                        "§7等级: §f"
-                                + level,
-                        "§7经验: §f"
-                                + cat.getExperience()
-                                + " / "
-                                + nextLevelXp
+                        lang.forPlayer(player).text(
+                                "gui.level-name"
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.level-value",
+                                String.valueOf(
+                                        level
+                                )
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.level-xp",
+                                String.valueOf(
+                                        cat.getExperience()
+                                ),
+                                String.valueOf(
+                                        nextLevelXp
+                                )
+                        )
                 )
         );
 
@@ -178,20 +214,32 @@ public class CatGuiManager {
         long nextRankPower =
                 GrowthMath.meowRequiredForRank(
                         meowRank + 1,
-                        config.getMeowRankCurveOffset()
+                        config.getMeow()
+                                .getRankCurveOffset()
                 );
 
         inventory.setItem(
                 SLOT_MEOW,
                 item(
                         Material.AMETHYST_SHARD,
-                        "§d喵阶",
-                        "§7喵阶: §f"
-                                + meowRank,
-                        "§7喵力: §f"
-                                + cat.getMeowPower()
-                                + " / "
-                                + nextRankPower
+                        lang.forPlayer(player).text(
+                                "gui.meow-name"
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.meow-value",
+                                String.valueOf(
+                                        meowRank
+                                )
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.meow-power",
+                                String.valueOf(
+                                        cat.getMeowPower()
+                                ),
+                                String.valueOf(
+                                        nextRankPower
+                                )
+                        )
                 )
         );
 
@@ -202,10 +250,20 @@ public class CatGuiManager {
                 SLOT_PERSONALITY,
                 item(
                         Material.PAPER,
-                        "§b性格",
-                        "§7"
-                                + cat.getPersonality()
-                                .getDisplayName()
+                        lang.forPlayer(player).text(
+                                "gui.personality-name"
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.personality-value",
+                                lang.forPlayer(player).text(
+                                        "personality-name."
+                                                + cat.getPersonality()
+                                                .name()
+                                                .toLowerCase(
+                                                        java.util.Locale.ROOT
+                                                )
+                                )
+                        )
                 )
         );
 
@@ -216,10 +274,15 @@ public class CatGuiManager {
                 SLOT_HUNGER,
                 item(
                         Material.COOKED_COD,
-                        "§6饥饿",
-                        "§7"
-                                + cat.getHunger()
-                                + " / 100"
+                        lang.forPlayer(player).text(
+                                "gui.hunger-name"
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.hunger-value",
+                                String.valueOf(
+                                        cat.getHunger()
+                                )
+                        )
                 )
         );
 
@@ -230,10 +293,15 @@ public class CatGuiManager {
                 SLOT_AFFECTION,
                 item(
                         Material.RED_DYE,
-                        "§c好感",
-                        "§7"
-                                + cat.getAffection()
-                                + " / 100"
+                        lang.forPlayer(player).text(
+                                "gui.affection-name"
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.affection-value",
+                                String.valueOf(
+                                        cat.getAffection()
+                                )
+                        )
                 )
         );
 
@@ -244,10 +312,15 @@ public class CatGuiManager {
                 SLOT_HEALTH,
                 item(
                         Material.GOLDEN_APPLE,
-                        "§a健康",
-                        "§7"
-                                + cat.getHealth()
-                                + " / 100"
+                        lang.forPlayer(player).text(
+                                "gui.health-name"
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.health-value",
+                                String.valueOf(
+                                        cat.getHealth()
+                                )
+                        )
                 )
         );
 
@@ -257,9 +330,12 @@ public class CatGuiManager {
         inventory.setItem(
                 SLOT_MODE_FOLLOW,
                 modeItem(
+                        player,
                         cat,
                         CatBehaviorMode.FOLLOW,
-                        "§a🐾 跟随",
+                        lang.forPlayer(player).text(
+                                "gui.mode-follow"
+                        ),
                         Material.LEAD
                 )
         );
@@ -267,9 +343,12 @@ public class CatGuiManager {
         inventory.setItem(
                 SLOT_MODE_SIT,
                 modeItem(
+                        player,
                         cat,
                         CatBehaviorMode.SIT,
-                        "§e🪑 坐下",
+                        lang.forPlayer(player).text(
+                                "gui.mode-sit"
+                        ),
                         Material.GREEN_WOOL
                 )
         );
@@ -277,9 +356,12 @@ public class CatGuiManager {
         inventory.setItem(
                 SLOT_MODE_FREE,
                 modeItem(
+                        player,
                         cat,
                         CatBehaviorMode.FREE,
-                        "§7🌿 自由",
+                        lang.forPlayer(player).text(
+                                "gui.mode-free"
+                        ),
                         Material.FEATHER
                 )
         );
@@ -291,7 +373,9 @@ public class CatGuiManager {
                 SLOT_CLOSE,
                 item(
                         Material.BARRIER,
-                        "§c关闭"
+                        lang.forPlayer(player).text(
+                                "gui.close"
+                        )
                 )
         );
 
@@ -307,6 +391,7 @@ public class CatGuiManager {
      */
 
     private ItemStack modeItem(
+            Player player,
             Cat cat,
             CatBehaviorMode mode,
             String displayName,
@@ -318,7 +403,9 @@ public class CatGuiManager {
             return item(
                     material,
                     displayName,
-                    "§7✔ 当前模式"
+                    lang.forPlayer(player).text(
+                            "gui.mode-current"
+                    )
             );
         }
 

@@ -1,5 +1,7 @@
 package mizukichou.nekonyume.cat;
 
+import lombok.Getter;
+
 /**
  * 喵丹品质。
  *
@@ -8,6 +10,7 @@ package mizukichou.nekonyume.cat;
  * 品质决定效果数值、显示颜色与自定义材质编号。
  * </p>
  */
+@Getter
 public enum MeowDanQuality {
 
     COMMON(
@@ -76,30 +79,6 @@ public enum MeowDanQuality {
         this.affectionGain = affectionGain;
         this.xpGain = xpGain;
         this.defaultModelData = defaultModelData;
-    }
-
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public String getColorCode() {
-        return colorCode;
-    }
-
-    public int getMeowPowerGain() {
-        return meowPowerGain;
-    }
-
-    public int getAffectionGain() {
-        return affectionGain;
-    }
-
-    public int getXpGain() {
-        return xpGain;
-    }
-
-    public int getDefaultModelData() {
-        return defaultModelData;
     }
 
     /*

@@ -3,6 +3,7 @@ package mizukichou.nekonyume.listener;
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.MeowDanQuality;
 import org.bukkit.Material;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -180,16 +181,31 @@ public class MeowDanCraftListener implements Listener {
          */
         if (ourRecipe) {
 
+            /*
+             * 结果物品按合成者的客户端语言生成
+             * （控制台/异常时回退默认语言）。
+             */
+            Player crafter = null;
+
+            if (event.getView()
+                    .getPlayer()
+                    instanceof Player player) {
+
+                crafter = player;
+            }
+
             event.getInventory()
                     .setResult(
                             foodManager.createMeowDan(
                                     qualities.get(
                                             index + 1
                                     ),
-                                    1
+                                    1,
+                                    crafter
                             )
                     );
         }
 
     }
 }
+

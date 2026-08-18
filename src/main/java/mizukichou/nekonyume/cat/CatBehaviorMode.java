@@ -1,5 +1,7 @@
 package mizukichou.nekonyume.cat;
 
+import lombok.Getter;
+
 /**
  * 猫咪行为模式。
  *
@@ -9,6 +11,7 @@ package mizukichou.nekonyume.cat;
  * FREE   = 自由（原版 AI，玩家可空手右键切换坐姿）
  * </p>
  */
+@Getter
 public enum CatBehaviorMode {
 
     FOLLOW("跟随"),
@@ -24,10 +27,6 @@ public enum CatBehaviorMode {
     ) {
 
         this.displayName = displayName;
-    }
-
-    public String getDisplayName() {
-        return displayName;
     }
 
     /*

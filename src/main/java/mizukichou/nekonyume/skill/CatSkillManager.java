@@ -3,10 +3,11 @@ package mizukichou.nekonyume.skill;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatSkill;
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.event.CatSkillActivatedEvent;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.storage.CatStore;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -37,6 +38,8 @@ import java.util.logging.Logger;
  *
  * <p>
  * 受伤恢复期内禁止施放任何主动技能。
+ * 0.7.0：配置改走 ConfigManager 快照；文案改走 Lang。
+ * 0.7.1：消息按玩家客户端语言解析。
  * </p>
  */
 public class CatSkillManager {
@@ -44,10 +47,9 @@ public class CatSkillManager {
     private final Logger logger;
     private final CatStore store;
     private final CatCache cache;
-    private final PluginConfig config;
+    private final ConfigManager configManager;
     private final CatBattleState battleState;
-
-    private final MiniMessage mm = MiniMessage.miniMessage();
+    private final Lang lang;
 
     /*
      * 冷却：
@@ -63,15 +65,17 @@ public class CatSkillManager {
             Logger logger,
             CatStore store,
             CatCache cache,
-            PluginConfig config,
-            CatBattleState battleState
+            ConfigManager configManager,
+            CatBattleState battleState,
+            Lang lang
     ) {
 
         this.logger = logger;
         this.store = store;
         this.cache = cache;
-        this.config = config;
+        this.configManager = configManager;
         this.battleState = battleState;
+        this.lang = lang;
 
         loadRefreshCostProvider();
     }
@@ -85,7 +89,9 @@ public class CatSkillManager {
     public void loadRefreshCostProvider() {
 
         String type =
-                config.getSkillRefreshCostType();
+                configManager.snapshot()
+                        .getSkills()
+                        .getRefreshCostType();
 
         if ("player-points".equalsIgnoreCase(type)) {
 
@@ -126,13 +132,17 @@ public class CatSkillManager {
             boolean dreamSlot
     ) {
 
+        ConfigSnapshot.Skills skills =
+                configManager.snapshot()
+                        .getSkills();
+
         int base =
-                config.getSkillRefreshCost();
+                skills.getRefreshCost();
 
         if (dreamSlot) {
 
             return base
-                    * config.getDreamSlotCostMultiplier();
+                    * skills.getDreamSlotCostMultiplier();
         }
 
         return base;
@@ -221,11 +231,13 @@ public class CatSkillManager {
             CatSkill skill
     ) {
 
-        return config.getSkillValue(
-                skill,
-                "cooldown",
-                defaultCooldown(skill)
-        ) * 1000L;
+        return configManager.snapshot()
+                .getSkills()
+                .valueInt(
+                        skill,
+                        "cooldown",
+                        defaultCooldown(skill)
+                ) * 1000L;
     }
 
     private int defaultCooldown(
@@ -282,8 +294,8 @@ public class CatSkillManager {
         if (!cat.hasSkill(skill)) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<red>🐱 你的猫咪还没有这个技能。</red>"
+                    lang.forPlayer(player).message(
+                            "skill.missing"
                     )
             );
 
@@ -298,8 +310,8 @@ public class CatSkillManager {
         )) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<red>🐱 猫咪受伤了，暂时无法使用技能。</red>"
+                    lang.forPlayer(player).message(
+                            "skill.recovering"
                     )
             );
 
@@ -309,13 +321,14 @@ public class CatSkillManager {
         if (isOnCooldown(player, skill)) {
 
             player.sendMessage(
-                    mm.deserialize(
-                            "<yellow>⏳ 技能冷却中，剩余 <white>"
-                                    + getRemainingCooldownSeconds(
-                                    player,
-                                    skill
+                    lang.forPlayer(player).message(
+                            "skill.cooldown",
+                            String.valueOf(
+                                    getRemainingCooldownSeconds(
+                                            player,
+                                            skill
+                                    )
                             )
-                                    + " 秒</white></yellow>"
                     )
             );
 
@@ -382,12 +395,16 @@ public class CatSkillManager {
             CatSkill skill
     ) {
 
+        ConfigSnapshot.Skills skillsConfig =
+                configManager.snapshot()
+                        .getSkills();
+
         switch (skill) {
 
             case HEALING_PURR -> {
 
                 int power =
-                        config.getSkillValue(
+                        skillsConfig.valueInt(
                                 skill,
                                 "power",
                                 6
@@ -405,10 +422,11 @@ public class CatSkillManager {
                 );
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<green>❤ 「治愈呼噜」生效，恢复了 "
-                                        + power
-                                        + " 点生命。</green>"
+                        lang.forPlayer(player).message(
+                                "skill.effect-healing",
+                                String.valueOf(
+                                        power
+                                )
                         )
                 );
             }
@@ -416,7 +434,7 @@ public class CatSkillManager {
             case SWIFT_PAWS -> {
 
                 int duration =
-                        config.getSkillValue(
+                        skillsConfig.valueInt(
                                 skill,
                                 "duration",
                                 20
@@ -431,8 +449,8 @@ public class CatSkillManager {
                 );
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<aqua>💨 「灵猫迅捷」生效，速度提升。</aqua>"
+                        lang.forPlayer(player).message(
+                                "skill.effect-swift"
                         )
                 );
             }
@@ -440,7 +458,7 @@ public class CatSkillManager {
             case HUNTING_INSTINCT -> {
 
                 int duration =
-                        config.getSkillValue(
+                        skillsConfig.valueInt(
                                 skill,
                                 "duration",
                                 30
@@ -455,8 +473,8 @@ public class CatSkillManager {
                 );
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<red>⚔ 「狩猎觉醒」生效，攻击提升。</red>"
+                        lang.forPlayer(player).message(
+                                "skill.effect-hunting"
                         )
                 );
             }
@@ -464,7 +482,7 @@ public class CatSkillManager {
             case MEOW_GUARD -> {
 
                 int duration =
-                        config.getSkillValue(
+                        skillsConfig.valueInt(
                                 skill,
                                 "duration",
                                 10
@@ -479,8 +497,8 @@ public class CatSkillManager {
                 );
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<light_purple>🛡 「喵之守护」生效，抗性提升。</light_purple>"
+                        lang.forPlayer(player).message(
+                                "skill.effect-guard"
                         )
                 );
             }
@@ -488,21 +506,21 @@ public class CatSkillManager {
             case DREAM_AWAKEN -> {
 
                 int power =
-                        config.getSkillValue(
+                        skillsConfig.valueInt(
                                 skill,
                                 "power",
                                 20
                         );
 
                 int radius =
-                        config.getSkillValue(
+                        skillsConfig.valueInt(
                                 skill,
                                 "radius",
                                 12
                         );
 
                 int slowSeconds =
-                        config.getSkillValue(
+                        skillsConfig.valueInt(
                                 skill,
                                 "duration",
                                 5
@@ -535,8 +553,8 @@ public class CatSkillManager {
                 }
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<gradient:#c4b5fd:#a78bfa>🌙 「梦醒」降临，敌人应声而倒。</gradient>"
+                        lang.forPlayer(player).message(
+                                "skill.effect-dream"
                         )
                 );
             }
@@ -544,14 +562,14 @@ public class CatSkillManager {
             case STARFALL -> {
 
                 int power =
-                        config.getSkillValue(
+                        skillsConfig.valueInt(
                                 skill,
                                 "power",
                                 40
                         );
 
                 int radius =
-                        config.getSkillValue(
+                        skillsConfig.valueInt(
                                 skill,
                                 "radius",
                                 12
@@ -592,8 +610,8 @@ public class CatSkillManager {
                 }
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<gradient:#fde68a:#f59e0b>⭐ 「星坠」发动，群星为之坠落!</gradient>"
+                        lang.forPlayer(player).message(
+                                "skill.effect-starfall"
                         )
                 );
             }
@@ -601,7 +619,7 @@ public class CatSkillManager {
             case TIME_ECHO -> {
 
                 int duration =
-                        config.getSkillValue(
+                        skillsConfig.valueInt(
                                 skill,
                                 "duration",
                                 8
@@ -665,8 +683,8 @@ public class CatSkillManager {
                 }
 
                 player.sendMessage(
-                        mm.deserialize(
-                                "<gradient:#c4b5fd:#f59e0b>⏳ 「时间回响」发动，时间在这一刻为你们倒流。</gradient>"
+                        lang.forPlayer(player).message(
+                                "skill.effect-time-echo"
                         )
                 );
             }

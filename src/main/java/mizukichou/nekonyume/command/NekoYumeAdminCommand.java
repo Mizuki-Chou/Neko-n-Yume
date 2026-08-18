@@ -5,10 +5,10 @@ import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.CatProgressionService;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.MeowDanQuality;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.muma.MumaNightManager;
 import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
@@ -25,13 +25,22 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 
+/**
+ * 管理命令。
+ *
+ * <p>
+ * 0.7.0：玩家/管理员可见文案改走 Lang（admin.* 节）。
+ * </p>
+ */
 public class NekoYumeAdminCommand
         implements CommandExecutor, TabCompleter {
+
     /*
      * 喵丹单次发放上限（100 组 × 64）。
      * 防止超大数量导致发放循环冻结主线程。
      */
     private static final int MAX_MEOW_DAN_GIVE = 6400;
+
     /*
      * reloadAction：由装配根注入的"重载配置"动作
      * （NekoNYume::reloadSettings）。
@@ -43,8 +52,7 @@ public class NekoYumeAdminCommand
     private final CatProgressionService progression;
     private final CatFoodManager foodManager;
     private final MumaNightManager mumaNightManager;
-
-    private final MiniMessage mm = MiniMessage.miniMessage();
+    private final Lang lang;
 
     /*
      * 解析物品名等含 § 颜色码的文本，
@@ -60,7 +68,8 @@ public class NekoYumeAdminCommand
             CatEntityService entityService,
             CatProgressionService progression,
             CatFoodManager foodManager,
-            MumaNightManager mumaNightManager
+            MumaNightManager mumaNightManager,
+            Lang lang
     ) {
 
         this.reloadAction = reloadAction;
@@ -70,6 +79,7 @@ public class NekoYumeAdminCommand
         this.progression = progression;
         this.foodManager = foodManager;
         this.mumaNightManager = mumaNightManager;
+        this.lang = lang;
     }
 
     @Override
@@ -88,8 +98,8 @@ public class NekoYumeAdminCommand
         if (!sender.hasPermission("nekoyume.admin")) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<red>❌ 你没有权限执行此命令!</red>"
+                    lang.forSender(sender).message(
+                            "admin.no-permission"
                     )
             );
 
@@ -99,8 +109,8 @@ public class NekoYumeAdminCommand
         if (args.length == 0) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<yellow>用法: /nekoyumeadmin <meowdan|cat|skill|mumanight|reload></yellow>"
+                    lang.forSender(sender).message(
+                            "admin.usage"
                     )
             );
 
@@ -159,8 +169,8 @@ public class NekoYumeAdminCommand
             reloadAction.run();
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<gradient:#a7f3d0:#60a5fa>✔ Neko n' Yume 配置重载成功!</gradient>"
+                    lang.forSender(sender).message(
+                            "admin.reload-done"
                     )
             );
 
@@ -171,8 +181,8 @@ public class NekoYumeAdminCommand
          * unknown command
          */
         sender.sendMessage(
-                mm.deserialize(
-                        "<yellow>用法: /nekoyumeadmin <meowdan|cat|skill|mumanight|reload></yellow>"
+                lang.forSender(sender).message(
+                        "admin.usage"
                 )
         );
 
@@ -194,14 +204,14 @@ public class NekoYumeAdminCommand
                 !args[1].equalsIgnoreCase("give")) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<yellow>用法: /nekoyumeadmin meowdan give <玩家> <品质> [数量]</yellow>"
+                    lang.forSender(sender).message(
+                            "admin.meowdan-usage"
                     )
             );
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<gray>品质: 平凡 / 精良 / 独特 / 卓越 / 至极</gray>"
+                    lang.forSender(sender).message(
+                            "admin.meowdan-quality-hint"
                     )
             );
 
@@ -220,8 +230,8 @@ public class NekoYumeAdminCommand
                 !target.isOnline()) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<red>❌ 玩家不在线!</red>"
+                    lang.forSender(sender).message(
+                            "admin.player-offline"
                     )
             );
 
@@ -231,7 +241,7 @@ public class NekoYumeAdminCommand
         /*
          * 品质。
          * （args[3] 是玩家/管理员输入，
-         *   用 Component.text 拼接防注入）
+         *   经 Lang 占位符包装为纯文本防注入）
          */
         MeowDanQuality quality =
                 MeowDanQuality.fromInput(
@@ -241,18 +251,15 @@ public class NekoYumeAdminCommand
         if (quality == null) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<red>❌ 未知品质: </red>"
-                    ).append(
-                            Component.text(
-                                    args[3]
-                            )
+                    lang.forSender(sender).message(
+                            "admin.unknown-quality",
+                            args[3]
                     )
             );
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<gray>可用品质: 平凡 / 精良 / 独特 / 卓越 / 至极</gray>"
+                    lang.forSender(sender).message(
+                            "admin.meowdan-quality-hint"
                     )
             );
 
@@ -276,8 +283,8 @@ public class NekoYumeAdminCommand
             } catch (NumberFormatException e) {
 
                 sender.sendMessage(
-                        mm.deserialize(
-                                "<red>❌ 无效数量!</red>"
+                        lang.forSender(sender).message(
+                                "admin.invalid-amount"
                         )
                 );
 
@@ -288,8 +295,8 @@ public class NekoYumeAdminCommand
         if (amount <= 0) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<red>❌ 数量必须大于 0!</red>"
+                    lang.forSender(sender).message(
+                            "admin.amount-positive"
                     )
             );
 
@@ -304,14 +311,14 @@ public class NekoYumeAdminCommand
             amount = MAX_MEOW_DAN_GIVE;
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<yellow>⚠ 单次最多发放 "
-                                    + MAX_MEOW_DAN_GIVE
-                                    + " 个，已按上限处理。</yellow>"
+                    lang.forSender(sender).message(
+                            "admin.give-cap",
+                            String.valueOf(
+                                    MAX_MEOW_DAN_GIVE
+                            )
                     )
             );
         }
-
 
         /*
          * 发放：
@@ -332,7 +339,8 @@ public class NekoYumeAdminCommand
             ItemStack stack =
                     foodManager.createMeowDan(
                             quality,
-                            stackSize
+                            stackSize,
+                            target
                     );
 
             Map<Integer, ItemStack> leftover =
@@ -355,33 +363,41 @@ public class NekoYumeAdminCommand
         }
 
         sender.sendMessage(
-                mm.deserialize(
-                        "<gradient:#a7f3d0:#60a5fa>✔ 已给予 </gradient>"
-                ).append(
+                lang.forSender(sender).messageComponents(
+                        "admin.give-sender",
                         Component.text(
                                 target.getName()
-                        )
-                ).append(
-                        mm.deserialize(
-                                "<white> "
-                                        + amount
-                                        + " 个 </white>"
-                        )
-                ).append(
+                        ),
+                        Component.text(
+                                String.valueOf(
+                                        amount
+                                )
+                        ),
                         legacySerializer.deserialize(
-                                quality.getFullDisplayName()
+                                lang.forSender(sender).text(
+                                        "meowdan-name."
+                                                + quality.name()
+                                                .toLowerCase(
+                                                        java.util.Locale.ROOT
+                                                )
+                                )
                         )
                 )
         );
 
         target.sendMessage(
-                mm.deserialize(
-                        "<gradient:#c4b5fd:#a78bfa>✨ 你收到了 </gradient>"
-                ).append(
+                lang.forPlayer(target).messageComponents(
+                        "admin.give-target",
                         legacySerializer.deserialize(
                                 amount
-                                        + " 个 "
-                                        + quality.getFullDisplayName()
+                                        + "× "
+                                        + lang.forPlayer(target).text(
+                                        "meowdan-name."
+                                                + quality.name()
+                                                .toLowerCase(
+                                                        java.util.Locale.ROOT
+                                                )
+                                )
                         )
                 )
         );
@@ -412,8 +428,8 @@ public class NekoYumeAdminCommand
                 !args[1].equalsIgnoreCase("remove")) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<yellow>用法: /nekoyumeadmin cat remove <玩家> [confirm]</yellow>"
+                    lang.forSender(sender).message(
+                            "admin.cat-usage"
                     )
             );
 
@@ -431,8 +447,8 @@ public class NekoYumeAdminCommand
         if (playerUUID == null) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<red>❌ 找不到该玩家。离线玩家请使用玩家 UUID。</red>"
+                    lang.forSender(sender).message(
+                            "admin.player-not-found"
                     )
             );
 
@@ -444,8 +460,8 @@ public class NekoYumeAdminCommand
         )) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<yellow>该玩家没有猫咪数据。</yellow>"
+                    lang.forSender(sender).message(
+                            "admin.no-cat-data"
                     )
             );
 
@@ -459,16 +475,15 @@ public class NekoYumeAdminCommand
         if (!confirm) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<yellow>⚠ 删除不可逆!</yellow>"
+                    lang.forSender(sender).message(
+                            "admin.remove-warning"
                     )
             );
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<yellow>确认请执行: /nekoyumeadmin cat remove "
-                                    + playerUUID
-                                    + " confirm</yellow>"
+                    lang.forSender(sender).message(
+                            "admin.remove-confirm",
+                            playerUUID.toString()
                     )
             );
 
@@ -483,8 +498,8 @@ public class NekoYumeAdminCommand
         if (removed) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<green>✔ 已删除该玩家的猫咪数据与实体。</green>"
+                    lang.forSender(sender).message(
+                            "admin.remove-done"
                     )
             );
 
@@ -498,8 +513,8 @@ public class NekoYumeAdminCommand
         } else {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<red>❌ 删除失败。</red>"
+                    lang.forSender(sender).message(
+                            "admin.remove-fail"
                     )
             );
         }
@@ -524,14 +539,14 @@ public class NekoYumeAdminCommand
                 !args[1].equalsIgnoreCase("give")) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<yellow>用法: /nekoyumeadmin skill give <玩家> <技能ID></yellow>"
+                    lang.forSender(sender).message(
+                            "admin.skill-usage"
                     )
             );
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<gray>技能ID示例: sharp_claw / spirit_shot / dream_awaken</gray>"
+                    lang.forSender(sender).message(
+                            "admin.skill-hint"
                     )
             );
 
@@ -547,8 +562,8 @@ public class NekoYumeAdminCommand
                 !target.isOnline()) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<red>❌ 玩家不在线!</red>"
+                    lang.forSender(sender).message(
+                            "admin.player-offline"
                     )
             );
 
@@ -563,12 +578,9 @@ public class NekoYumeAdminCommand
         if (skill == null) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<red>❌ 未知技能: </red>"
-                    ).append(
-                            Component.text(
-                                    args[3]
-                            )
+                    lang.forSender(sender).message(
+                            "admin.unknown-skill",
+                            args[3]
                     )
             );
 
@@ -584,29 +596,34 @@ public class NekoYumeAdminCommand
         if (granted) {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<green>✔ 已授予 </green>"
-                    ).append(
+                    lang.forSender(sender).messageComponents(
+                            "admin.skill-granted",
                             Component.text(
                                     target.getName()
-                            )
-                    ).append(
-                            mm.deserialize(
-                                    "<white> 技能 </white>"
-                            )
-                    ).append(
+                            ),
                             legacySerializer.deserialize(
-                                    skill.getDisplayName()
+                                    lang.forSender(sender).text(
+                                            "skill-name."
+                                                    + skill.name()
+                                                    .toLowerCase(
+                                                            java.util.Locale.ROOT
+                                                    )
+                                    )
                             )
                     )
             );
 
             target.sendMessage(
-                    mm.deserialize(
-                            "<gradient:#fde68a:#f59e0b>🎉 你的猫咪学会了新技能：</gradient>"
-                    ).append(
+                    lang.forPlayer(target).messageComponents(
+                            "admin.skill-granted-target",
                             legacySerializer.deserialize(
-                                    skill.getDisplayName()
+                                    lang.forPlayer(target).text(
+                                            "skill-name."
+                                                    + skill.name()
+                                                    .toLowerCase(
+                                                            java.util.Locale.ROOT
+                                                    )
+                                    )
                             )
                     )
             );
@@ -614,8 +631,8 @@ public class NekoYumeAdminCommand
         } else {
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<red>❌ 授予失败（可能已拥有该技能）。</red>"
+                    lang.forSender(sender).message(
+                            "admin.skill-grant-fail"
                     )
             );
         }
@@ -639,7 +656,9 @@ public class NekoYumeAdminCommand
         if (!(sender instanceof Player player)) {
 
             sender.sendMessage(
-                    "只有玩家可以使用此命令（作用于你所在的世界）。"
+                    lang.forSender(sender).message(
+                            "admin.mumanight-player-only"
+                    )
             );
 
             return true;
@@ -656,12 +675,11 @@ public class NekoYumeAdminCommand
                     );
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<yellow>🌑 梦魔之夜（当前世界）：</yellow> "
-                                    + (enabled
-                                    ? "<green>开启</green>"
-                                    : "<gray>关闭</gray>")
-                                    + " <gray>用法: /nekoyumeadmin mumanight <on|off></gray>"
+                    lang.forSender(sender).message(
+                            "admin.mumanight-status",
+                            enabled
+                                    ? "开启"
+                                    : "关闭"
                     )
             );
 
@@ -676,8 +694,8 @@ public class NekoYumeAdminCommand
             );
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<green>✔ 已在本世界开启梦魔之夜：每晚 20% 概率降临。</green>"
+                    lang.forSender(sender).message(
+                            "admin.mumanight-on"
                     )
             );
 
@@ -692,8 +710,8 @@ public class NekoYumeAdminCommand
             );
 
             sender.sendMessage(
-                    mm.deserialize(
-                            "<green>✔ 已在本世界关闭梦魔之夜。</green>"
+                    lang.forSender(sender).message(
+                            "admin.mumanight-off"
                     )
             );
 
@@ -701,8 +719,8 @@ public class NekoYumeAdminCommand
         }
 
         sender.sendMessage(
-                mm.deserialize(
-                        "<red>❌ 用法: /nekoyumeadmin mumanight <on|off></red>"
+                lang.forSender(sender).message(
+                        "admin.mumanight-usage"
                 )
         );
 
@@ -800,8 +818,6 @@ public class NekoYumeAdminCommand
                         args[2]
                 );
             }
-
-            return List.of();
         }
 
         if (args.length == 4 &&
@@ -810,11 +826,11 @@ public class NekoYumeAdminCommand
 
             return filter(
                     args[3],
-                    "平凡",
-                    "精良",
-                    "独特",
-                    "卓越",
-                    "至极"
+                    "COMMON",
+                    "UNCOMMON",
+                    "RARE",
+                    "EPIC",
+                    "LEGENDARY"
             );
         }
 
@@ -822,22 +838,14 @@ public class NekoYumeAdminCommand
                 args[0].equalsIgnoreCase("skill") &&
                 args[1].equalsIgnoreCase("give")) {
 
-            String lower =
-                    args[3] == null
-                            ? ""
-                            : args[3].toLowerCase();
-
-            return Arrays.stream(
-                            CatSkill.values()
-                    )
-                    .map(skill ->
-                            skill.name()
-                                    .toLowerCase()
-                    )
-                    .filter(id ->
-                            id.startsWith(lower)
-                    )
-                    .toList();
+            return filter(
+                    args[3],
+                    Arrays.stream(
+                                    CatSkill.values()
+                            )
+                            .map(CatSkill::name)
+                            .toList()
+            );
         }
 
         return List.of();
@@ -873,6 +881,24 @@ public class NekoYumeAdminCommand
                         : prefix.toLowerCase();
 
         return Arrays.stream(values)
+                .filter(value ->
+                        value.toLowerCase()
+                                .startsWith(lower)
+                )
+                .toList();
+    }
+
+    private List<String> filter(
+            String prefix,
+            List<String> values
+    ) {
+
+        String lower =
+                prefix == null
+                        ? ""
+                        : prefix.toLowerCase();
+
+        return values.stream()
                 .filter(value ->
                         value.toLowerCase()
                                 .startsWith(lower)

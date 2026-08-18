@@ -4,7 +4,8 @@ import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.CatTier;
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -25,6 +26,11 @@ import java.util.UUID;
  * 顶部信息行（底蕴 / 成长 / 槽位进度 / 操作说明 / 猫头 / 关闭）
  * 槽位区（第 18 格起，最多 10 个槽）
  * </p>
+ *
+ * <p>
+ * 0.7.0：物品文案改走 Lang（lang/zh_cn.yml 的 skill-gui.* 节）；
+ * 配置改走 ConfigManager 快照。
+ * </p>
  */
 public class SkillGuiManager {
 
@@ -44,19 +50,22 @@ public class SkillGuiManager {
     private final CatStore store;
     private final CatCache cache;
     private final CatSkillManager skillManager;
-    private final PluginConfig config;
+    private final ConfigManager configManager;
+    private final Lang lang;
 
     public SkillGuiManager(
             CatStore store,
             CatCache cache,
             CatSkillManager skillManager,
-            PluginConfig config
+            ConfigManager configManager,
+            Lang lang
     ) {
 
         this.store = store;
         this.cache = cache;
         this.skillManager = skillManager;
-        this.config = config;
+        this.configManager = configManager;
+        this.lang = lang;
     }
 
     public void open(
@@ -90,7 +99,9 @@ public class SkillGuiManager {
                 Bukkit.createInventory(
                         holder,
                         SIZE,
-                        "🐱 技能面板"
+                        lang.forPlayer(player).text(
+                                "skill-gui.title"
+                        )
                 );
 
         ItemStack filler =
@@ -114,22 +125,22 @@ public class SkillGuiManager {
          */
         inventory.setItem(
                 SLOT_TIER,
-                tierItem(cat)
+                tierItem(player, cat)
         );
 
         inventory.setItem(
                 SLOT_INFO,
-                infoItem(cat)
+                infoItem(player, cat)
         );
 
         inventory.setItem(
                 SLOT_PROGRESS,
-                progressItem(cat)
+                progressItem(player, cat)
         );
 
         inventory.setItem(
                 SLOT_HINT,
-                hintItem(cat)
+                hintItem(player, cat)
         );
 
         inventory.setItem(
@@ -138,7 +149,9 @@ public class SkillGuiManager {
                         Material.CAT_SPAWN_EGG,
                         "§d🐱 "
                                 + cat.getName(),
-                        "§7技能面板"
+                        lang.forPlayer(player).text(
+                                "skill-gui.head-lore"
+                        )
                 )
         );
 
@@ -146,7 +159,9 @@ public class SkillGuiManager {
                 SLOT_CLOSE,
                 item(
                         Material.BARRIER,
-                        "§c关闭"
+                        lang.forPlayer(player).text(
+                                "skill-gui.close"
+                        )
                 )
         );
 
@@ -183,6 +198,7 @@ public class SkillGuiManager {
                 inventory.setItem(
                         slot,
                         lockedSlotItem(
+                                player,
                                 cat,
                                 i
                         )
@@ -264,6 +280,7 @@ public class SkillGuiManager {
      */
 
     private ItemStack tierItem(
+            Player player,
             Cat cat
     ) {
 
@@ -278,59 +295,99 @@ public class SkillGuiManager {
 
         return item(
                 material,
-                "§e底蕴: "
-                        + tierColor(cat.getTier())
-                        + cat.getTier().getDisplayName(),
-                "§7技能槽成长随底蕴提升"
+                lang.forPlayer(player).text(
+                        "skill-gui.tier-name",
+                        tierColor(cat.getTier())
+                                + lang.forPlayer(player).text(
+                                "tier-name."
+                                        + cat.getTier()
+                                        .name()
+                                        .toLowerCase(
+                                                java.util.Locale.ROOT
+                                        )
+                        )
+                ),
+                lang.forPlayer(player).text(
+                        "skill-gui.tier-lore"
+                )
         );
     }
 
     private ItemStack infoItem(
+            Player player,
             Cat cat
     ) {
 
         return item(
                 Material.EXPERIENCE_BOTTLE,
-                "§a成长",
-                "§7等级: "
-                        + cat.getLevel(),
-                "§7喵阶: "
-                        + cat.getMeowRank()
+                lang.forPlayer(player).text(
+                        "skill-gui.growth-name"
+                ),
+                lang.forPlayer(player).text(
+                        "skill-gui.growth-level",
+                        String.valueOf(
+                                cat.getLevel()
+                        )
+                ),
+                lang.forPlayer(player).text(
+                        "skill-gui.growth-rank",
+                        String.valueOf(
+                                cat.getMeowRank()
+                        )
+                )
         );
     }
 
     private ItemStack progressItem(
+            Player player,
             Cat cat
     ) {
 
         return item(
                 Material.AMETHYST_SHARD,
-                "§d技能槽",
-                "§7"
-                        + cat.getSkills().size()
-                        + " / "
-                        + cat.getSkillSlotCount()
-                        + " 槽"
+                lang.forPlayer(player).text(
+                        "skill-gui.progress-name"
+                ),
+                lang.forPlayer(player).text(
+                        "skill-gui.progress-count",
+                        String.valueOf(
+                                cat.getSkills().size()
+                        ),
+                        String.valueOf(
+                                cat.getSkillSlotCount()
+                        )
+                )
         );
     }
 
     private ItemStack hintItem(
+            Player player,
             Cat cat
     ) {
 
         return item(
                 Material.GOLD_NUGGET,
-                "§6操作说明",
-                "§7左键: 施放主动技能",
-                "§7右键: 刷新技能（花费 "
-                        + skillManager
-                        .getRefreshCostDisplay(
-                                false
+                lang.forPlayer(player).text(
+                        "skill-gui.hint-name"
+                ),
+                lang.forPlayer(player).text(
+                        "skill-gui.hint-cast"
+                ),
+                lang.forPlayer(player).text(
+                        "skill-gui.hint-refresh",
+                        skillManager
+                                .getRefreshCostDisplay(
+                                        false
+                                )
+                ),
+                lang.forPlayer(player).text(
+                        "skill-gui.hint-dream-multiplier",
+                        String.valueOf(
+                                configManager.snapshot()
+                                        .getSkills()
+                                        .getDreamSlotCostMultiplier()
                         )
-                        + "）",
-                "§7梦槽刷新消耗 ×"
-                        + config
-                        .getDreamSlotCostMultiplier()
+                )
         );
     }
 
@@ -356,8 +413,15 @@ public class SkillGuiManager {
          */
         return item(
                 Material.LIGHT_GRAY_STAINED_GLASS_PANE,
-                "§7空槽",
-                "§8槽位 #" + (index + 1)
+                lang.forPlayer(player).text(
+                        "skill-gui.slot-empty"
+                ),
+                lang.forPlayer(player).text(
+                        "skill-gui.slot-index",
+                        String.valueOf(
+                                index + 1
+                        )
+                )
         );
     }
 
@@ -382,21 +446,37 @@ public class SkillGuiManager {
                 new ArrayList<>();
 
         lore.add(
-                "§7品质: "
-                        + tierColor
-                        + skill.getTier()
-                        .getDisplayName()
+                lang.forPlayer(player).text(
+                        "skill-gui.quality",
+                        tierColor
+                                + lang.forPlayer(player).text(
+                                "tier-name."
+                                        + skill.getTier()
+                                        .name()
+                                        .toLowerCase(
+                                                java.util.Locale.ROOT
+                                        )
+                        )
+                )
         );
 
         lore.add(
-                "§7" + skill.getDescription()
+                "§7"
+                        + lang.forPlayer(player).text(
+                        "skill-desc."
+                                + skill.name()
+                                .toLowerCase(
+                                        java.util.Locale.ROOT
+                                )
+                )
         );
 
         lore.add(
-                "§7类型: "
-                        + (skill.isActive()
-                        ? "§e主动"
-                        : "§b被动")
+                lang.forPlayer(player).text(
+                        skill.isActive()
+                                ? "skill-gui.type-active"
+                                : "skill-gui.type-passive"
+                )
         );
 
         if (skill.isActive()) {
@@ -411,15 +491,20 @@ public class SkillGuiManager {
             if (remainingSec > 0) {
 
                 lore.add(
-                        "§c⏳ 冷却中: "
-                                + remainingSec
-                                + " 秒"
+                        lang.forPlayer(player).text(
+                                "skill-gui.cooldown",
+                                String.valueOf(
+                                        remainingSec
+                                )
+                        )
                 );
 
             } else {
 
                 lore.add(
-                        "§a✔ 已就绪"
+                        lang.forPlayer(player).text(
+                                "skill-gui.ready"
+                        )
                 );
             }
         }
@@ -427,12 +512,19 @@ public class SkillGuiManager {
         if (dreamSlot) {
 
             lore.add(
-                    "§d✦ 梦槽 ✦"
+                    lang.forPlayer(player).text(
+                            "skill-gui.dream-slot"
+                    )
             );
         }
 
         lore.add(
-                "§8槽位 #" + (index + 1)
+                lang.forPlayer(player).text(
+                        "skill-gui.slot-index",
+                        String.valueOf(
+                                index + 1
+                        )
+                )
         );
 
         String refreshCost =
@@ -444,24 +536,32 @@ public class SkillGuiManager {
         if (skill.isActive()) {
 
             lore.add(
-                    "§8左键施放 · 右键刷新（"
-                            + refreshCost
-                            + "）"
+                    lang.forPlayer(player).text(
+                            "skill-gui.cast-refresh",
+                            refreshCost
+                    )
             );
 
         } else {
 
             lore.add(
-                    "§8被动自动生效 · 右键刷新（"
-                            + refreshCost
-                            + "）"
+                    lang.forPlayer(player).text(
+                            "skill-gui.passive-refresh",
+                            refreshCost
+                    )
             );
         }
 
         return item(
                 skill.getIcon(),
                 tierColor
-                        + skill.getDisplayName(),
+                        + lang.forPlayer(player).text(
+                        "skill-name."
+                                + skill.name()
+                                .toLowerCase(
+                                        java.util.Locale.ROOT
+                                )
+                ),
                 lore.toArray(
                         new String[0]
                 )
@@ -469,6 +569,7 @@ public class SkillGuiManager {
     }
 
     private ItemStack lockedSlotItem(
+            Player player,
             Cat cat,
             int index
     ) {
@@ -486,13 +587,26 @@ public class SkillGuiManager {
 
             return item(
                     Material.RED_STAINED_GLASS_PANE,
-                    "§c已达上限",
-                    "§7"
-                            + cat.getTier().getDisplayName()
-                            + "底蕴的猫咪",
-                    "§7最多拥有 "
-                            + maxSlots
-                            + " 个技能槽"
+                    lang.forPlayer(player).text(
+                            "skill-gui.max-reached"
+                    ),
+                    lang.forPlayer(player).text(
+                            "skill-gui.max-reached-tier",
+                            lang.forPlayer(player).text(
+                                    "tier-name."
+                                            + cat.getTier()
+                                            .name()
+                                            .toLowerCase(
+                                                    java.util.Locale.ROOT
+                                            )
+                            )
+                    ),
+                    lang.forPlayer(player).text(
+                            "skill-gui.max-reached-slots",
+                            String.valueOf(
+                                    maxSlots
+                            )
+                    )
             );
         }
 
@@ -504,10 +618,16 @@ public class SkillGuiManager {
 
         return item(
                 Material.BLACK_STAINED_GLASS_PANE,
-                "§8未解锁技能槽",
-                "§7解锁条件:",
-                "§7" + checkpointHint(
-                        checkpoint
+                lang.forPlayer(player).text(
+                        "skill-gui.locked-name"
+                ),
+                lang.forPlayer(player).text(
+                        "skill-gui.locked-hint"
+                ),
+                "§7"
+                        + lang.forPlayer(player).text(
+                        "checkpoint.hint-"
+                                + checkpoint
                 )
         );
     }

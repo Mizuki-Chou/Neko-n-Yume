@@ -2,6 +2,7 @@ package mizukichou.nekonyume.craft;
 
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.MeowDanQuality;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.util.CatToolItem;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -30,6 +31,8 @@ import java.util.List;
  *
  * <p>
  * 逗猫棒：1 木棍 + 1 生鳕鱼 → 逗猫棒。
+ * 0.7.0：物品外观文案统一走 Lang。
+ * 0.7.1：配方占位物品使用默认语言（无玩家上下文）。
  * </p>
  */
 public class CraftingRecipes {
@@ -37,6 +40,7 @@ public class CraftingRecipes {
     private final JavaPlugin plugin;
     private final CatFoodManager foodManager;
     private final NamespacedKey toolKey;
+    private final Lang lang;
 
     /*
      * 已注册的配方键（用于重载时移除）。
@@ -47,12 +51,14 @@ public class CraftingRecipes {
     public CraftingRecipes(
             JavaPlugin plugin,
             CatFoodManager foodManager,
-            NamespacedKey toolKey
+            NamespacedKey toolKey,
+            Lang lang
     ) {
 
         this.plugin = plugin;
         this.foodManager = foodManager;
         this.toolKey = toolKey;
+        this.lang = lang;
     }
 
     public void registerAll() {
@@ -89,7 +95,8 @@ public class CraftingRecipes {
             ItemStack placeholderResult =
                     foodManager.createMeowDan(
                             to,
-                            1
+                            1,
+                            null
                     );
 
             NamespacedKey key =
@@ -146,7 +153,9 @@ public class CraftingRecipes {
                 new ShapelessRecipe(
                         toolRecipeKey,
                         CatToolItem.create(
-                                toolKey
+                                toolKey,
+                                lang,
+                                null
                         )
                 );
 

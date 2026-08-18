@@ -5,7 +5,9 @@ import mizukichou.nekonyume.cat.CatBehaviorMode;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.CatSkill;
-import mizukichou.nekonyume.config.PluginConfig;
+import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.util.SafeTeleport;
 import mizukichou.nekonyume.util.TargetGuard;
@@ -98,7 +100,7 @@ public class CatBattleTask implements Runnable {
     private static final int INVISIBILITY_REFRESH_TICKS = 40;
 
     private final Logger logger;
-    private final PluginConfig config;
+    private final ConfigManager configManager;
     private final CatCache cache;
     private final CatBattleState battleState;
     private final CatEntityService entityService;
@@ -111,14 +113,15 @@ public class CatBattleTask implements Runnable {
 
     public CatBattleTask(
             Logger logger,
-            PluginConfig config,
+            ConfigManager configManager,
             CatCache cache,
             CatBattleState battleState,
-            CatEntityService entityService
+            CatEntityService entityService,
+            Lang lang
     ) {
 
         this.logger = logger;
-        this.config = config;
+        this.configManager = configManager;
         this.cache = cache;
         this.battleState = battleState;
         this.entityService = entityService;
@@ -127,7 +130,10 @@ public class CatBattleTask implements Runnable {
     @Override
     public void run() {
 
-        if (!config.isBattleEnabled()) {
+        if (!configManager.snapshot()
+                .getBattle()
+                .isEnabled()) {
+
             return;
         }
 
@@ -367,7 +373,9 @@ public class CatBattleTask implements Runnable {
          * 避免在野外乱引怪。
          */
         int aggroRadius =
-                config.getBattleAggroRadius();
+                configManager.snapshot()
+                        .getBattle()
+                        .getAggroRadius();
 
         if (cat.getLocation()
                 .distanceSquared(
@@ -473,7 +481,9 @@ public class CatBattleTask implements Runnable {
         }
 
         long intervalTicks =
-                config.getBattleAttackIntervalTicks();
+                configManager.snapshot()
+                        .getBattle()
+                        .getAttackIntervalTicks();
 
         /*
          * 灵步：攻击间隔 -20%。
@@ -580,7 +590,9 @@ public class CatBattleTask implements Runnable {
         }
 
         long intervalMillis =
-                config.getBattleRegenIntervalSeconds()
+                configManager.snapshot()
+                        .getBattle()
+                        .getRegenIntervalSeconds()
                         * 1000L;
 
         if (!battleState.canRegen(
@@ -776,11 +788,15 @@ public class CatBattleTask implements Runnable {
             org.bukkit.entity.Cat cat
     ) {
 
+        ConfigSnapshot.Battle battleConfig =
+                configManager.snapshot()
+                        .getBattle();
+
         int base =
-                config.getBattleBaseDamage();
+                battleConfig.getBaseDamage();
 
         int perRank =
-                config.getBattlePerRankDamage();
+                battleConfig.getPerRankDamage();
 
         int damage =
                 base
@@ -792,11 +808,13 @@ public class CatBattleTask implements Runnable {
         )) {
 
             damage +=
-                    config.getSkillValue(
-                            CatSkill.SHARP_CLAW,
-                            "power",
-                            2
-                    );
+                    configManager.snapshot()
+                            .getSkills()
+                            .valueInt(
+                                    CatSkill.SHARP_CLAW,
+                                    "power",
+                                    2
+                            );
         }
 
         if (logicalCat.hasSkill(
@@ -804,11 +822,13 @@ public class CatBattleTask implements Runnable {
         )) {
 
             damage +=
-                    config.getSkillValue(
-                            CatSkill.RESONANCE,
-                            "power",
-                            5
-                    );
+                    configManager.snapshot()
+                            .getSkills()
+                            .valueInt(
+                                    CatSkill.RESONANCE,
+                                    "power",
+                                    5
+                            );
         }
 
         /*
