@@ -237,4 +237,3 @@ public enum CatMood {
         return CALM;
     }
 }
-

@@ -48,28 +48,32 @@ class SkillGuiManagerTest {
     }
 
     @Test
-    void hintsAreReadable() {
+    void hintsMapToLanguageKeys() {
 
+        /*
+         * 提示文案不再硬编码在代码里：
+         * 统一映射到 lang 文件的 checkpoint.hint-N 键，
+         * 四语言文件各提供对应翻译。
+         */
         assertEquals(
-                "天生梦槽",
+                "checkpoint.hint-0",
                 SkillGuiManager.checkpointHint(0)
         );
 
         assertEquals(
-                "喵阶 1",
+                "checkpoint.hint-1",
                 SkillGuiManager.checkpointHint(1)
         );
 
         assertEquals(
-                "喵阶 10 且等级 30",
+                "checkpoint.hint-2",
                 SkillGuiManager.checkpointHint(2)
         );
 
         assertEquals(
-                "喵阶 30 且等级 60",
+                "checkpoint.hint-3",
                 SkillGuiManager.checkpointHint(3)
         );
     }
 
 }
-

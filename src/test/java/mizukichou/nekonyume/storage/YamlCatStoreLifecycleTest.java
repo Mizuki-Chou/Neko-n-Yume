@@ -75,7 +75,7 @@ class YamlCatStoreLifecycleTest {
         assertTrue(Files.exists(file));
         assertTrue(
                 Files.readString(file)
-                        .contains("data-version: 5")
+                        .contains("data-version: 6")
         );
     }
 
@@ -209,10 +209,43 @@ class YamlCatStoreLifecycleTest {
                         "unknown-key"
                 )
         );
+
+        /*
+         * 奖励待发队列（P0-2）重启往返。
+         */
+        assertTrue(
+                reopened.getAchievementsPendingList(player)
+                        .isEmpty()
+        );
+
+        reopened.addAchievementPending(player, "FIRST_CLAIM");
+        reopened.addAchievementPending(player, "FIRST_CLAIM");
+
+        assertEquals(
+                1,
+                reopened.getAchievementsPendingList(player)
+                        .size()
+        );
+
+        flushAndAwait(reopened);
+
+        YamlCatStore reopenedAgain = newStore();
+
+        assertEquals(
+                List.of("FIRST_CLAIM"),
+                reopenedAgain.getAchievementsPendingList(player)
+        );
+
+        reopenedAgain.removeAchievementPending(player, "FIRST_CLAIM");
+
+        assertTrue(
+                reopenedAgain.getAchievementsPendingList(player)
+                        .isEmpty()
+        );
     }
 
     @Test
-    void migrationV1ToV5() throws IOException {
+    void migrationV1ToV6() throws IOException {
 
         String yaml = """
                 data-version: 1
@@ -290,7 +323,7 @@ class YamlCatStoreLifecycleTest {
                 );
 
         assertTrue(
-                written.contains("data-version: 5")
+                written.contains("data-version: 6")
         );
     }
 
@@ -324,7 +357,7 @@ class YamlCatStoreLifecycleTest {
     }
 
     @Test
-    void migrationV4ToV5AddsAchievementSection() throws IOException {
+    void migrationV4ToV6AddsAchievementSection() throws IOException {
 
         String yaml = """
                 data-version: 4
@@ -370,7 +403,7 @@ class YamlCatStoreLifecycleTest {
                 );
 
         assertTrue(
-                written.contains("data-version: 5")
+                written.contains("data-version: 6")
         );
 
         assertTrue(
@@ -379,6 +412,75 @@ class YamlCatStoreLifecycleTest {
 
         assertTrue(
                 written.contains("achievements-progress")
+        );
+
+        assertTrue(
+                written.contains("achievements-pending")
+        );
+    }
+
+    @Test
+    void migrationV5ToV6AddsPendingField() throws IOException {
+
+        String yaml = """
+                data-version: 5
+                players:
+                  11111111-1111-1111-1111-111111111111:
+                   cat:
+                    id: 22222222-2222-2222-2222-222222222222
+                    name: OldCat
+                    level: 3
+                    achievements-unlocked:
+                     - FIRST_CLAIM
+                    achievements-progress:
+                     - feed-total=42
+                """;
+
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                yaml
+        );
+
+        YamlCatStore store = newStore();
+
+        UUID player =
+                UUID.fromString(
+                        "11111111-1111-1111-1111-111111111111"
+                );
+
+        /*
+         * v5 数据迁移到 v6：
+         * 既有成就数据原样保留，pending 字段补为空列表。
+         */
+        assertEquals(
+                List.of("FIRST_CLAIM"),
+                store.getAchievementsUnlockedList(player)
+        );
+
+        assertEquals(
+                42,
+                store.getAchievementProgress(
+                        player,
+                        "feed-total"
+                )
+        );
+
+        assertTrue(
+                store.getAchievementsPendingList(player)
+                        .isEmpty()
+        );
+
+        String written =
+                Files.readString(
+                        tempDir.resolve("players.yml")
+                );
+
+        assertTrue(
+                written.contains("data-version: 6")
+        );
+
+        assertTrue(
+                written.contains("achievements-pending")
         );
     }
 
@@ -532,6 +634,23 @@ class YamlCatStoreLifecycleTest {
      * 测试环境
      * ============================================================
      */
+
+    @Test
+    void rapidRestartInSameSecondDoesNotFailOnBackupCollision() {
+
+        /*
+         * BUG G 回归防护：
+         * 崩溃后秒级重启时，备份文件名若同秒碰撞，
+         * Files.copy 会抛 FileAlreadyExistsException 阻断启动。
+         * 毫秒级时间戳 + REPLACE_EXISTING 后必须不再抛。
+         */
+        YamlCatStore first = newStore();
+        first.shutdownAndAwait();
+
+        assertDoesNotThrow(
+                this::newStore
+        );
+    }
 
     private static class FakeCatStoreEnv implements CatStoreEnv {
 

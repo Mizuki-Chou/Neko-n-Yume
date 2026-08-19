@@ -201,4 +201,3 @@ public enum CatPersonality {
         return values()[index];
     }
 }
-

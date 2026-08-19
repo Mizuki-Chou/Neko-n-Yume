@@ -48,4 +48,3 @@ public class CatLevelUpEvent extends Event {
         return handlers;
     }
 }
-

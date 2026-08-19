@@ -308,4 +308,3 @@ public class CatBehaviorTask implements Runnable {
         };
     }
 }
-

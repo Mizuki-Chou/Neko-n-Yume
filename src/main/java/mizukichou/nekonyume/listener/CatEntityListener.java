@@ -353,6 +353,33 @@ public class CatEntityListener implements Listener {
             return;
         }
 
+        /*
+         * 互操作：若更早的监听器（领地/保护插件等）已取消事件，
+         * 猫根本不会受伤，致死保护协议无需介入。
+         */
+        if (event.isCancelled()) {
+            return;
+        }
+
+        /*
+         * 异常伤害治理：他插件可能写入 NaN 伤害，
+         * NaN 会击穿下方的致死判定（NaN <= 0 为 false），
+         * 使猫带着 NaN 血量继续存在。直接取消该次伤害。
+         */
+        double finalDamage =
+                event.getFinalDamage();
+
+        if (!Double.isFinite(
+                finalDamage
+        )) {
+
+            event.setCancelled(
+                    true
+            );
+
+            return;
+        }
+
         if (!configManager.snapshot()
                 .getBattle()
                 .isEnabled()) {

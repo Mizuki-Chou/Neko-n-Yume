@@ -297,8 +297,26 @@ public class CatProgressionService {
             int slotIndex
     ) {
 
-        boolean dreamSlot =
-                cat.isDreamSlot(slotIndex);
+        List<CatSkill> pool =
+                buildCandidatePool(
+                        cat,
+                        cat.isDreamSlot(slotIndex)
+                );
+
+        return weightedSkillRoll(pool);
+    }
+
+    /*
+     * 构建"刷新候选池"：
+     * 该槽位允许的品质池，剔除猫已拥有的技能。
+     *
+     * 梦槽 = 精确梦幻池；其余槽位 = 品质上限内的全池。
+     * 抽取与刷新共用同一实现，杜绝两处逻辑漂移。
+     */
+    private List<CatSkill> buildCandidatePool(
+            Cat cat,
+            boolean dreamSlot
+    ) {
 
         List<CatSkill> candidates =
                 dreamSlot
@@ -319,7 +337,7 @@ public class CatProgressionService {
             }
         }
 
-        return weightedSkillRoll(pool);
+        return pool;
     }
 
     private CatSkill weightedSkillRoll(
@@ -410,27 +428,38 @@ public class CatProgressionService {
         CatSkill oldSkill =
                 currentSkills.get(slotIndex);
 
-        List<CatSkill> candidates =
-                dreamSlot
-                        ? CatSkill.poolOfTierExact(CatTier.DREAM)
-                        : CatSkill.poolFor(
-                        CatTier.maxSkillTierForSlot(
-                                cat.getTier(),
-                                dreamSlot
-                        )
+        List<CatSkill> pool =
+                buildCandidatePool(
+                        cat,
+                        dreamSlot
                 );
-
-        List<CatSkill> pool = new ArrayList<>();
-
-        for (CatSkill skill : candidates) {
-
-            if (!cat.hasSkill(skill)) {
-                pool.add(skill);
-            }
-        }
 
         if (pool.isEmpty()) {
 
+            player.sendMessage(
+                    lang.forPlayer(player).message(
+                            "progression.refresh-no-pool"
+                    )
+            );
+
+            return false;
+        }
+
+        /*
+         * 经济安全不变量（先掷骰、后扣费、再写入）：
+         * 在产生任何经济代价之前，必须先确定新的
+         * 技能一定存在。roll 是纯函数，不会修改任何状态。
+         */
+        CatSkill newSkill =
+                weightedSkillRoll(pool);
+
+        if (newSkill == null) {
+
+            /*
+             * 防御分支：当前权重全为正，非空池理论上不可能
+             * 返回 null；若未来权重配置允许 0 权重，
+             * 这里必须在扣费前拦截，绝不产生"付费无结果"。
+             */
             player.sendMessage(
                     lang.forPlayer(player).message(
                             "progression.refresh-no-pool"
@@ -454,14 +483,31 @@ public class CatProgressionService {
             return false;
         }
 
-        CatSkill newSkill =
-                weightedSkillRoll(pool);
+        /*
+         * 写入防御：CatSkills.set 拒绝与既有槽位重复的技能；
+         * 新技能来自"已剔除已拥有技能"的候选池，
+         * 因此这里必然写入成功。
+         * 若极端情况下写入被拒绝（防御），回退扣费，
+         * 保证"付费必有结果、无结果必不付费"。
+         */
+        cat.setSkillAt(slotIndex, newSkill);
 
-        if (newSkill == null) {
+        if (cat.getSkills().get(slotIndex)
+                != newSkill) {
+
+            /*
+             * 理论不可达：候选池已剔除已拥有技能，
+             * CatSkills.set 必然写入成功。
+             * 万一未来规则变化导致写入被拒，
+             * 必须把扣费退回，保证"无结果必不付费"。
+             */
+            provider.refund(
+                    player,
+                    cost
+            );
+
             return false;
         }
-
-        cat.setSkillAt(slotIndex, newSkill);
 
         persistSkills(player.getUniqueId(), cat);
 

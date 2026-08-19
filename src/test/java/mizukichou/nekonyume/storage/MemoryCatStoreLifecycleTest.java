@@ -121,6 +121,56 @@ class MemoryCatStoreLifecycleTest {
     }
 
     @Test
+    void createCatNamesAreUnique() {
+
+        /*
+         * §22 TODO：名字池只有 8 个名字，
+         * 建档数量超过池大小后必须靠罗马数字后缀
+         * 保证全服无重名。
+         */
+        int count = 24;
+
+        java.util.Set<String> names =
+                new java.util.HashSet<>();
+
+        for (int i = 0; i < count; i++) {
+
+            store.createCat(
+                    UUID.randomUUID()
+            );
+        }
+
+        for (UUID player :
+                store.getCatPlayers()) {
+
+            String name =
+                    store.getCatName(player);
+
+            assertTrue(
+                    names.add(name),
+                    "duplicate cat name: " + name
+            );
+
+            boolean poolPrefixed =
+                    java.util.Arrays.stream(
+                                    AbstractCatStore.CAT_NAME_POOL
+                            )
+                            .anyMatch(name::startsWith);
+
+            assertTrue(
+                    poolPrefixed,
+                    "name should start with a pool name: "
+                            + name
+            );
+        }
+
+        assertEquals(
+                count,
+                names.size()
+        );
+    }
+
+    @Test
     void readsNeverCreateData() {
 
         UUID ghost = UUID.randomUUID();
@@ -349,5 +399,70 @@ class MemoryCatStoreLifecycleTest {
                 )
         );
     }
-}
 
+    /*
+     * ============================================================
+     * 成就奖励待发队列（P0-2）
+     * ============================================================
+     */
+
+    @Test
+    void achievementPendingQueueLifecycle() {
+
+        UUID player = UUID.randomUUID();
+
+        store.createCat(player);
+
+        assertTrue(
+                store.getAchievementsPendingList(player)
+                        .isEmpty()
+        );
+
+        /*
+         * 入队幂等：重复添加不产生重复条目。
+         */
+        store.addAchievementPending(player, "FIRST_CLAIM");
+        store.addAchievementPending(player, "FIRST_CLAIM");
+
+        assertEquals(
+                1,
+                store.getAchievementsPendingList(player)
+                        .size()
+        );
+
+        store.removeAchievementPending(player, "FIRST_CLAIM");
+
+        assertTrue(
+                store.getAchievementsPendingList(player)
+                        .isEmpty()
+        );
+
+        /*
+         * 移除不存在的条目：静默 no-op，不置脏。
+         */
+        store.flush();
+        store.removeAchievementPending(player, "GHOST_ACHIEVEMENT");
+        assertFalse(store.isDirty());
+    }
+
+    @Test
+    void pendingWritesDoNotResurrectAfterRemove() {
+
+        UUID player = UUID.randomUUID();
+
+        store.createCat(player);
+
+        store.addAchievementPending(player, "FIRST_CLAIM");
+
+        assertTrue(store.removeCat(player));
+
+        store.addAchievementPending(player, "GIFT_1");
+        store.removeAchievementPending(player, "FIRST_CLAIM");
+
+        assertFalse(store.hasCat(player));
+        assertTrue(
+                store.getAchievementsPendingList(player)
+                        .isEmpty()
+        );
+    }
+}

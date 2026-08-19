@@ -379,6 +379,21 @@ public class PlayerDataManager implements CatStore {
     }
 
     @Override
+    public List<String> getAchievementsPendingList(UUID playerUUID) {
+        return delegate.getAchievementsPendingList(playerUUID);
+    }
+
+    @Override
+    public void addAchievementPending(UUID playerUUID, String id) {
+        delegate.addAchievementPending(playerUUID, id);
+    }
+
+    @Override
+    public void removeAchievementPending(UUID playerUUID, String id) {
+        delegate.removeAchievementPending(playerUUID, id);
+    }
+
+    @Override
     public Set<UUID> getCatPlayers() {
         return delegate.getCatPlayers();
     }
@@ -403,4 +418,3 @@ public class PlayerDataManager implements CatStore {
         delegate.saveNow();
     }
 }
-

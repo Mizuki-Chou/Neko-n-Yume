@@ -45,6 +45,10 @@ public class MumaNightManager {
     private final NamespacedKey origHealthKey;
     private final NamespacedKey origDamageKey;
     private final NamespacedKey enabledKey;
+    private final NamespacedKey origMainHandKey;
+    private final NamespacedKey origOffHandKey;
+    private final NamespacedKey origMainDropKey;
+    private final NamespacedKey origOffDropKey;
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -99,6 +103,34 @@ public class MumaNightManager {
                 new NamespacedKey(
                         plugin,
                         "muma_night_enabled"
+                );
+
+        /*
+         * P0-3：强化前完整保存怪物原始装备与掉落率，
+         * 黎明还原时逐项恢复，绝不破坏原版世界状态。
+         */
+        this.origMainHandKey =
+                new NamespacedKey(
+                        plugin,
+                        "muma_orig_main_hand"
+                );
+
+        this.origOffHandKey =
+                new NamespacedKey(
+                        plugin,
+                        "muma_orig_off_hand"
+                );
+
+        this.origMainDropKey =
+                new NamespacedKey(
+                        plugin,
+                        "muma_orig_main_drop"
+                );
+
+        this.origOffDropKey =
+                new NamespacedKey(
+                        plugin,
+                        "muma_orig_off_drop"
                 );
     }
 
@@ -367,19 +399,61 @@ public class MumaNightManager {
             );
         }
 
-        monster.getEquipment()
-                .setItemInMainHand(
-                        new ItemStack(
-                                random.nextBoolean()
-                                        ? Material.DIAMOND_SWORD
-                                        : Material.NETHERITE_SWORD
-                        )
-                );
+        /*
+         * P0-3：强化前把原主手 / 原副手 / 掉落率完整保存到 PDC，
+         * 黎明 stripMonster 逐项还原。
+         *
+         * 注意（Paper 26.2 API）：
+         * PersistentDataType.TAG_CONTAINER 的类型参数是
+         * PersistentDataContainer 而非 ItemStack，
+         * 物品必须走 serializeAsBytes()/deserializeBytes()
+         * 与 BYTE_ARRAY 组合存储。
+         */
+        org.bukkit.inventory.EntityEquipment equipment =
+                monster.getEquipment();
 
-        monster.getEquipment()
-                .setItemInMainHandDropChance(
-                        0f
-                );
+        if (equipment != null) {
+
+            pdc.set(
+                    origMainHandKey,
+                    PersistentDataType.BYTE_ARRAY,
+                    equipment.getItemInMainHand()
+                            .serializeAsBytes()
+            );
+
+            pdc.set(
+                    origOffHandKey,
+                    PersistentDataType.BYTE_ARRAY,
+                    equipment.getItemInOffHand()
+                            .serializeAsBytes()
+            );
+
+            pdc.set(
+                    origMainDropKey,
+                    PersistentDataType.DOUBLE,
+                    (double) equipment
+                            .getItemInMainHandDropChance()
+            );
+
+            pdc.set(
+                    origOffDropKey,
+                    PersistentDataType.DOUBLE,
+                    (double) equipment
+                            .getItemInOffHandDropChance()
+            );
+
+            equipment.setItemInMainHand(
+                    new ItemStack(
+                            random.nextBoolean()
+                                    ? Material.DIAMOND_SWORD
+                                    : Material.NETHERITE_SWORD
+                    )
+            );
+
+            equipment.setItemInMainHandDropChance(
+                    0f
+            );
+        }
     }
 
     public void stripMonster(
@@ -451,16 +525,100 @@ public class MumaNightManager {
             }
         }
 
-        monster.getEquipment()
-                .setItemInMainHand(
-                        new ItemStack(
-                                Material.AIR
-                        )
+        /*
+         * P0-3：黎明还原原版装备。
+         *
+         * 从 PDC 逐项恢复原始主手 / 副手 / 掉落率；
+         * 记录缺失或字节损坏（外部篡改等异常）时才回退为空气，
+         * 绝不再无条件清空原版装备。
+         */
+        org.bukkit.inventory.EntityEquipment equipment =
+                monster.getEquipment();
+
+        if (equipment != null) {
+
+            ItemStack originalMain =
+                    restoreStack(
+                            pdc.get(
+                                    origMainHandKey,
+                                    PersistentDataType.BYTE_ARRAY
+                            )
+                    );
+
+            ItemStack originalOff =
+                    restoreStack(
+                            pdc.get(
+                                    origOffHandKey,
+                                    PersistentDataType.BYTE_ARRAY
+                            )
+                    );
+
+            equipment.setItemInMainHand(
+                    originalMain
+            );
+
+            equipment.setItemInOffHand(
+                    originalOff
+            );
+
+            Double mainDrop =
+                    pdc.get(
+                            origMainDropKey,
+                            PersistentDataType.DOUBLE
+                    );
+
+            Double offDrop =
+                    pdc.get(
+                            origOffDropKey,
+                            PersistentDataType.DOUBLE
+                    );
+
+            if (mainDrop != null) {
+
+                equipment.setItemInMainHandDropChance(
+                        mainDrop.floatValue()
                 );
+            }
+
+            if (offDrop != null) {
+
+                equipment.setItemInOffHandDropChance(
+                        offDrop.floatValue()
+                );
+            }
+        }
 
         pdc.remove(buffedKey);
         pdc.remove(origHealthKey);
         pdc.remove(origDamageKey);
+        pdc.remove(origMainHandKey);
+        pdc.remove(origOffHandKey);
+        pdc.remove(origMainDropKey);
+        pdc.remove(origOffDropKey);
+    }
+
+    /*
+     * 从保存的字节还原 ItemStack；
+     * 缺失 / 损坏 / 外部篡改时回退空气，绝不抛异常。
+     */
+    private ItemStack restoreStack(
+            byte[] bytes
+    ) {
+
+        if (bytes == null) {
+            return new ItemStack(Material.AIR);
+        }
+
+        try {
+
+            return ItemStack.deserializeBytes(
+                    bytes
+            );
+
+        } catch (Exception e) {
+
+            return new ItemStack(Material.AIR);
+        }
     }
 
     public void maybeDropMeowDan(

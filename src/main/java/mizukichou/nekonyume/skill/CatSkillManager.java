@@ -167,13 +167,18 @@ public class CatSkillManager {
 
     public String costDisplayKey() {
 
-        return "player-points".equalsIgnoreCase(
-                configManager.snapshot()
-                        .getSkills()
-                        .getRefreshCostType()
-        )
-                ? "cost.player-points"
-                : "cost.meow-power";
+        /*
+         * NEW-2：按"实际生效的提供者实例"判定消耗类型，
+         * 而不是按 config 的 cost-type。
+         *
+         * 若 config 配了 player-points 但 PlayerPoints
+         * 未安装（回退到喵力），显示必须与真实扣费一致，
+         * 避免玩家看到扣 points、实际扣喵力。
+         */
+        return refreshCostProvider
+                instanceof MeowPowerCostProvider
+                ? "cost.meow-power"
+                : "cost.player-points";
     }
 
     /*
@@ -181,6 +186,23 @@ public class CatSkillManager {
      * 冷却
      * ============================================================
      */
+
+    /*
+     * 清理指定玩家的全部冷却记录（玩家退出时调用）。
+     * 防止长跑服务器上冷却表无限膨胀。
+     */
+    public void clearCooldowns(
+            UUID playerUuid
+    ) {
+
+        if (playerUuid == null) {
+            return;
+        }
+
+        cooldowns.remove(
+                playerUuid
+        );
+    }
 
     public boolean isOnCooldown(
             Player player,

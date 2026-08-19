@@ -46,4 +46,3 @@ public class CatSkillActivatedEvent extends Event {
         return handlers;
     }
 }
-

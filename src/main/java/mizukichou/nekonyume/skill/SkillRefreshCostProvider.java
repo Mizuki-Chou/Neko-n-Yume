@@ -38,5 +38,23 @@ public interface SkillRefreshCostProvider {
             Player player,
             int cost
     );
-}
 
+    /**
+     * 回退扣除（默认无操作）。
+     *
+     * <p>
+     * 仅在"扣费成功但后续写入被拒绝"的极端防御路径上调用，
+     * 保证"无结果必不付费"不变量。
+     * 实现方若无法安全回退（如第三方经济插件不支持退款），
+     * 应保持默认实现并记录日志。
+     * </p>
+     */
+    default void refund(
+            Player player,
+            int cost
+    ) {
+        /*
+         * 默认无操作。
+         */
+    }
+}

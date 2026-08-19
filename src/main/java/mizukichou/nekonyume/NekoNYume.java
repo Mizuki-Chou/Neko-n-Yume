@@ -17,6 +17,8 @@ Sora 2026-今 - 不懂事的猫咪，只能笼养呜呜
 import mizukichou.nekonyume.achievement.AchievementGuiManager;
 import mizukichou.nekonyume.achievement.AchievementService;
 import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatEntityBinding;
+import mizukichou.nekonyume.cat.CatEntityRestorer;
 import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.CatManager;
@@ -116,6 +118,8 @@ public final class NekoNYume extends JavaPlugin {
      */
     private CatCache catCache;
     private CatProgressionService catProgressionService;
+    private CatEntityBinding catEntityBinding;
+    private CatEntityRestorer catEntityRestorer;
     private CatEntityService catEntityService;
     private CatVariantService catVariantService;
 
@@ -394,25 +398,45 @@ public final class NekoNYume extends JavaPlugin {
                         lang
                 );
 
-        catEntityService =
-                new CatEntityService(
-                        this,
-                        getLogger(),
+        catEntityBinding =
+                new CatEntityBinding(
                         catStore,
                         catCache,
                         catProgressionService,
                         catVariantService,
-                        catKey,
-                        ownerKey,
                         battleState,
-                        lang
+                        lang,
+                        catKey,
+                        ownerKey
+                );
+
+        catEntityRestorer =
+                new CatEntityRestorer(
+                        this,
+                        getLogger(),
+                        catStore,
+                        catCache,
+                        catVariantService,
+                        lang,
+                        catEntityBinding
+                );
+
+        catEntityService =
+                new CatEntityService(
+                        getLogger(),
+                        catStore,
+                        catCache,
+                        lang,
+                        catEntityBinding,
+                        catEntityRestorer
                 );
 
         catManager =
                 new CatManager(
                         catCache,
                         catEntityService,
-                        catProgressionService
+                        catProgressionService,
+                        getLogger()
                 );
 
         /*
@@ -569,6 +593,10 @@ public final class NekoNYume extends JavaPlugin {
                 )
         )) {
 
+            failStartup(
+                    "nekoyume"
+            );
+
             return;
         }
 
@@ -585,6 +613,10 @@ public final class NekoNYume extends JavaPlugin {
                         lang
                 )
         )) {
+
+            failStartup(
+                    "nekoyumeadmin"
+            );
 
             return;
         }
@@ -611,7 +643,8 @@ public final class NekoNYume extends JavaPlugin {
                 new PlayerQuitListener(
                         catCache,
                         catStore,
-                        catEntityService
+                        catEntityService,
+                        catSkillManager
                 ),
                 new AchievementListener(
                         achievementService,
@@ -905,11 +938,6 @@ public final class NekoNYume extends JavaPlugin {
                 catManager.saveAllCats();
             }
 
-            if (catStore instanceof YamlCatStore yamlStore) {
-
-                yamlStore.shutdownAndAwait();
-            }
-
         } catch (Exception exception) {
 
             getLogger().log(
@@ -917,6 +945,29 @@ public final class NekoNYume extends JavaPlugin {
                     "Failed to save Neko n' Yume data during shutdown.",
                     exception
             );
+
+        } finally {
+
+            /*
+             * P0-5：无论保存环节是否抛异常，
+             * 都必须等待保存线程完成在飞写入。
+             * 否则未落盘的快照会随进程退出而丢失。
+             */
+            try {
+
+                if (catStore instanceof YamlCatStore yamlStore) {
+
+                    yamlStore.shutdownAndAwait();
+                }
+
+            } catch (Exception exception) {
+
+                getLogger().log(
+                        Level.SEVERE,
+                        "Failed to flush Neko n' Yume data during shutdown.",
+                        exception
+                );
+            }
         }
 
         /*
@@ -937,6 +988,39 @@ public final class NekoNYume extends JavaPlugin {
      * 工具
      * ============================================================
      */
+
+    /*
+     * 启动失败时清理已建资源：
+     * YamlCatStore 在构造时已经启动了保存线程，
+     * 若后续装配失败（命令缺失等）直接 return，
+     * onDisable 不会被执行，保存线程会永久泄漏。
+     * 这里主动等待保存线程停摆后再禁用插件。
+     */
+    private void failStartup(
+            String reason
+    ) {
+
+        getLogger().severe(
+                "Startup failed: "
+                        + reason
+        );
+
+        if (catStore instanceof YamlCatStore yamlStore) {
+
+            try {
+
+                yamlStore.shutdownAndAwait();
+
+            } catch (Exception exception) {
+
+                getLogger().log(
+                        Level.SEVERE,
+                        "Failed to flush store during failed startup cleanup.",
+                        exception
+                );
+            }
+        }
+    }
 
     /*
      * 注册命令。

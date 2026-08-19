@@ -2,6 +2,7 @@ package mizukichou.nekonyume.listener;
 
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEntityService;
+import mizukichou.nekonyume.skill.CatSkillManager;
 import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -14,16 +15,19 @@ public class PlayerQuitListener implements Listener {
     private final CatCache cache;
     private final CatStore store;
     private final CatEntityService entityService;
+    private final CatSkillManager skillManager;
 
     public PlayerQuitListener(
             CatCache cache,
             CatStore store,
-            CatEntityService entityService
+            CatEntityService entityService,
+            CatSkillManager skillManager
     ) {
 
         this.cache = cache;
         this.store = store;
         this.entityService = entityService;
+        this.skillManager = skillManager;
     }
 
     @EventHandler
@@ -70,6 +74,13 @@ public class PlayerQuitListener implements Listener {
         entityService.clearPendingRestore(
                 playerUUID
         );
+
+        /*
+         * 清理技能冷却表条目（§22 TODO）：
+         * 防止长跑服务器上冷却 Map 累积离线玩家记录。
+         */
+        skillManager.clearCooldowns(
+                playerUUID
+        );
     }
 }
-

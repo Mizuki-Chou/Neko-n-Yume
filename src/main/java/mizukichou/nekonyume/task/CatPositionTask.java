@@ -204,4 +204,3 @@ public class CatPositionTask implements Runnable {
         }
     }
 }
-

@@ -225,6 +225,20 @@ public interface CatStore {
     void addAchievementProgress(UUID playerUUID, String key, int amount);
 
     /*
+     * 奖励待发队列（P0-2 崩溃恢复）：
+     * 解锁与奖励的原子性由"同一 YAML 文档、同一快照落盘"保证：
+     * 解锁时先写入 pending 标记，奖励发放完毕后移除；
+     * 崩溃后下次登录由 AchievementService 对仍处于 pending
+     * 状态的成就补发奖励。
+     */
+
+    List<String> getAchievementsPendingList(UUID playerUUID);
+
+    void addAchievementPending(UUID playerUUID, String id);
+
+    void removeAchievementPending(UUID playerUUID, String id);
+
+    /*
      * ---------- 集合 ----------
      */
 
@@ -251,4 +265,3 @@ public interface CatStore {
      */
     void saveNow();
 }
-

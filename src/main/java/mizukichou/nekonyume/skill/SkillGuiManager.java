@@ -263,14 +263,11 @@ public class SkillGuiManager {
             int checkpoint
     ) {
 
-        return switch (checkpoint) {
-
-            case 0 -> "天生梦槽";
-            case 1 -> "喵阶 1";
-            case 2 -> "喵阶 10 且等级 30";
-            case 3 -> "喵阶 30 且等级 60";
-            default -> "未知";
-        };
+        /*
+         * 返回语言键而非硬编码文案：
+         * 具体显示文案由 lang 文件的 checkpoint.hint-N 提供。
+         */
+        return "checkpoint.hint-" + checkpoint;
     }
 
     /*

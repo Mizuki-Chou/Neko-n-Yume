@@ -7,6 +7,7 @@ import org.bukkit.entity.Player;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.logging.Logger;
 
 /**
  * 猫咪系统门面（Step 5A：纯委托 + 注入构造）。
@@ -28,16 +29,19 @@ public class CatManager {
     private final CatCache catCache;
     private final CatEntityService catEntityService;
     private final CatProgressionService catProgressionService;
+    private final Logger logger;
 
     public CatManager(
             CatCache catCache,
             CatEntityService catEntityService,
-            CatProgressionService catProgressionService
+            CatProgressionService catProgressionService,
+            Logger logger
     ) {
 
         this.catCache = catCache;
         this.catEntityService = catEntityService;
         this.catProgressionService = catProgressionService;
+        this.logger = logger;
     }
 
     /*
@@ -97,14 +101,31 @@ public class CatManager {
      * 2. 回写玩家数据层；
      * 3. 驱逐"离线且长时间无互动"的缓存。
      * </p>
+     *
+     * <p>
+     * P1-6：单猫异常隔离——一只猫的数据/实体出现任何意外，
+     * 只跳过这一只，绝不阻断其余猫咪的保存。
+     * </p>
      */
     public void saveAllCats() {
 
         for (Cat cat : catCache.getCats()) {
 
-            catEntityService.captureEntityState(cat);
+            try {
 
-            catCache.saveCat(cat);
+                catEntityService.captureEntityState(cat);
+
+                catCache.saveCat(cat);
+
+            } catch (Exception exception) {
+
+                logger.warning(
+                        "Failed to save cat "
+                                + cat.getId()
+                                + ": "
+                                + exception.getMessage()
+                );
+            }
         }
 
         catCache.evictOffline(
@@ -265,4 +286,3 @@ public class CatManager {
         return catEntityService.getOwnerKey();
     }
 }
-

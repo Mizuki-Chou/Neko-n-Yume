@@ -31,4 +31,3 @@ public final class CatGuiHolder implements InventoryHolder {
         return null;
     }
 }
-

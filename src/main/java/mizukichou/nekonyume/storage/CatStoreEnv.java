@@ -25,4 +25,3 @@ public interface CatStoreEnv {
 
     int getConfigInt(String path, int def);
 }
-

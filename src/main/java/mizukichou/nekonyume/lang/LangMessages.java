@@ -566,7 +566,8 @@ public final class LangMessages {
 
                     result.add(
                             index < args.length
-                                    ? args[index].style(
+                                    ? applyPlaceholderStyle(
+                                    args[index],
                                     style
                             )
                                     : Component.empty()
@@ -599,6 +600,33 @@ public final class LangMessages {
         }
 
         return result;
+    }
+
+    /*
+     * 占位符样式继承规则：
+     *
+     * - 模板节点样式非空（如 <yellow>{0}</yellow>）→
+     *   参数继承模板样式（保持既有语义）；
+     * - 模板节点样式为空 → 保留参数自身样式。
+     *
+     * 修复前对空样式节点执行 .style(empty) 会覆盖参数
+     * 自身样式，导致经 LegacyComponentSerializer 反序列化的
+     * 彩色参数（如 §6 喵丹名）在普通模板中丢失颜色。
+     */
+    private Component applyPlaceholderStyle(
+            Component arg,
+            Style style
+    ) {
+
+        if (style == null ||
+                style.isEmpty()) {
+
+            return arg;
+        }
+
+        return arg.style(
+                style
+        );
     }
 
     private boolean isDigits(

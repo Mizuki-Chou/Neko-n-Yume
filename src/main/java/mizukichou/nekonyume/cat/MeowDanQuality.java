@@ -139,4 +139,3 @@ public enum MeowDanQuality {
         return null;
     }
 }
-

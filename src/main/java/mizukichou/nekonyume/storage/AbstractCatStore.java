@@ -6,7 +6,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -24,7 +23,26 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * <p>
  * P0 四条不变量集中在这里实现一次，
- * YamlCatStore 与 MemoryCatStore 语义永远一致。
+ * YamlCatStore 与 MemoryCatStore 语义永远一致：
+ * </p>
+ *
+ * <ol>
+ *   <li>读不建档：{@link #getString}/{@link #getInt}/{@link #getLong}/
+ *       {@link #getDouble}/{@link #getStringList} 无猫数据一律返回默认值；</li>
+ *   <li>写不复活：所有写路径先 {@link #hasCat} 守卫；</li>
+ *   <li>创建唯一入口：{@link #createCat} / {@link #ensureCat}；</li>
+ *   <li>原子写：{@link #saveNow} 由磁盘实现原子落盘，失败保持脏标记。</li>
+ * </ol>
+ *
+ * <p>
+ * God Object 拆分（0.7.3）：
+ * 字段访问逻辑按域下沉为六个同包 Section 类
+ * （{@link CatStoreProfile} / {@link CatStoreGrowth} /
+ * {@link CatStoreVitals} / {@link CatStoreInteractions} /
+ * {@link CatStorePresence} / {@link CatStoreAchievements}），
+ * 全部经本类的原始操作与助手访问底层，P0 语义仍集中于此。
+ * 本类只保留：常量、原始操作、读取助手、P0 核心（创建/删除）
+ * 与对各 Section 的委托。
  * </p>
  */
 public abstract class AbstractCatStore implements CatStore {
@@ -61,6 +79,7 @@ public abstract class AbstractCatStore implements CatStore {
     protected static final String FIELD_Z = "z";
     protected static final String FIELD_ACHIEVEMENTS_UNLOCKED = "achievements-unlocked";
     protected static final String FIELD_ACHIEVEMENTS_PROGRESS = "achievements-progress";
+    protected static final String FIELD_ACHIEVEMENTS_PENDING = "achievements-pending";
 
     /*
      * 默认值。
@@ -88,6 +107,93 @@ public abstract class AbstractCatStore implements CatStore {
                                 CAT_NAME_POOL.length
                         )
                 ];
+    }
+
+    /*
+     * §22 TODO：名字池查重。
+     *
+     * 同名猫会干扰玩家辨识与按名字匹配的周边插件，
+     * 建档时与全服已有名字对比，
+     * 撞名追加罗马数字后缀（Marisa、Marisa·II、Marisa·III…）。
+     */
+    private String uniquePoolName() {
+
+        Set<String> taken =
+                new HashSet<>();
+
+        for (UUID owner : ownerKeysRaw()) {
+
+            String existing =
+                    getString(
+                            owner,
+                            FIELD_NAME,
+                            null
+                    );
+
+            if (existing != null &&
+                    !existing.isBlank()) {
+
+                taken.add(existing);
+            }
+        }
+
+        String base =
+                randomCatName();
+
+        if (!taken.contains(base)) {
+            return base;
+        }
+
+        for (int n = 2; n <= 3999; n++) {
+
+            String candidate =
+                    base + "·" + romanNumeral(n);
+
+            if (!taken.contains(candidate)) {
+                return candidate;
+            }
+        }
+
+        /*
+         * 理论不可达兜底（同名猫超过 3998 只）：
+         * 附加时间戳保证唯一，绝不让建档失败。
+         */
+        return base
+                + "·"
+                + (System.currentTimeMillis() % 1000000);
+    }
+
+    private static String romanNumeral(
+            int number
+    ) {
+
+        String[] symbols = {
+                "M", "CM", "D", "CD", "C", "XC",
+                "L", "XL", "X", "IX", "V", "IV", "I"
+        };
+
+        int[] values = {
+                1000, 900, 500, 400, 100, 90,
+                50, 40, 10, 9, 5, 4, 1
+        };
+
+        StringBuilder builder =
+                new StringBuilder();
+
+        int remaining = number;
+
+        for (int i = 0;
+             i < values.length;
+             i++) {
+
+            while (remaining >= values[i]) {
+
+                builder.append(symbols[i]);
+                remaining -= values[i];
+            }
+        }
+
+        return builder.toString();
     }
 
     /*
@@ -212,7 +318,7 @@ public abstract class AbstractCatStore implements CatStore {
 
     /*
      * ============================================================
-     * 成就原始助手
+     * 字符串列表原始助手
      * ============================================================
      *
      * 成就数据以"字符串列表"形式存储：
@@ -252,83 +358,6 @@ public abstract class AbstractCatStore implements CatStore {
         return result;
     }
 
-    private Map<String, Integer> readProgressMap(
-            UUID playerUUID
-    ) {
-
-        Map<String, Integer> result =
-                new LinkedHashMap<>();
-
-        for (String entry :
-                getStringList(
-                        playerUUID,
-                        FIELD_ACHIEVEMENTS_PROGRESS
-                )) {
-
-            int split =
-                    entry.indexOf('=');
-
-            if (split <= 0) {
-                continue;
-            }
-
-            String key =
-                    entry.substring(
-                            0,
-                            split
-                    );
-
-            try {
-
-                int value =
-                        Integer.parseInt(
-                                entry.substring(
-                                        split + 1
-                                )
-                        );
-
-                result.put(
-                        key,
-                        value
-                );
-
-            } catch (NumberFormatException ignored) {
-
-                /*
-                 * 非法条目直接忽略，
-                 * 不阻断其余进度。
-                 */
-            }
-        }
-
-        return result;
-    }
-
-    private void writeProgressMap(
-            UUID playerUUID,
-            Map<String, Integer> map
-    ) {
-
-        List<String> entries =
-                new ArrayList<>();
-
-        for (Map.Entry<String, Integer> entry :
-                map.entrySet()) {
-
-            entries.add(
-                    entry.getKey()
-                            + "="
-                            + entry.getValue()
-            );
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_ACHIEVEMENTS_PROGRESS,
-                entries
-        );
-    }
-
     protected static UUID parseUUID(String value) {
 
         if (value == null || value.isBlank()) {
@@ -355,8 +384,12 @@ public abstract class AbstractCatStore implements CatStore {
 
     /*
      * ============================================================
-     * 基础
+     * P0 核心：存在性 / 创建 / 删除
      * ============================================================
+     *
+     * 创建数据的唯一入口是 createCat / ensureCat；
+     * removeCat 是不可逆删除，立即 saveNow。
+     * 这两条路径永不外移到 Section 类。
      */
 
     @Override
@@ -387,7 +420,7 @@ public abstract class AbstractCatStore implements CatStore {
                 new HashMap<>();
 
         fields.put(FIELD_ID, newCatId.toString());
-        fields.put(FIELD_NAME, randomCatName());
+        fields.put(FIELD_NAME, uniquePoolName());
         fields.put(FIELD_LEVEL, DEFAULT_CAT_LEVEL);
         fields.put(FIELD_AFFECTION, DEFAULT_CAT_AFFECTION);
         fields.put(FIELD_HUNGER, DEFAULT_CAT_HUNGER);
@@ -426,975 +459,6 @@ public abstract class AbstractCatStore implements CatStore {
         }
     }
 
-    /*
-     * ============================================================
-     * 逻辑 UUID
-     * ============================================================
-     */
-
-    @Override
-    public UUID getCatUUID(UUID playerUUID) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return null;
-        }
-
-        return parseUUID(
-                getString(
-                        playerUUID,
-                        FIELD_ID,
-                        null
-                )
-        );
-    }
-
-    @Override
-    public void setCatUUID(
-            UUID playerUUID,
-            UUID catUUID
-    ) {
-
-        if (playerUUID == null ||
-                catUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_ID,
-                catUUID.toString()
-        );
-    }
-
-    /*
-     * ============================================================
-     * 名称
-     * ============================================================
-     */
-
-    @Override
-    public String getCatName(UUID playerUUID) {
-
-        return getString(
-                playerUUID,
-                FIELD_NAME,
-                DEFAULT_CAT_NAME
-        );
-    }
-
-    @Override
-    public void setCatName(
-            UUID playerUUID,
-            String name
-    ) {
-
-        if (playerUUID == null ||
-                name == null ||
-                name.isBlank() ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(playerUUID, FIELD_NAME, name);
-    }
-
-    /*
-     * ============================================================
-     * 等级 / 经验
-     * ============================================================
-     */
-
-    @Override
-    public int getCatLevel(UUID playerUUID) {
-
-        return Math.max(
-                1,
-                getInt(
-                        playerUUID,
-                        FIELD_LEVEL,
-                        DEFAULT_CAT_LEVEL
-                )
-        );
-    }
-
-    @Override
-    public void setCatLevel(
-            UUID playerUUID,
-            int level
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_LEVEL,
-                Math.max(1, level)
-        );
-    }
-
-    @Override
-    public void addCatLevel(
-            UUID playerUUID,
-            int amount
-    ) {
-
-        setCatLevel(
-                playerUUID,
-                getCatLevel(playerUUID) + amount
-        );
-    }
-
-    @Override
-    public int getCatExperience(UUID playerUUID) {
-
-        return Math.max(
-                0,
-                getInt(
-                        playerUUID,
-                        FIELD_EXPERIENCE,
-                        0
-                )
-        );
-    }
-
-    @Override
-    public void setCatExperience(
-            UUID playerUUID,
-            int experience
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_EXPERIENCE,
-                Math.max(0, experience)
-        );
-    }
-
-    /*
-     * ============================================================
-     * 喵力 / 喵阶
-     * ============================================================
-     */
-
-    @Override
-    public int getCatMeowPower(UUID playerUUID) {
-
-        return Math.max(
-                0,
-                getInt(
-                        playerUUID,
-                        FIELD_MEOW_POWER,
-                        0
-                )
-        );
-    }
-
-    @Override
-    public void setCatMeowPower(
-            UUID playerUUID,
-            int meowPower
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_MEOW_POWER,
-                Math.max(0, meowPower)
-        );
-    }
-
-    @Override
-    public int getCatMeowRank(UUID playerUUID) {
-
-        return Math.max(
-                0,
-                getInt(
-                        playerUUID,
-                        FIELD_MEOW_RANK,
-                        0
-                )
-        );
-    }
-
-    @Override
-    public void setCatMeowRank(
-            UUID playerUUID,
-            int meowRank
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_MEOW_RANK,
-                Math.max(0, meowRank)
-        );
-    }
-
-    /*
-     * ============================================================
-     * 好感度
-     * ============================================================
-     */
-
-    @Override
-    public int getCatAffection(UUID playerUUID) {
-
-        return clamp100(
-                getInt(
-                        playerUUID,
-                        FIELD_AFFECTION,
-                        DEFAULT_CAT_AFFECTION
-                )
-        );
-    }
-
-    @Override
-    public void setCatAffection(
-            UUID playerUUID,
-            int affection
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_AFFECTION,
-                clamp100(affection)
-        );
-    }
-
-    @Override
-    public void addCatAffection(
-            UUID playerUUID,
-            int amount
-    ) {
-
-        setCatAffection(
-                playerUUID,
-                getCatAffection(playerUUID) + amount
-        );
-    }
-
-    /*
-     * ============================================================
-     * 健康度
-     * ============================================================
-     */
-
-    @Override
-    public int getCatHealth(UUID playerUUID) {
-
-        return clamp100(
-                getInt(
-                        playerUUID,
-                        FIELD_HEALTH,
-                        DEFAULT_CAT_HEALTH
-                )
-        );
-    }
-
-    @Override
-    public void setCatHealth(
-            UUID playerUUID,
-            int health
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_HEALTH,
-                clamp100(health)
-        );
-    }
-
-    @Override
-    public void addCatHealth(
-            UUID playerUUID,
-            int amount
-    ) {
-
-        setCatHealth(
-                playerUUID,
-                getCatHealth(playerUUID) + amount
-        );
-    }
-
-    @Override
-    public boolean isCatUnhealthy(UUID playerUUID) {
-
-        return getCatHealth(playerUUID) <= 0;
-    }
-
-    /*
-     * ============================================================
-     * 饱食度
-     * ============================================================
-     */
-
-    @Override
-    public int getCatHunger(UUID playerUUID) {
-
-        return clamp100(
-                getInt(
-                        playerUUID,
-                        FIELD_HUNGER,
-                        DEFAULT_CAT_HUNGER
-                )
-        );
-    }
-
-    @Override
-    public void setCatHunger(
-            UUID playerUUID,
-            int hunger
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_HUNGER,
-                clamp100(hunger)
-        );
-    }
-
-    @Override
-    public void addCatHunger(
-            UUID playerUUID,
-            int amount
-    ) {
-
-        setCatHunger(
-                playerUUID,
-                getCatHunger(playerUUID) + amount
-        );
-    }
-
-    @Override
-    public void removeCatHunger(
-            UUID playerUUID,
-            int amount
-    ) {
-
-        addCatHunger(playerUUID, -amount);
-    }
-
-    @Override
-    public boolean isCatHungry(UUID playerUUID) {
-
-        return getCatHunger(playerUUID) <= 0;
-    }
-
-    @Override
-    public double getCatHungerPercent(UUID playerUUID) {
-
-        return getCatHunger(playerUUID) / 100.0;
-    }
-
-    @Override
-    public long getCatHungerLastUpdate(UUID playerUUID) {
-
-        return getLong(
-                playerUUID,
-                FIELD_HUNGER_LAST_UPDATE,
-                System.currentTimeMillis()
-        );
-    }
-
-    @Override
-    public void setCatHungerLastUpdate(
-            UUID playerUUID,
-            long timestamp
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        if (timestamp < 0) {
-            timestamp = System.currentTimeMillis();
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_HUNGER_LAST_UPDATE,
-                timestamp
-        );
-    }
-
-    /*
-     * ============================================================
-     * 时间
-     * ============================================================
-     */
-
-    @Override
-    public long getCatCreatedAt(UUID playerUUID) {
-
-        return getLong(
-                playerUUID,
-                FIELD_CREATED_AT,
-                System.currentTimeMillis()
-        );
-    }
-
-    @Override
-    public void setCatCreatedAt(
-            UUID playerUUID,
-            long timestamp
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        if (timestamp < 0) {
-            timestamp = System.currentTimeMillis();
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_CREATED_AT,
-                timestamp
-        );
-    }
-
-    @Override
-    public long getCatLastFedAt(UUID playerUUID) {
-
-        return getLong(
-                playerUUID,
-                FIELD_LAST_FED_AT,
-                getCatCreatedAt(playerUUID)
-        );
-    }
-
-    @Override
-    public void setCatLastFedAt(
-            UUID playerUUID,
-            long timestamp
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        if (timestamp < 0) {
-            timestamp = System.currentTimeMillis();
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_LAST_FED_AT,
-                timestamp
-        );
-    }
-
-    @Override
-    public long getCatLastInteractionAt(UUID playerUUID) {
-
-        return getLong(
-                playerUUID,
-                FIELD_LAST_INTERACTION_AT,
-                getCatCreatedAt(playerUUID)
-        );
-    }
-
-    @Override
-    public void setCatLastInteractionAt(
-            UUID playerUUID,
-            long timestamp
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        if (timestamp < 0) {
-            timestamp = System.currentTimeMillis();
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_LAST_INTERACTION_AT,
-                timestamp
-        );
-    }
-
-    /*
-     * ============================================================
-     * 每日计数（跨天重置）
-     * ============================================================
-     */
-
-    @Override
-    public int getCatPetCount(UUID playerUUID) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return 0;
-        }
-
-        resetPetCountIfNewDay(playerUUID);
-
-        return Math.max(
-                0,
-                getInt(
-                        playerUUID,
-                        FIELD_PET_COUNT,
-                        0
-                )
-        );
-    }
-
-    @Override
-    public void addCatPetCount(UUID playerUUID) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        resetPetCountIfNewDay(playerUUID);
-
-        setRaw(
-                playerUUID,
-                FIELD_PET_COUNT,
-                getInt(playerUUID, FIELD_PET_COUNT, 0) + 1
-        );
-
-        setRaw(
-                playerUUID,
-                FIELD_LAST_INTERACTION_AT,
-                System.currentTimeMillis()
-        );
-    }
-
-    private void resetPetCountIfNewDay(UUID playerUUID) {
-
-        resetDayCounterIfNeeded(
-                playerUUID,
-                FIELD_PET_DATE,
-                FIELD_PET_COUNT
-        );
-    }
-
-    @Override
-    public int getCatFeedCount(UUID playerUUID) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return 0;
-        }
-
-        resetFeedCountIfNewDay(playerUUID);
-
-        return Math.max(
-                0,
-                getInt(
-                        playerUUID,
-                        FIELD_FEED_COUNT,
-                        0
-                )
-        );
-    }
-
-    @Override
-    public void addCatFeedCount(UUID playerUUID) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        resetFeedCountIfNewDay(playerUUID);
-
-        setRaw(
-                playerUUID,
-                FIELD_FEED_COUNT,
-                getInt(playerUUID, FIELD_FEED_COUNT, 0) + 1
-        );
-    }
-
-    private void resetFeedCountIfNewDay(UUID playerUUID) {
-
-        resetDayCounterIfNeeded(
-                playerUUID,
-                FIELD_FEED_DATE,
-                FIELD_FEED_COUNT
-        );
-    }
-
-    /*
-     * 通用跨天重置：
-     * 日期与今日不一致时，日期刷新、计数归零。
-     * 两个每日计数共用同一实现，避免重复膨胀（Issue #15）。
-     */
-    private void resetDayCounterIfNeeded(
-            UUID playerUUID,
-            String dateField,
-            String countField
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        String today =
-                LocalDate.now().toString();
-
-        String saved =
-                getString(
-                        playerUUID,
-                        dateField,
-                        null
-                );
-
-        if (saved == null ||
-                !saved.equals(today)) {
-
-            setRaw(
-                    playerUUID,
-                    dateField,
-                    today
-            );
-
-            setRaw(
-                    playerUUID,
-                    countField,
-                    0
-            );
-        }
-    }
-
-    /*
-     * ============================================================
-     * 每日礼物判定
-     * ============================================================
-     */
-
-    @Override
-    public boolean isGiftCheckedToday(UUID playerUUID) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return true;
-        }
-
-        return LocalDate.now()
-                .toString()
-                .equals(
-                        getString(
-                                playerUUID,
-                                FIELD_GIFT_DATE,
-                                null
-                        )
-                );
-    }
-
-    @Override
-    public void markGiftChecked(UUID playerUUID) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_GIFT_DATE,
-                LocalDate.now().toString()
-        );
-    }
-
-    /*
-     * ============================================================
-     * 行为模式
-     * ============================================================
-     */
-
-    @Override
-    public String getCatBehaviorMode(UUID playerUUID) {
-
-        return getString(
-                playerUUID,
-                FIELD_BEHAVIOR_MODE,
-                "FOLLOW"
-        );
-    }
-
-    @Override
-    public void setCatBehaviorMode(
-            UUID playerUUID,
-            String mode
-    ) {
-
-        if (playerUUID == null ||
-                mode == null ||
-                mode.isBlank() ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_BEHAVIOR_MODE,
-                mode
-        );
-    }
-
-    /*
-     * ============================================================
-     * 底蕴
-     * ============================================================
-     */
-
-    @Override
-    public String getCatTier(UUID playerUUID) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return null;
-        }
-
-        String value =
-                getString(
-                        playerUUID,
-                        FIELD_TIER,
-                        null
-                );
-
-        if (value == null || value.isBlank()) {
-
-            CatTier tier =
-                    CatTier.fromCatId(
-                            getCatUUID(playerUUID)
-                    );
-
-            return tier == null
-                    ? null
-                    : tier.name();
-        }
-
-        return value;
-    }
-
-    @Override
-    public void setCatTier(
-            UUID playerUUID,
-            String tier
-    ) {
-
-        if (playerUUID == null ||
-                tier == null ||
-                tier.isBlank() ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(playerUUID, FIELD_TIER, tier);
-    }
-
-    /*
-     * ============================================================
-     * 技能槽
-     * ============================================================
-     */
-
-    @Override
-    public List<String> getCatSkills(UUID playerUUID) {
-
-        List<String> result =
-                new ArrayList<>();
-
-        Object value =
-                getRaw(playerUUID, FIELD_SKILLS);
-
-        if (value instanceof List<?> list) {
-
-            for (Object item : list) {
-
-                if (item instanceof String s) {
-                    result.add(s);
-                }
-            }
-        }
-
-        return result;
-    }
-
-    @Override
-    public void setCatSkills(
-            UUID playerUUID,
-            List<String> skills
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_SKILLS,
-                skills == null
-                        ? new ArrayList<String>()
-                        : new ArrayList<>(skills)
-        );
-    }
-
-    /*
-     * ============================================================
-     * 花色
-     * ============================================================
-     */
-
-    @Override
-    public String getCatVariant(UUID playerUUID) {
-
-        return getString(
-                playerUUID,
-                FIELD_VARIANT,
-                null
-        );
-    }
-
-    @Override
-    public void setCatVariant(
-            UUID playerUUID,
-            String variant
-    ) {
-
-        if (playerUUID == null ||
-                variant == null ||
-                variant.isBlank() ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(playerUUID, FIELD_VARIANT, variant);
-    }
-
-    /*
-     * ============================================================
-     * 实体绑定
-     * ============================================================
-     */
-
-    @Override
-    public UUID getCatEntityUUID(UUID playerUUID) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return null;
-        }
-
-        return parseUUID(
-                getString(
-                        playerUUID,
-                        FIELD_ENTITY_UUID,
-                        null
-                )
-        );
-    }
-
-    @Override
-    public void setCatEntityUUID(
-            UUID playerUUID,
-            UUID entityUUID
-    ) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_ENTITY_UUID,
-                entityUUID == null
-                        ? null
-                        : entityUUID.toString()
-        );
-    }
-
-    @Override
-    public void removeCatEntityUUID(UUID playerUUID) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_ENTITY_UUID,
-                null
-        );
-    }
-
     @Override
     public boolean removeCat(UUID playerUUID) {
 
@@ -1414,125 +478,6 @@ public abstract class AbstractCatStore implements CatStore {
         return true;
     }
 
-    /*
-     * ============================================================
-     * 世界与坐标
-     * ============================================================
-     */
-
-    @Override
-    public UUID getCatWorldUUID(UUID playerUUID) {
-
-        if (playerUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return null;
-        }
-
-        return parseUUID(
-                getString(
-                        playerUUID,
-                        FIELD_WORLD_UUID,
-                        null
-                )
-        );
-    }
-
-    @Override
-    public void setCatWorldUUID(
-            UUID playerUUID,
-            UUID worldUUID
-    ) {
-
-        if (playerUUID == null ||
-                worldUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_WORLD_UUID,
-                worldUUID.toString()
-        );
-    }
-
-    @Override
-    public double getCatX(UUID playerUUID) {
-
-        return getDouble(
-                playerUUID,
-                FIELD_X,
-                0.0
-        );
-    }
-
-    @Override
-    public double getCatY(UUID playerUUID) {
-
-        return getDouble(
-                playerUUID,
-                FIELD_Y,
-                0.0
-        );
-    }
-
-    @Override
-    public double getCatZ(UUID playerUUID) {
-
-        return getDouble(
-                playerUUID,
-                FIELD_Z,
-                0.0
-        );
-    }
-
-    @Override
-    public void setCatLocation(
-            UUID playerUUID,
-            UUID worldUUID,
-            double x,
-            double y,
-            double z
-    ) {
-
-        if (playerUUID == null ||
-                worldUUID == null ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        /*
-         * 坐标有效性检查：
-         * NaN / Infinity 坐标会击穿后续的粒子、
-         * 传送与存档恢复逻辑，必须拒绝写入。
-         */
-        if (!Double.isFinite(x) ||
-                !Double.isFinite(y) ||
-                !Double.isFinite(z)) {
-
-            return;
-        }
-
-        setRaw(
-                playerUUID,
-                FIELD_WORLD_UUID,
-                worldUUID.toString()
-        );
-
-        setRaw(playerUUID, FIELD_X, x);
-        setRaw(playerUUID, FIELD_Y, y);
-        setRaw(playerUUID, FIELD_Z, z);
-    }
-
-    /*
-     * ============================================================
-     * 集合
-     * ============================================================
-     */
-
     @Override
     public Set<UUID> getCatPlayers() {
 
@@ -1551,159 +496,368 @@ public abstract class AbstractCatStore implements CatStore {
 
     /*
      * ============================================================
-     * 成就
+     * Section 委托（God Object 拆分）
      * ============================================================
-     *
-     * P0 不变量在此同样成立：
-     * 读操作永不建档，写操作永不复活。
      */
+
+    private final CatStoreProfile profile =
+            new CatStoreProfile(this);
+
+    private final CatStoreGrowth growth =
+            new CatStoreGrowth(this);
+
+    private final CatStoreVitals vitals =
+            new CatStoreVitals(this);
+
+    private final CatStoreInteractions interactions =
+            new CatStoreInteractions(this);
+
+    private final CatStorePresence presence =
+            new CatStorePresence(this);
+
+    private final CatStoreAchievements achievements =
+            new CatStoreAchievements(this);
+
+    @Override
+    public UUID getCatUUID(UUID playerUUID) {
+        return profile.getCatUUID(playerUUID);
+    }
+
+    @Override
+    public void setCatUUID(UUID playerUUID, UUID catUUID) {
+        profile.setCatUUID(playerUUID, catUUID);
+    }
+
+    @Override
+    public String getCatName(UUID playerUUID) {
+        return profile.getCatName(playerUUID);
+    }
+
+    @Override
+    public void setCatName(UUID playerUUID, String name) {
+        profile.setCatName(playerUUID, name);
+    }
+
+    @Override
+    public long getCatCreatedAt(UUID playerUUID) {
+        return profile.getCatCreatedAt(playerUUID);
+    }
+
+    @Override
+    public void setCatCreatedAt(UUID playerUUID, long timestamp) {
+        profile.setCatCreatedAt(playerUUID, timestamp);
+    }
+
+    @Override
+    public int getCatLevel(UUID playerUUID) {
+        return growth.getCatLevel(playerUUID);
+    }
+
+    @Override
+    public void setCatLevel(UUID playerUUID, int level) {
+        growth.setCatLevel(playerUUID, level);
+    }
+
+    @Override
+    public void addCatLevel(UUID playerUUID, int amount) {
+        growth.addCatLevel(playerUUID, amount);
+    }
+
+    @Override
+    public int getCatExperience(UUID playerUUID) {
+        return growth.getCatExperience(playerUUID);
+    }
+
+    @Override
+    public void setCatExperience(UUID playerUUID, int experience) {
+        growth.setCatExperience(playerUUID, experience);
+    }
+
+    @Override
+    public int getCatMeowPower(UUID playerUUID) {
+        return growth.getCatMeowPower(playerUUID);
+    }
+
+    @Override
+    public void setCatMeowPower(UUID playerUUID, int meowPower) {
+        growth.setCatMeowPower(playerUUID, meowPower);
+    }
+
+    @Override
+    public int getCatMeowRank(UUID playerUUID) {
+        return growth.getCatMeowRank(playerUUID);
+    }
+
+    @Override
+    public void setCatMeowRank(UUID playerUUID, int meowRank) {
+        growth.setCatMeowRank(playerUUID, meowRank);
+    }
+
+    @Override
+    public String getCatTier(UUID playerUUID) {
+        return growth.getCatTier(playerUUID);
+    }
+
+    @Override
+    public void setCatTier(UUID playerUUID, String tier) {
+        growth.setCatTier(playerUUID, tier);
+    }
+
+    @Override
+    public List<String> getCatSkills(UUID playerUUID) {
+        return growth.getCatSkills(playerUUID);
+    }
+
+    @Override
+    public void setCatSkills(UUID playerUUID, List<String> skills) {
+        growth.setCatSkills(playerUUID, skills);
+    }
+
+    @Override
+    public int getCatAffection(UUID playerUUID) {
+        return vitals.getCatAffection(playerUUID);
+    }
+
+    @Override
+    public void setCatAffection(UUID playerUUID, int affection) {
+        vitals.setCatAffection(playerUUID, affection);
+    }
+
+    @Override
+    public void addCatAffection(UUID playerUUID, int amount) {
+        vitals.addCatAffection(playerUUID, amount);
+    }
+
+    @Override
+    public int getCatHealth(UUID playerUUID) {
+        return vitals.getCatHealth(playerUUID);
+    }
+
+    @Override
+    public void setCatHealth(UUID playerUUID, int health) {
+        vitals.setCatHealth(playerUUID, health);
+    }
+
+    @Override
+    public void addCatHealth(UUID playerUUID, int amount) {
+        vitals.addCatHealth(playerUUID, amount);
+    }
+
+    @Override
+    public boolean isCatUnhealthy(UUID playerUUID) {
+        return vitals.isCatUnhealthy(playerUUID);
+    }
+
+    @Override
+    public int getCatHunger(UUID playerUUID) {
+        return vitals.getCatHunger(playerUUID);
+    }
+
+    @Override
+    public void setCatHunger(UUID playerUUID, int hunger) {
+        vitals.setCatHunger(playerUUID, hunger);
+    }
+
+    @Override
+    public void addCatHunger(UUID playerUUID, int amount) {
+        vitals.addCatHunger(playerUUID, amount);
+    }
+
+    @Override
+    public void removeCatHunger(UUID playerUUID, int amount) {
+        vitals.removeCatHunger(playerUUID, amount);
+    }
+
+    @Override
+    public boolean isCatHungry(UUID playerUUID) {
+        return vitals.isCatHungry(playerUUID);
+    }
+
+    @Override
+    public double getCatHungerPercent(UUID playerUUID) {
+        return vitals.getCatHungerPercent(playerUUID);
+    }
+
+    @Override
+    public long getCatHungerLastUpdate(UUID playerUUID) {
+        return vitals.getCatHungerLastUpdate(playerUUID);
+    }
+
+    @Override
+    public void setCatHungerLastUpdate(UUID playerUUID, long timestamp) {
+        vitals.setCatHungerLastUpdate(playerUUID, timestamp);
+    }
+
+    @Override
+    public long getCatLastFedAt(UUID playerUUID) {
+        return interactions.getCatLastFedAt(playerUUID);
+    }
+
+    @Override
+    public void setCatLastFedAt(UUID playerUUID, long timestamp) {
+        interactions.setCatLastFedAt(playerUUID, timestamp);
+    }
+
+    @Override
+    public long getCatLastInteractionAt(UUID playerUUID) {
+        return interactions.getCatLastInteractionAt(playerUUID);
+    }
+
+    @Override
+    public void setCatLastInteractionAt(UUID playerUUID, long timestamp) {
+        interactions.setCatLastInteractionAt(playerUUID, timestamp);
+    }
+
+    @Override
+    public int getCatPetCount(UUID playerUUID) {
+        return interactions.getCatPetCount(playerUUID);
+    }
+
+    @Override
+    public void addCatPetCount(UUID playerUUID) {
+        interactions.addCatPetCount(playerUUID);
+    }
+
+    @Override
+    public int getCatFeedCount(UUID playerUUID) {
+        return interactions.getCatFeedCount(playerUUID);
+    }
+
+    @Override
+    public void addCatFeedCount(UUID playerUUID) {
+        interactions.addCatFeedCount(playerUUID);
+    }
+
+    @Override
+    public boolean isGiftCheckedToday(UUID playerUUID) {
+        return interactions.isGiftCheckedToday(playerUUID);
+    }
+
+    @Override
+    public void markGiftChecked(UUID playerUUID) {
+        interactions.markGiftChecked(playerUUID);
+    }
+
+    @Override
+    public String getCatBehaviorMode(UUID playerUUID) {
+        return presence.getCatBehaviorMode(playerUUID);
+    }
+
+    @Override
+    public void setCatBehaviorMode(UUID playerUUID, String mode) {
+        presence.setCatBehaviorMode(playerUUID, mode);
+    }
+
+    @Override
+    public String getCatVariant(UUID playerUUID) {
+        return presence.getCatVariant(playerUUID);
+    }
+
+    @Override
+    public void setCatVariant(UUID playerUUID, String variant) {
+        presence.setCatVariant(playerUUID, variant);
+    }
+
+    @Override
+    public UUID getCatEntityUUID(UUID playerUUID) {
+        return presence.getCatEntityUUID(playerUUID);
+    }
+
+    @Override
+    public void setCatEntityUUID(UUID playerUUID, UUID entityUUID) {
+        presence.setCatEntityUUID(playerUUID, entityUUID);
+    }
+
+    @Override
+    public void removeCatEntityUUID(UUID playerUUID) {
+        presence.removeCatEntityUUID(playerUUID);
+    }
+
+    @Override
+    public UUID getCatWorldUUID(UUID playerUUID) {
+        return presence.getCatWorldUUID(playerUUID);
+    }
+
+    @Override
+    public void setCatWorldUUID(UUID playerUUID, UUID worldUUID) {
+        presence.setCatWorldUUID(playerUUID, worldUUID);
+    }
+
+    @Override
+    public double getCatX(UUID playerUUID) {
+        return presence.getCatX(playerUUID);
+    }
+
+    @Override
+    public double getCatY(UUID playerUUID) {
+        return presence.getCatY(playerUUID);
+    }
+
+    @Override
+    public double getCatZ(UUID playerUUID) {
+        return presence.getCatZ(playerUUID);
+    }
+
+    @Override
+    public void setCatLocation(
+            UUID playerUUID,
+            UUID worldUUID,
+            double x,
+            double y,
+            double z
+    ) {
+
+        presence.setCatLocation(
+                playerUUID,
+                worldUUID,
+                x,
+                y,
+                z
+        );
+    }
 
     @Override
     public List<String> getAchievementsUnlockedList(UUID playerUUID) {
-
-        return getStringList(
-                playerUUID,
-                FIELD_ACHIEVEMENTS_UNLOCKED
-        );
+        return achievements.getAchievementsUnlockedList(playerUUID);
     }
 
     @Override
-    public boolean isAchievementUnlocked(
-            UUID playerUUID,
-            String id
-    ) {
-
-        if (playerUUID == null ||
-                id == null ||
-                id.isBlank() ||
-                !hasCat(playerUUID)) {
-
-            return false;
-        }
-
-        return getStringList(
-                playerUUID,
-                FIELD_ACHIEVEMENTS_UNLOCKED
-        ).contains(id);
+    public boolean isAchievementUnlocked(UUID playerUUID, String id) {
+        return achievements.isAchievementUnlocked(playerUUID, id);
     }
 
     @Override
-    public void addAchievementUnlocked(
-            UUID playerUUID,
-            String id
-    ) {
-
-        if (playerUUID == null ||
-                id == null ||
-                id.isBlank() ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        List<String> unlocked =
-                getStringList(
-                        playerUUID,
-                        FIELD_ACHIEVEMENTS_UNLOCKED
-                );
-
-        if (unlocked.contains(id)) {
-            return;
-        }
-
-        unlocked.add(id);
-
-        setRaw(
-                playerUUID,
-                FIELD_ACHIEVEMENTS_UNLOCKED,
-                unlocked
-        );
+    public void addAchievementUnlocked(UUID playerUUID, String id) {
+        achievements.addAchievementUnlocked(playerUUID, id);
     }
 
     @Override
-    public int getAchievementProgress(
-            UUID playerUUID,
-            String key
-    ) {
-
-        if (playerUUID == null ||
-                key == null ||
-                key.isBlank() ||
-                !hasCat(playerUUID)) {
-
-            return 0;
-        }
-
-        return Math.max(
-                0,
-                readProgressMap(playerUUID)
-                        .getOrDefault(
-                                key,
-                                0
-                        )
-        );
+    public List<String> getAchievementsPendingList(UUID playerUUID) {
+        return achievements.getAchievementsPendingList(playerUUID);
     }
 
     @Override
-    public void setAchievementProgress(
-            UUID playerUUID,
-            String key,
-            int value
-    ) {
-
-        if (playerUUID == null ||
-                key == null ||
-                key.isBlank() ||
-                !hasCat(playerUUID)) {
-
-            return;
-        }
-
-        Map<String, Integer> progress =
-                readProgressMap(playerUUID);
-
-        if (value <= 0) {
-
-            progress.remove(key);
-
-        } else {
-
-            progress.put(
-                    key,
-                    value
-            );
-        }
-
-        writeProgressMap(
-                playerUUID,
-                progress
-        );
+    public void addAchievementPending(UUID playerUUID, String id) {
+        achievements.addAchievementPending(playerUUID, id);
     }
 
     @Override
-    public void addAchievementProgress(
-            UUID playerUUID,
-            String key,
-            int amount
-    ) {
+    public void removeAchievementPending(UUID playerUUID, String id) {
+        achievements.removeAchievementPending(playerUUID, id);
+    }
 
-        if (playerUUID == null ||
-                key == null ||
-                key.isBlank() ||
-                amount == 0 ||
-                !hasCat(playerUUID)) {
+    @Override
+    public int getAchievementProgress(UUID playerUUID, String key) {
+        return achievements.getAchievementProgress(playerUUID, key);
+    }
 
-            return;
-        }
+    @Override
+    public void setAchievementProgress(UUID playerUUID, String key, int value) {
+        achievements.setAchievementProgress(playerUUID, key, value);
+    }
 
-        setAchievementProgress(
-                playerUUID,
-                key,
-                getAchievementProgress(
-                        playerUUID,
-                        key
-                ) + amount
-        );
+    @Override
+    public void addAchievementProgress(UUID playerUUID, String key, int amount) {
+        achievements.addAchievementProgress(playerUUID, key, amount);
     }
 }
-

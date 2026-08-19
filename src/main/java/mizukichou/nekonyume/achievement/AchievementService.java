@@ -301,6 +301,9 @@ public class AchievementService {
      * 奖励发放可能推进等级 / 喵阶，
      * 从而在同一检查中连锁解锁派生成就。
      * 循环上限 = 成就总数，保证必然终止。
+     *
+     * P0-2：每轮先补发 pending 队列中的奖励
+     * （崩溃恢复路径），再做普通解锁判定。
      */
     private void checkAndUnlock(
             Player player,
@@ -313,13 +316,6 @@ public class AchievementService {
         long now =
                 System.currentTimeMillis();
 
-        Set<String> unlocked =
-                new HashSet<>(
-                        store.getAchievementsUnlockedList(
-                                playerUuid
-                        )
-                );
-
         int rounds = 0;
 
         boolean progressed = true;
@@ -330,6 +326,85 @@ public class AchievementService {
             progressed = false;
 
             rounds++;
+
+            /*
+             * 1. 崩溃恢复：补发 pending 奖励。
+             *
+             * 解锁与奖励写在同一个 YAML 文档里，
+             * 由同一份快照原子落盘：
+             * - 崩溃于落盘前 → 解锁与奖励都未持久化，
+             *   下次登录重新解锁，不重复、不丢失；
+             * - 崩溃于奖励发放后、pending 清除前 →
+             *   奖励也未随崩溃前的快照落盘，
+             *   下次登录补发恰好一次。
+             */
+            for (String pendingName :
+                    store.getAchievementsPendingList(
+                            playerUuid
+                    )) {
+
+                CatAchievement pending =
+                        CatAchievement.fromName(
+                                pendingName
+                        );
+
+                if (pending == null) {
+
+                    /*
+                     * 未知条目（未来版本回滚等异常）：
+                     * 清除标记，避免每次登录重复扫描。
+                     */
+                    store.removeAchievementPending(
+                            playerUuid,
+                            pendingName
+                    );
+
+                    continue;
+                }
+
+                try {
+
+                    completePendingReward(
+                            player,
+                            cat,
+                            pending
+                    );
+
+                    /*
+                     * 只有补发成功才推进循环：
+                     * 失败时 pending 标记仍在，下一轮由外层循环
+                     * 自然重试，不在同一轮内反复尝试。
+                     */
+                    progressed = true;
+
+                } catch (Exception exception) {
+
+                    /*
+                     * 单条恢复异常隔离：
+                     * 保留 pending 标记下次重试，
+                     * 绝不阻断其余成就的判定与解锁。
+                     */
+                    logger.log(
+                            Level.SEVERE,
+                            "Failed to complete pending reward for "
+                                    + pendingName
+                                    + " ("
+                                    + player.getName()
+                                    + "), will retry later.",
+                            exception
+                    );
+                }
+            }
+
+            /*
+             * 2. 普通解锁判定。
+             */
+            Set<String> unlocked =
+                    new HashSet<>(
+                            store.getAchievementsUnlockedList(
+                                    playerUuid
+                            )
+                    );
 
             for (CatAchievement achievement :
                     CatAchievement.values()) {
@@ -382,54 +457,50 @@ public class AchievementService {
         }
     }
 
+    /*
+     * 解锁（P0-2 三态：未解锁 → pending → 已解锁+已发奖）：
+     *
+     * 1. 先持久化解锁标记与 pending 标记；
+     * 2. 发放奖励；
+     * 3. 成功后移除 pending 标记。
+     *
+     * 任何一步抛异常：保留 unlocked + pending 标记，
+     * 下次 checkAll 通过 completePendingReward 补发，
+     * 奖励绝不静默丢失；已解锁标记保证绝不重复发放。
+     */
     private void unlock(
             Player player,
             Cat cat,
             CatAchievement achievement
     ) {
 
+        UUID playerUuid =
+                player.getUniqueId();
+
+        store.addAchievementUnlocked(
+                playerUuid,
+                achievement.name()
+        );
+
+        store.addAchievementPending(
+                playerUuid,
+                achievement.name()
+        );
+
         try {
 
-            /*
-             * 先持久化解锁，再发放奖励：
-             * 奖励路径可能重入 checkAndUnlock，
-             * 已解锁标记保证绝不重复发放。
-             */
-            store.addAchievementUnlocked(
-                    player.getUniqueId(),
-                    achievement.name()
+            completePendingReward(
+                    player,
+                    cat,
+                    achievement
             );
-
-            int xp =
-                    rewardXp(achievement);
-
-            int meow =
-                    rewardMeowPower(achievement);
-
-            if (xp > 0) {
-
-                progression.gainExperience(
-                        player,
-                        cat,
-                        xp
-                );
-            }
-
-            if (meow > 0) {
-
-                progression.grantMeowPower(
-                        player,
-                        cat,
-                        meow
-                );
-            }
 
             notifyUnlock(
                     player,
                     cat,
                     achievement,
-                    xp,
-                    meow
+                    rewardXp(achievement),
+                    rewardMeowPower(achievement)
             );
 
             Bukkit.getPluginManager()
@@ -438,8 +509,8 @@ public class AchievementService {
                                     player,
                                     cat,
                                     achievement,
-                                    xp,
-                                    meow
+                                    rewardXp(achievement),
+                                    rewardMeowPower(achievement)
                             )
                     );
 
@@ -450,10 +521,62 @@ public class AchievementService {
                     "Failed to unlock achievement "
                             + achievement.name()
                             + " for "
-                            + player.getName(),
+                            + player.getName()
+                            + ". Reward pending; will retry on next check.",
                     exception
             );
         }
+    }
+
+    /*
+     * 补发一个成就的奖励并清除 pending 标记。
+     * 任何一步抛异常时 pending 标记保持，
+     * 由下次 checkAll 继续重试。
+     */
+    private void completePendingReward(
+            Player player,
+            Cat cat,
+            CatAchievement achievement
+    ) {
+
+        /*
+         * 幂等补记解锁标记：
+         * 封堵"pending 存在而 unlocked 缺失"的异常数据组合，
+         * 保证恢复路径不会与普通解锁路径叠加重复发奖。
+         */
+        store.addAchievementUnlocked(
+                player.getUniqueId(),
+                achievement.name()
+        );
+
+        int xp =
+                rewardXp(achievement);
+
+        int meow =
+                rewardMeowPower(achievement);
+
+        if (xp > 0) {
+
+            progression.gainExperience(
+                    player,
+                    cat,
+                    xp
+            );
+        }
+
+        if (meow > 0) {
+
+            progression.grantMeowPower(
+                    player,
+                    cat,
+                    meow
+            );
+        }
+
+        store.removeAchievementPending(
+                player.getUniqueId(),
+                achievement.name()
+        );
     }
 
     private void notifyUnlock(

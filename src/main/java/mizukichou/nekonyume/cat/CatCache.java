@@ -51,6 +51,18 @@ public class CatCache {
     private final ConcurrentHashMap<UUID, UUID> ownerToCatId =
             new ConcurrentHashMap<>();
 
+    /*
+     * Bukkit 实体 UUID → 逻辑猫 UUID 反向索引（P1-5）。
+     *
+     * 使 getCatByEntity 从 O(n) 降为 O(1)。
+     * 由于 Cat.setEntityUuid 是外部可直接调用的普通 setter，
+     * 索引可能短暂陈旧；getCatByEntity 在命中时
+     * 校验 cat.getEntityUuid() 与查询键一致，
+     * 不一致则回退全量扫描并自愈索引，正确性优先。
+     */
+    private final ConcurrentHashMap<UUID, UUID> entityToCatId =
+            new ConcurrentHashMap<>();
+
     public CatCache(
             CatStore store,
             Logger logger
@@ -106,11 +118,54 @@ public class CatCache {
             return null;
         }
 
+        /*
+         * 快速路径：索引命中且校验一致。
+         */
+        UUID indexedCatId =
+                entityToCatId.get(entityUUID);
+
+        if (indexedCatId != null) {
+
+            Cat indexed =
+                    cats.get(indexedCatId);
+
+            if (indexed != null &&
+                    entityUUID.equals(
+                            indexed.getEntityUuid()
+                    )) {
+
+                return indexed;
+            }
+        }
+
+        /*
+         * 回退全量扫描，并自愈索引。
+         */
         for (Cat cat : cats.values()) {
 
             if (entityUUID.equals(cat.getEntityUuid())) {
+
+                entityToCatId.put(
+                        entityUUID,
+                        cat.getId()
+                );
+
                 return cat;
             }
+        }
+
+        /*
+         * 索引陈旧（实体已解绑）：清除脏条目。
+         *
+         * 注意：ConcurrentHashMap.remove(key, null) 会抛 NPE，
+         * 快速路径未命中（indexedCatId == null）时绝不能调双参版。
+         */
+        if (indexedCatId != null) {
+
+            entityToCatId.remove(
+                    entityUUID,
+                    indexedCatId
+            );
         }
 
         return null;
@@ -149,11 +204,29 @@ public class CatCache {
 
         if (oldCatId != null) {
 
-            cats.remove(oldCatId);
+            Cat oldCat =
+                    cats.remove(oldCatId);
+
+            if (oldCat != null &&
+                    oldCat.getEntityUuid() != null) {
+
+                entityToCatId.remove(
+                        oldCat.getEntityUuid(),
+                        oldCatId
+                );
+            }
         }
 
         cats.put(cat.getId(), cat);
         ownerToCatId.put(ownerUuid, cat.getId());
+
+        if (cat.getEntityUuid() != null) {
+
+            entityToCatId.put(
+                    cat.getEntityUuid(),
+                    cat.getId()
+            );
+        }
     }
 
 
@@ -175,13 +248,24 @@ public class CatCache {
             return;
         }
 
-        cats.remove(catId);
+        Cat removed =
+                cats.remove(catId);
+
+        if (removed != null &&
+                removed.getEntityUuid() != null) {
+
+            entityToCatId.remove(
+                    removed.getEntityUuid(),
+                    catId
+            );
+        }
     }
 
     public void clear() {
 
         cats.clear();
         ownerToCatId.clear();
+        entityToCatId.clear();
     }
 
     /*
@@ -213,10 +297,19 @@ public class CatCache {
         for (Cat cat : toEvict) {
 
             cats.remove(cat.getId());
+
             ownerToCatId.remove(
                     cat.getOwnerUuid(),
                     cat.getId()
             );
+
+            if (cat.getEntityUuid() != null) {
+
+                entityToCatId.remove(
+                        cat.getEntityUuid(),
+                        cat.getId()
+                );
+            }
         }
     }
 
@@ -646,15 +739,33 @@ public class CatCache {
             );
         }
 
-        if (cat.getEntityUuid() != null &&
-                !cat.getEntityUuid().equals(
-                        store.getCatEntityUUID(ownerUUID)
-                )) {
+        /*
+         * P1-13：实体绑定全量对称同步。
+         *
+         * 运行时与存档不一致时无条件写入——
+         * 包括运行时为 null 而存档仍残留旧 UUID 的情况
+         * （此时显式清除存档字段），
+         * saveCat 因此成为 Cat → Store 的完整状态同步器，
+         * 而不是"部分字段同步器"。
+         */
+        if (!java.util.Objects.equals(
+                cat.getEntityUuid(),
+                store.getCatEntityUUID(ownerUUID)
+        )) {
 
-            store.setCatEntityUUID(
-                    ownerUUID,
-                    cat.getEntityUuid()
-            );
+            if (cat.getEntityUuid() == null) {
+
+                store.removeCatEntityUUID(
+                        ownerUUID
+                );
+
+            } else {
+
+                store.setCatEntityUUID(
+                        ownerUUID,
+                        cat.getEntityUuid()
+                );
+            }
         }
 
         if (cat.getWorldName() != null &&
@@ -730,4 +841,3 @@ public class CatCache {
         logicalCat.setSkills(skills);
     }
 }
-

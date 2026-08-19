@@ -43,7 +43,7 @@ public class YamlCatStore extends AbstractCatStore {
 
     private static final String PLAYERS_PATH = "players";
 
-    private static final int DATA_VERSION = 5;
+    private static final int DATA_VERSION = 6;
 
     private final CatStoreEnv env;
 
@@ -84,8 +84,6 @@ public class YamlCatStore extends AbstractCatStore {
      * 写入线程空闲标志（用于关服时的唤醒等待）。
      */
     private final Object saverMonitor = new Object();
-
-    private boolean saverIdle = true;
 
     /*
      * 在飞快照的写入是否已失败（失败后要回填）。
@@ -189,8 +187,6 @@ public class YamlCatStore extends AbstractCatStore {
 
                 while (pendingSnapshot.get() == null) {
 
-                    saverIdle = true;
-
                     try {
 
                         saverMonitor.wait();
@@ -201,8 +197,6 @@ public class YamlCatStore extends AbstractCatStore {
                         return;
                     }
                 }
-
-                saverIdle = false;
 
                 snapshot = pendingSnapshot.get();
             }
@@ -234,8 +228,6 @@ public class YamlCatStore extends AbstractCatStore {
                      */
                     saverMonitor.notifyAll();
                 }
-
-                saverIdle = true;
             }
 
             /*
@@ -699,7 +691,7 @@ public class YamlCatStore extends AbstractCatStore {
 
             String timestamp =
                     new SimpleDateFormat(
-                            "yyyy-MM-dd-HH-mm-ss"
+                            "yyyy-MM-dd-HH-mm-ss-SSS"
                     ).format(new Date());
 
             File backupFile =
@@ -708,9 +700,15 @@ public class YamlCatStore extends AbstractCatStore {
                             "players-" + timestamp + ".yml"
                     );
 
+            /*
+             * REPLACE_EXISTING：崩溃后秒级重启时，
+             * 若时间戳（毫秒级）仍撞上，宁可覆盖旧备份，
+             * 绝不因 FileAlreadyExistsException 阻断启动。
+             */
             Files.copy(
                     file.toPath(),
-                    backupFile.toPath()
+                    backupFile.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING
             );
 
             int keep =
@@ -831,6 +829,10 @@ public class YamlCatStore extends AbstractCatStore {
                 migrateV4ToV5();
             }
 
+            if (version < 6) {
+                migrateV5ToV6();
+            }
+
             data.set("data-version", DATA_VERSION);
 
             /*
@@ -889,9 +891,21 @@ public class YamlCatStore extends AbstractCatStore {
 
         } catch (Exception e) {
 
-            env.logger().log(
-                    Level.SEVERE,
-                    "Failed to write players.yml during startup migration",
+            /*
+             * P0-4：迁移后的关键写盘失败必须 fail-fast。
+             *
+             * 与"未来版本数据拒启"同等级保护：
+             * 迁移是启动关键操作，内存数据已迁移而磁盘仍旧时，
+             * 后续保存线程行为会变得不可预测。
+             * 直接抛异常让 Paper 禁用插件，
+             * 修复磁盘空间 / 权限后重启即可重试。
+             */
+            throw new IllegalStateException(
+                    "players.yml 迁移后的关键数据写盘失败，"
+                            + "插件拒绝启动以保护数据一致性。"
+                            + "请检查磁盘空间与文件权限，"
+                            + "修复后重启；旧数据仍保留在："
+                            + file.getAbsolutePath(),
                     e
             );
         }
@@ -1111,6 +1125,47 @@ public class YamlCatStore extends AbstractCatStore {
         }
     }
 
+    /*
+     * v5 → v6（0.7.2-P0-2）：
+     * 成就奖励待发队列字段。
+     *
+     * achievements-pending 缺省为空列表；
+     * 解锁与奖励的原子性由"同一文档、同一快照落盘"保证，
+     * 崩溃后由 AchievementService 对 pending 条目补发奖励。
+     */
+    private void migrateV5ToV6() {
+
+        ConfigurationSection playersSection =
+                data.getConfigurationSection(PLAYERS_PATH);
+
+        if (playersSection == null) {
+            return;
+        }
+
+        for (String key : playersSection.getKeys(false)) {
+
+            UUID playerUUID = parseUUID(key);
+
+            if (playerUUID == null) {
+                continue;
+            }
+
+            String path = catPath(playerUUID);
+
+            if (!data.contains(path)) {
+                continue;
+            }
+
+            if (!data.contains(path + ".achievements-pending")) {
+
+                data.set(
+                        path + ".achievements-pending",
+                        new java.util.ArrayList<String>()
+                );
+            }
+        }
+    }
+
     private int cumulativeXpForLevel(int level) {
 
         if (level <= 1) {
@@ -1155,4 +1210,3 @@ public class YamlCatStore extends AbstractCatStore {
         return playerPath(playerUUID) + ".cat";
     }
 }
-

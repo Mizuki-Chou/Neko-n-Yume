@@ -366,4 +366,99 @@ class LangMessagesTest {
                 plain(result).contains("§")
         );
     }
+
+    @Test
+    void styledArgKeepsItsStyleWhenTemplateStyleIsEmpty() {
+
+        /*
+         * 修复回归测试：
+         * 模板节点无样式时，参数必须保留自身样式，
+         * 不能被空样式覆盖（否则 legacy 反序列化的
+         * 彩色喵丹名会丢失颜色）。
+         */
+        LangMessages messages =
+                messages(
+                        "reward: \"你收到了 {0}\""
+                );
+
+        Component coloredArg =
+                net.kyori.adventure.text.serializer.legacy
+                        .LegacyComponentSerializer
+                        .legacySection()
+                        .deserialize(
+                                "§6✨ 至极喵丹"
+                        );
+
+        Component result =
+                messages.messageComponents(
+                        "reward",
+                        coloredArg
+                );
+
+        assertEquals(
+                "你收到了 ✨ 至极喵丹",
+                plain(result)
+        );
+
+        Component arg =
+                findChildWithText(
+                        result,
+                        "✨ 至极喵丹"
+                );
+
+        assertNotNull(arg);
+
+        assertEquals(
+                "gold",
+                arg.style().color() != null
+                        ? arg.style()
+                        .color()
+                        .toString()
+                        : null
+        );
+    }
+
+    @Test
+    void styledArgInheritsTemplateStyleWhenPresent() {
+
+        /*
+         * 对照测试：模板节点带样式时，
+         * 参数仍继承模板样式（既有语义不变）。
+         */
+        LangMessages messages =
+                messages(
+                        "reward: \"<yellow>你收到了 {0}</yellow>\""
+                );
+
+        Component coloredArg =
+                net.kyori.adventure.text.serializer.legacy
+                        .LegacyComponentSerializer
+                        .legacySection()
+                        .deserialize(
+                                "§6✨ 至极喵丹"
+                        );
+
+        Component result =
+                messages.messageComponents(
+                        "reward",
+                        coloredArg
+                );
+
+        Component arg =
+                findChildWithText(
+                        result,
+                        "✨ 至极喵丹"
+                );
+
+        assertNotNull(arg);
+
+        assertEquals(
+                "yellow",
+                arg.style().color() != null
+                        ? arg.style()
+                        .color()
+                        .toString()
+                        : null
+        );
+    }
 }

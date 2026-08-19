@@ -70,4 +70,3 @@ public class CatFedEvent extends Event {
         return handlers;
     }
 }
-

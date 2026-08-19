@@ -140,4 +140,3 @@ public final class CatSkills {
         return skills.toString();
     }
 }
-

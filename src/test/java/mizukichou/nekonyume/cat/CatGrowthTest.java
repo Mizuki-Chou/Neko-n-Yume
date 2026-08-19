@@ -363,5 +363,44 @@ class CatGrowthTest {
         );
     }
 
-}
+    @Test
+    void companionDaysNeverOverflowsInt() {
 
+        /*
+         * 极端时间差（时钟回拨 / 损坏数据）：
+         * 天数超出 int 范围时必须钳制在
+         * Integer.MAX_VALUE，绝不溢出成负数。
+         */
+        Cat ancient =
+                new Cat(
+                        CAT_ID,
+                        OWNER_ID,
+                        "Mikan",
+                        1,
+                        50,
+                        100,
+                        100,
+                        null,
+                        1L,
+                        System.currentTimeMillis(),
+                        System.currentTimeMillis()
+                );
+
+        int days =
+                ancient.getCompanionDays(
+                        Long.MAX_VALUE
+                );
+
+        assertTrue(
+                days >= 1,
+                "companion days must never be negative: "
+                        + days
+        );
+
+        assertEquals(
+                Integer.MAX_VALUE,
+                days
+        );
+    }
+
+}

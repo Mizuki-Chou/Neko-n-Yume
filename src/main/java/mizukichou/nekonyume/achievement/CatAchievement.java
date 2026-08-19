@@ -371,6 +371,35 @@ public enum CatAchievement {
     }
 
     /**
+     * 从存储字符串（枚举名）恢复成就定义。
+     * 未知值返回 null，调用方决定回退策略。
+     */
+    public static CatAchievement fromName(
+            String name
+    ) {
+
+        if (name == null ||
+                name.isBlank()) {
+
+            return null;
+        }
+
+        try {
+
+            return valueOf(
+                    name.trim()
+                            .toUpperCase(
+                                    Locale.ROOT
+                            )
+            );
+
+        } catch (IllegalArgumentException e) {
+
+            return null;
+        }
+    }
+
+    /**
      * config 奖励节使用的 kebab-case 键名，
      * 例如 COMPANION_DAYS_100 → companion-days-100。
      */

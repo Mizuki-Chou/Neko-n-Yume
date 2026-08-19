@@ -81,5 +81,31 @@ public class MeowPowerCostProvider implements SkillRefreshCostProvider {
 
         return true;
     }
-}
 
+    @Override
+    public void refund(
+            Player player,
+            int cost
+    ) {
+
+        if (cost <= 0) {
+            return;
+        }
+
+        Cat cat =
+                cache.loadCat(player);
+
+        if (cat == null) {
+            return;
+        }
+
+        cat.setMeowPower(
+                cat.getMeowPower() + cost
+        );
+
+        store.setCatMeowPower(
+                player.getUniqueId(),
+                cat.getMeowPower()
+        );
+    }
+}

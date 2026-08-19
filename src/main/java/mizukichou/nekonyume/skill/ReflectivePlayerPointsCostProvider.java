@@ -35,6 +35,7 @@ public class ReflectivePlayerPointsCostProvider
     private final Constructor<?> playerIdConstructor;
     private final Method lookMethod;
     private final Method takeMethod;
+    private final Method giveMethod;
     private final boolean available;
 
     public ReflectivePlayerPointsCostProvider(
@@ -46,6 +47,7 @@ public class ReflectivePlayerPointsCostProvider
         Constructor<?> pidCtor = null;
         Method look = null;
         Method take = null;
+        Method give = null;
 
         try {
 
@@ -173,6 +175,26 @@ public class ReflectivePlayerPointsCostProvider
                 );
             }
 
+            /*
+             * give(...) 可选：仅用于防御路径退款。
+             * 探测失败不影响可用性判定。
+             */
+            for (Method m :
+                    api.getClass()
+                            .getMethods()) {
+
+                if (m.getName().equals("give") &&
+                        m.getParameterCount() == 2 &&
+                        m.getParameterTypes()[0]
+                                == paramType &&
+                        m.getParameterTypes()[1]
+                                == int.class) {
+
+                    give = m;
+                    break;
+                }
+            }
+
             ok = true;
 
         } catch (Exception e) {
@@ -184,6 +206,7 @@ public class ReflectivePlayerPointsCostProvider
         this.playerIdConstructor = pidCtor;
         this.lookMethod = look;
         this.takeMethod = take;
+        this.giveMethod = give;
         this.available = ok;
     }
 
@@ -312,5 +335,45 @@ public class ReflectivePlayerPointsCostProvider
                 uuid
         );
     }
-}
 
+    @Override
+    public void refund(
+            Player player,
+            int cost
+    ) {
+
+        if (!available ||
+                giveMethod == null ||
+                cost <= 0) {
+
+            return;
+        }
+
+        try {
+
+            giveMethod.invoke(
+                    pointsApi,
+                    toId(
+                            player.getUniqueId()
+                    ),
+                    cost
+            );
+
+        } catch (Exception e) {
+
+            /*
+             * 退款失败只记录，不影响主流程：
+             * 该路径仅在"写入被拒绝"的极端防御分支触发。
+             */
+            java.util.logging.Logger.getLogger(
+                            "NekoNYume"
+                    )
+                    .warning(
+                            "Failed to refund "
+                                    + cost
+                                    + " points to "
+                                    + player.getName()
+                    );
+        }
+    }
+}

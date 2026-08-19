@@ -246,4 +246,3 @@ public final class SafeTeleport {
         return !block.isPassable();
     }
 }
-

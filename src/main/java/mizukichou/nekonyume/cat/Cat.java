@@ -1029,7 +1029,17 @@ public class Cat {
                 (now - this.createdAt)
                         / (24L * 60 * 60 * 1000);
 
-        return (int) days + 1;
+        /*
+         * 钳制：异常时间戳（时钟回拨 / 数据损坏）
+         * 会产生极大天数，int 转换会溢出成负数，
+         * 进而击穿依赖天数的成就判定。
+         */
+        long result =
+                days + 1L;
+
+        return result >= Integer.MAX_VALUE
+                ? Integer.MAX_VALUE
+                : (int) result;
     }
 
     /*
@@ -1108,4 +1118,3 @@ public class Cat {
                 '}';
     }
 }
-

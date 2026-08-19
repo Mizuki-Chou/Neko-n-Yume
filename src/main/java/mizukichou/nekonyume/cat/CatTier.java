@@ -249,4 +249,3 @@ public enum CatTier {
                 slotIndex == 0;
     }
 }
-

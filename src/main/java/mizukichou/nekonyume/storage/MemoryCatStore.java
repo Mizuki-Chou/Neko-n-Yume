@@ -125,4 +125,3 @@ public class MemoryCatStore extends AbstractCatStore {
         dirty = false;
     }
 }
-
