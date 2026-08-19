@@ -191,6 +191,26 @@ public class CatEntityService {
     }
 
     /*
+     * 释放召唤标记（玩家退出时由 PlayerQuitListener 调用）。
+     *
+     * 异步区块加载完成前玩家若已下线，
+     * 回调不会被执行，wrappedCallback 的 finally 也无法释放标记，
+     * 会导致该玩家下次登录后永远收到「生成中」提示。
+     * 因此退出时必须强制清理。
+     */
+    public void clearSummoning(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID != null) {
+
+            summoning.remove(
+                    playerUUID
+            );
+        }
+    }
+
+    /*
      * ============================================================
      * 主动召唤（重入防护 + 流水线编排）
      * ============================================================

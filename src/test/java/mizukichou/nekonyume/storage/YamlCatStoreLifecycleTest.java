@@ -75,7 +75,7 @@ class YamlCatStoreLifecycleTest {
         assertTrue(Files.exists(file));
         assertTrue(
                 Files.readString(file)
-                        .contains("data-version: 6")
+                        .contains("data-version: 7")
         );
     }
 
@@ -242,10 +242,37 @@ class YamlCatStoreLifecycleTest {
                 reopenedAgain.getAchievementsPendingList(player)
                         .isEmpty()
         );
+
+        /*
+         * 0.7.4 防重台账：rewarded 列表同样跨重启完整保留。
+         */
+        reopenedAgain.addAchievementRewarded(
+                player,
+                "FIRST_CLAIM"
+        );
+
+        flushAndAwait(
+                reopenedAgain
+        );
+
+        YamlCatStore reopenedThird =
+                newStore();
+
+        assertTrue(
+                reopenedThird.isAchievementRewarded(
+                        player,
+                        "FIRST_CLAIM"
+                )
+        );
+
+        assertEquals(
+                List.of("FIRST_CLAIM"),
+                reopenedThird.getAchievementsRewardedList(player)
+        );
     }
 
     @Test
-    void migrationV1ToV6() throws IOException {
+    void migrationV1ToV7() throws IOException {
 
         String yaml = """
                 data-version: 1
@@ -323,7 +350,7 @@ class YamlCatStoreLifecycleTest {
                 );
 
         assertTrue(
-                written.contains("data-version: 6")
+                written.contains("data-version: 7")
         );
     }
 
@@ -357,7 +384,7 @@ class YamlCatStoreLifecycleTest {
     }
 
     @Test
-    void migrationV4ToV6AddsAchievementSection() throws IOException {
+    void migrationV4ToV7AddsAchievementSection() throws IOException {
 
         String yaml = """
                 data-version: 4
@@ -403,7 +430,7 @@ class YamlCatStoreLifecycleTest {
                 );
 
         assertTrue(
-                written.contains("data-version: 6")
+                written.contains("data-version: 7")
         );
 
         assertTrue(
@@ -420,7 +447,7 @@ class YamlCatStoreLifecycleTest {
     }
 
     @Test
-    void migrationV5ToV6AddsPendingField() throws IOException {
+    void migrationV5ToV7AddsPendingField() throws IOException {
 
         String yaml = """
                 data-version: 5
@@ -476,11 +503,77 @@ class YamlCatStoreLifecycleTest {
                 );
 
         assertTrue(
-                written.contains("data-version: 6")
+                written.contains("data-version: 7")
         );
 
         assertTrue(
                 written.contains("achievements-pending")
+        );
+
+        assertTrue(
+                written.contains("achievements-rewarded")
+        );
+    }
+
+    @Test
+    void migrationV6ToV7AddsRewardedField() throws IOException {
+
+        String yaml = """
+                data-version: 6
+                players:
+                  11111111-1111-1111-1111-111111111111:
+                   cat:
+                    id: 22222222-2222-2222-2222-222222222222
+                    name: OldCat
+                    level: 3
+                    achievements-unlocked:
+                     - FIRST_CLAIM
+                    achievements-pending:
+                     - FIRST_CLAIM
+                """;
+
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                yaml
+        );
+
+        YamlCatStore store = newStore();
+
+        UUID player =
+                UUID.fromString(
+                        "11111111-1111-1111-1111-111111111111"
+                );
+
+        /*
+         * v6 数据迁移到 v7：
+         * unlocked / pending 原样保留，rewarded 补为空列表。
+         */
+        assertEquals(
+                List.of("FIRST_CLAIM"),
+                store.getAchievementsUnlockedList(player)
+        );
+
+        assertEquals(
+                List.of("FIRST_CLAIM"),
+                store.getAchievementsPendingList(player)
+        );
+
+        assertTrue(
+                store.getAchievementsRewardedList(player)
+                        .isEmpty()
+        );
+
+        String written =
+                Files.readString(
+                        tempDir.resolve("players.yml")
+                );
+
+        assertTrue(
+                written.contains("data-version: 7")
+        );
+
+        assertTrue(
+                written.contains("achievements-rewarded")
         );
     }
 

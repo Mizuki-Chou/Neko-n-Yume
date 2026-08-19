@@ -177,6 +177,21 @@ public class CatHungerTask implements Runnable {
             return;
         }
 
+        /*
+         * 已完全归零（饱食 0 且好感 0）：
+         * 不再有任何可衰减的数值，
+         * 直接返回——不写任何字段、不推进 lastUpdate、不置脏。
+         *
+         * 否则每个结算周期都会对“不变的 0”写盘并置脏，
+         * 导致生产环境下 autosave 永远在重写整个文件。
+         * （喂食会把 lastUpdate 重置为 now，因此冻结不影响正确性。）
+         */
+        if (cat.getHunger() <= 0 &&
+                cat.getAffection() <= 0) {
+
+            return;
+        }
+
         long decrease =
                 elapsed / effectiveInterval;
 
@@ -282,6 +297,22 @@ public class CatHungerTask implements Runnable {
             return;
         }
 
+        int hunger =
+                store.getCatHunger(
+                        playerUUID
+                );
+
+        /*
+         * 已完全归零：跳过一切写入（与在线路径同语义）。
+         */
+        if (hunger <= 0 &&
+                store.getCatAffection(
+                        playerUUID
+                ) <= 0) {
+
+            return;
+        }
+
         long decrease =
                 elapsed / effectiveInterval;
 
@@ -289,11 +320,6 @@ public class CatHungerTask implements Runnable {
                 (int) Math.min(
                         decrease,
                         MAX_HUNGER_DECREASE
-                );
-
-        int hunger =
-                store.getCatHunger(
-                        playerUUID
                 );
 
         int newHunger =

@@ -2,6 +2,7 @@ package mizukichou.nekonyume.muma;
 
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.MeowDanQuality;
+import mizukichou.nekonyume.cat.XpPillTier;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.lang.Lang;
@@ -313,6 +314,19 @@ public class MumaNightManager {
         }
 
         /*
+         * 安全审查（0.7.4）：
+         * 跳过 NPC（Citizens 等插件会在实体上打 "NPC" 元数据）。
+         * NPC 若被当成野怪强化会破坏剧情/任务怪，
+         * 也可能被玩家刷成掉落机。
+         */
+        if (monster.hasMetadata(
+                "NPC"
+        )) {
+
+            return;
+        }
+
+        /*
          * 0.6.2：监守者与 Boss 不强化。
          */
         if (monster instanceof Warden ||
@@ -414,18 +428,16 @@ public class MumaNightManager {
 
         if (equipment != null) {
 
-            pdc.set(
+            saveOriginalStack(
+                    pdc,
                     origMainHandKey,
-                    PersistentDataType.BYTE_ARRAY,
                     equipment.getItemInMainHand()
-                            .serializeAsBytes()
             );
 
-            pdc.set(
+            saveOriginalStack(
+                    pdc,
                     origOffHandKey,
-                    PersistentDataType.BYTE_ARRAY,
                     equipment.getItemInOffHand()
-                            .serializeAsBytes()
             );
 
             pdc.set(
@@ -453,6 +465,45 @@ public class MumaNightManager {
             equipment.setItemInMainHandDropChance(
                     0f
             );
+        }
+    }
+
+    /*
+     * 保存原版装备到 PDC（0.7.3 P0-3 / 0.7.4 修正）。
+     *
+     * Paper 26.2：ItemStack.serializeAsBytes() 对空物品
+     * （AIR / amount=0）直接抛 IllegalArgumentException
+     * （Empty item cannot be serialized）。
+     * 野外怪物大多空手，因此必须：
+     * 1. 空物品不序列化——键不存在即“原本为空手”；
+     * 2. 序列化异常时静默降级为空手，绝不让一次 buff 中断整个扫描。
+     */
+    private void saveOriginalStack(
+            PersistentDataContainer pdc,
+            NamespacedKey key,
+            ItemStack stack
+    ) {
+
+        pdc.remove(key);
+
+        if (stack == null ||
+                stack.getType().isAir() ||
+                stack.isEmpty()) {
+
+            return;
+        }
+
+        try {
+
+            pdc.set(
+                    key,
+                    PersistentDataType.BYTE_ARRAY,
+                    stack.serializeAsBytes()
+            );
+
+        } catch (IllegalArgumentException e) {
+
+            pdc.remove(key);
         }
     }
 
@@ -657,6 +708,58 @@ public class MumaNightManager {
     }
 
     /*
+     * 0.7.4：经验丸掉落。
+     *
+     * 初阶 / 高阶两次独立掷骰（可同时掉落，极低概率），
+     * 概率取配置钳制后的 [0,1] 值。
+     *
+     * 注意：本方法在 EntityDeathEvent（MONITOR）中调用，
+     * 此时实体 isDead() 已为 true，
+     * 因此绝不能以 isDead() 作为守卫；
+     * 仅 null 检查即可（与喵丹掉落口径一致）。
+     */
+    public void maybeDropXpPills(
+            Monster monster
+    ) {
+
+        if (monster == null) {
+            return;
+        }
+
+        ConfigSnapshot.MumaNight mumaConfig =
+                configManager.snapshot()
+                        .getMumaNight();
+
+        if (random.nextDouble()
+                < mumaConfig.getXpPillDropChance()) {
+
+            monster.getWorld()
+                    .dropItemNaturally(
+                            monster.getLocation(),
+                            foodManager.createXpPill(
+                                    XpPillTier.NORMAL,
+                                    1,
+                                    null
+                            )
+                    );
+        }
+
+        if (random.nextDouble()
+                < mumaConfig.getEliteXpPillDropChance()) {
+
+            monster.getWorld()
+                    .dropItemNaturally(
+                            monster.getLocation(),
+                            foodManager.createXpPill(
+                                    XpPillTier.ELITE,
+                                    1,
+                                    null
+                            )
+                    );
+        }
+    }
+
+    /*
      * 品质权重（按品质升序）：
      * 平凡 80 / 精良 16 / 独特 3 / 卓越 1 / 至极 0。
      */
@@ -777,14 +880,46 @@ public class MumaNightManager {
             World world
     ) {
 
+        /*
+         * 性能优化（0.7.4）：
+         * 无玩家世界直接跳过。
+         * 强化效果只有玩家在场才可被观察，
+         * 无玩家时扫描纯属浪费；
+         * 玩家进入后下一次扫描（≤5s）即可补齐，
+         * 不产生任何可观察的行为差异。
+         */
+        if (world.getPlayers()
+                .isEmpty()) {
+
+            return;
+        }
+
         for (Monster monster :
                 world.getEntitiesByClass(
                         Monster.class
                 )) {
 
-            buffMonster(
-                    monster
-            );
+            /*
+             * 单怪隔离：任何一只怪物的异常状态
+             * （AI 切换 / 属性异常等）都不能中断整轮扫描。
+             */
+            try {
+
+                buffMonster(
+                        monster
+                );
+
+            } catch (Exception e) {
+
+                logger.warning(
+                        "Failed to buff monster during Muma's Night: "
+                                + monster.getUniqueId()
+                                + " ("
+                                + monster.getType()
+                                + ") - "
+                                + e.getMessage()
+                );
+            }
         }
     }
 
@@ -797,10 +932,26 @@ public class MumaNightManager {
                         Monster.class
                 )) {
 
-            if (isBuffed(monster)) {
+            if (!isBuffed(monster)) {
+
+                continue;
+            }
+
+            try {
 
                 stripMonster(
                         monster
+                );
+
+            } catch (Exception e) {
+
+                logger.warning(
+                        "Failed to strip monster at dawn: "
+                                + monster.getUniqueId()
+                                + " ("
+                                + monster.getType()
+                                + ") - "
+                                + e.getMessage()
                 );
             }
         }

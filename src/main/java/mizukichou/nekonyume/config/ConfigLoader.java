@@ -203,6 +203,60 @@ public final class ConfigLoader {
                         config
                 );
 
+        /*
+         * 0.7.4：战斗掉落经验区间（预先归一化）。
+         */
+        int xpPerKillMin =
+                ConfigParseSupport.positive(
+                        config.getInt(
+                                "battle.xp-per-kill-min",
+                                1
+                        ),
+                        0
+                );
+
+        int xpPerKillMax =
+                Math.max(
+                        xpPerKillMin,
+                        ConfigParseSupport.positive(
+                                config.getInt(
+                                        "battle.xp-per-kill-max",
+                                        3
+                                ),
+                                0
+                        )
+                );
+
+        int dragonXp =
+                ConfigParseSupport.positive(
+                        config.getInt(
+                                "battle.dragon-xp",
+                                100
+                        ),
+                        0
+                );
+
+        int witherXpMin =
+                ConfigParseSupport.positive(
+                        config.getInt(
+                                "battle.wither-xp-min",
+                                30
+                        ),
+                        0
+                );
+
+        int witherXpMax =
+                Math.max(
+                        witherXpMin,
+                        ConfigParseSupport.positive(
+                                config.getInt(
+                                        "battle.wither-xp-max",
+                                        50
+                                ),
+                                0
+                        )
+                );
+
         ConfigSnapshot.Battle battle =
                 new ConfigSnapshot.Battle(
                         config.getBoolean(
@@ -264,7 +318,17 @@ public final class ConfigLoader {
                                         180
                                 ),
                                 1
-                        )
+                        ),
+                        /*
+                         * 0.7.4：战斗掉落经验（猫击杀时）。
+                         * min/max 归一化：min > max 时以 min 为准，
+                         * 绝不让随机区间出现下界 > 上界。
+                         */
+                        xpPerKillMin,
+                        xpPerKillMax,
+                        dragonXp,
+                        witherXpMin,
+                        witherXpMax
                 );
 
         ConfigSnapshot.Aura aura =
@@ -326,9 +390,11 @@ public final class ConfigLoader {
 
         ConfigSnapshot.MumaNight mumaNight =
                 new ConfigSnapshot.MumaNight(
-                        config.getDouble(
-                                "muma-night.chance",
-                                0.2
+                        ConfigParseSupport.unit(
+                                config.getDouble(
+                                        "muma-night.chance",
+                                        0.2
+                                )
                         ),
                         config.getDouble(
                                 "muma-night.health-multiplier",
@@ -338,9 +404,41 @@ public final class ConfigLoader {
                                 "muma-night.damage-multiplier",
                                 2.5
                         ),
-                        config.getDouble(
-                                "muma-night.meowdan-drop-chance",
-                                0.15
+                        ConfigParseSupport.unit(
+                                config.getDouble(
+                                        "muma-night.meowdan-drop-chance",
+                                        0.15
+                                )
+                        ),
+                        ConfigParseSupport.unit(
+                                config.getDouble(
+                                        "muma-night.xp-pill-drop-chance",
+                                        0.03
+                                )
+                        ),
+                        ConfigParseSupport.unit(
+                                config.getDouble(
+                                        "muma-night.elite-xp-pill-drop-chance",
+                                        0.01
+                                )
+                        )
+                );
+
+        ConfigSnapshot.XpPill xpPill =
+                new ConfigSnapshot.XpPill(
+                        ConfigParseSupport.positive(
+                                config.getInt(
+                                        "xp-pill.normal-xp",
+                                        50
+                                ),
+                                1
+                        ),
+                        ConfigParseSupport.positive(
+                                config.getInt(
+                                        "xp-pill.elite-xp",
+                                        100
+                                ),
+                                1
                         )
                 );
 
@@ -360,7 +458,8 @@ public final class ConfigLoader {
                 battle,
                 aura,
                 joinMessage,
-                mumaNight
+                mumaNight,
+                xpPill
         );
     }
 }

@@ -330,13 +330,16 @@ public class AchievementService {
             /*
              * 1. 崩溃恢复：补发 pending 奖励。
              *
-             * 解锁与奖励写在同一个 YAML 文档里，
+             * 解锁/台账/奖励写在同一个 YAML 文档里，
              * 由同一份快照原子落盘：
              * - 崩溃于落盘前 → 解锁与奖励都未持久化，
              *   下次登录重新解锁，不重复、不丢失；
              * - 崩溃于奖励发放后、pending 清除前 →
              *   奖励也未随崩溃前的快照落盘，
-             *   下次登录补发恰好一次。
+             *   下次登录补发恰好一次；
+             * - 发放环节抛异常（0.7.4 台账）→
+             *   "先记台账、后发奖励"使失败方向被约束为
+             *   少发而非多发，绝不重复发放。
              */
             for (String pendingName :
                     store.getAchievementsPendingList(
@@ -518,11 +521,11 @@ public class AchievementService {
 
             logger.log(
                     Level.SEVERE,
-                    "Failed to unlock achievement "
+                    "Failed to complete reward for achievement "
                             + achievement.name()
                             + " for "
                             + player.getName()
-                            + ". Reward pending; will retry on next check.",
+                            + ". Ledger recorded; next check will verify and skip re-grant.",
                     exception
             );
         }
@@ -530,8 +533,14 @@ public class AchievementService {
 
     /*
      * 补发一个成就的奖励并清除 pending 标记。
-     * 任何一步抛异常时 pending 标记保持，
-     * 由下次 checkAll 继续重试。
+     *
+     * 0.7.4 防重台账（issues 核查）：
+     * 顺序为"先记台账 → 再发奖励 → 最后清 pending"：
+     * - 台账与经验/喵力同文档同快照，任何进程崩溃点
+     *   都不会出现"奖励已落盘而台账未落盘"的组合；
+     * - 已记台账的成就绝不重复发奖；
+     * - 任何一步抛异常时 pending 标记保持，
+     *   由下次 checkAll 继续重试。
      */
     private void completePendingReward(
             Player player,
@@ -539,13 +548,42 @@ public class AchievementService {
             CatAchievement achievement
     ) {
 
+        UUID playerUuid =
+                player.getUniqueId();
+
         /*
          * 幂等补记解锁标记：
-         * 封堵"pending 存在而 unlocked 缺失"的异常数据组合，
-         * 保证恢复路径不会与普通解锁路径叠加重复发奖。
+         * 封堵"pending 存在而 unlocked 缺失"的异常数据组合。
          */
         store.addAchievementUnlocked(
-                player.getUniqueId(),
+                playerUuid,
+                achievement.name()
+        );
+
+        /*
+         * 防重核心：台账已记账 → 只清 pending，绝不重发。
+         */
+        if (store.isAchievementRewarded(
+                playerUuid,
+                achievement.name()
+        )) {
+
+            store.removeAchievementPending(
+                    playerUuid,
+                    achievement.name()
+            );
+
+            return;
+        }
+
+        /*
+         * 先记台账，后发奖励。
+         * 若此后的发放环节抛异常，pending 保持而台账已记，
+         * 下次补发会因台账命中而跳过——失败方向被
+         * 约束为"少发"而非"多发"（经济系统正确方向）。
+         */
+        store.addAchievementRewarded(
+                playerUuid,
                 achievement.name()
         );
 
@@ -574,7 +612,7 @@ public class AchievementService {
         }
 
         store.removeAchievementPending(
-                player.getUniqueId(),
+                playerUuid,
                 achievement.name()
         );
     }

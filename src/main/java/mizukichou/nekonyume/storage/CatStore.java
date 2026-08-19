@@ -225,11 +225,15 @@ public interface CatStore {
     void addAchievementProgress(UUID playerUUID, String key, int amount);
 
     /*
-     * 奖励待发队列（P0-2 崩溃恢复）：
-     * 解锁与奖励的原子性由"同一 YAML 文档、同一快照落盘"保证：
-     * 解锁时先写入 pending 标记，奖励发放完毕后移除；
-     * 崩溃后下次登录由 AchievementService 对仍处于 pending
-     * 状态的成就补发奖励。
+     * 奖励待发队列（P0-2 崩溃恢复）+ 奖励台账（0.7.4 防重）。
+     *
+     * 三态设计：
+     *   unlocked（已解锁）→ pending（待发）→ rewarded（已发）。
+     *
+     * 发放顺序为"先记台账 → 再发奖励 → 最后清 pending"：
+     * 台账与经验/喵力同文档同快照原子落盘，任何进程崩溃点
+     * 都不会出现"奖励已落盘而台账未落盘"的组合，
+     * 补发路径先查台账，杜绝重复发放。
      */
 
     List<String> getAchievementsPendingList(UUID playerUUID);
@@ -237,6 +241,12 @@ public interface CatStore {
     void addAchievementPending(UUID playerUUID, String id);
 
     void removeAchievementPending(UUID playerUUID, String id);
+
+    List<String> getAchievementsRewardedList(UUID playerUUID);
+
+    boolean isAchievementRewarded(UUID playerUUID, String id);
+
+    void addAchievementRewarded(UUID playerUUID, String id);
 
     /*
      * ---------- 集合 ----------
@@ -246,22 +256,66 @@ public interface CatStore {
 
     /*
      * ---------- 保存生命周期 ----------
+     *
+     * 三档语义（0.7.4 修订，如实描述）：
+     *
+     * save()
+     *   仅标记脏（内存），不生成快照、不写盘。
+     *
+     * flush() / saveNow()
+     *   生成快照并提交给后台保存线程，方法返回时
+     *   磁盘写入尚未完成（异步写盘协议）。
+     *   flush 仅在脏时提交；saveNow 无条件提交。
+     *   两者在耐久性上等价——所谓"立即保存"
+     *   的准确含义是"立即进入写盘队列"。
+     *
+     * awaitPendingSave(ms)
+     *   阻塞主线程直到在飞快照写盘完成（上限 ms）；
+     *   仅用于低频关键操作（建档 / 删档 / 关服），
+     *   常规路径保持异步以保证 TPS。
+     *
+     * 崩溃窗口契约：普通变更在自动保存周期（默认 60s）、
+     * 玩家退出、关服三处落盘；进程被 SIGKILL 时，
+     * 距上次成功落盘的变更最多丢失一个周期。
+     * 这是异步保存设计的固有取舍，业务层不得假设
+     * flush()/saveNow() 返回时数据已持久。
      */
 
     /**
-     * 标记存在未落盘数据（不立即写磁盘）。
+     * 标记存在未落盘数据（内存脏标记，不写盘）。
      */
     void save();
 
     boolean isDirty();
 
     /**
-     * 若存在未落盘数据则立即写盘。
+     * 脏时提交快照给后台保存线程（不等待磁盘完成）。
      */
     void flush();
 
     /**
-     * 无条件立即写盘。磁盘实现必须原子写。
+     * 无条件提交快照给后台保存线程（不等待磁盘完成）。
+     * 磁盘实现必须原子写（tmp + fsync + ATOMIC_MOVE），
+     * 失败时保持快照待写与脏标记。
      */
     void saveNow();
+
+    /**
+     * 阻塞直到在飞快照写盘完成，上限 timeoutMillis。
+     * 默认实现为空操作（内存实现无磁盘概念）；
+     * 磁盘实现重写为真实等待。
+     */
+    default void awaitPendingSave(long timeoutMillis) {
+
+        // 内存实现：无磁盘，无需等待。
+    }
+
+    /**
+     * 最近一次磁盘写入是否失败（用于业务层探测耐久性异常）。
+     * 默认 false（内存实现永不失败）；磁盘实现重写。
+     */
+    default boolean isLastWriteFailed() {
+
+        return false;
+    }
 }

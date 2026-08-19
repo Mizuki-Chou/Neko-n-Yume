@@ -186,6 +186,39 @@ public class CatFoodListener implements Listener {
 
         /*
          * ============================================================
+         * 5a2. 经验丸判定（0.7.4）
+         * ============================================================
+         *
+         * 经验丸不是食物（不影响饱食），
+         * 走独立的使用逻辑：只加经验。
+         */
+
+        if (foodManager.isXpPill(item)) {
+
+            event.setCancelled(true);
+
+            boolean used =
+                    foodManager.feedXpPill(
+                            player,
+                            item
+                    );
+
+            if (used) {
+
+                player.getWorld()
+                        .playSound(
+                                cat.getLocation(),
+                                Sound.ENTITY_CAT_EAT,
+                                1.0f,
+                                1.0f
+                        );
+            }
+
+            return;
+        }
+
+        /*
+         * ============================================================
          * 5b. 过期喵丹：明确提示 + 取消事件 + 不消耗
          * ============================================================
          */

@@ -823,6 +823,19 @@ public class NekoYumeCommand
                             ""
                     );
 
+            /*
+             * 安全审查（0.7.4）：
+             * 过滤控制字符（换行 / 回车 / 制表符等）。
+             * 猫名会进入聊天组件与日志：
+             * 未过滤的 \n 会在聊天中渲染为换行，
+             * 可伪造服务器消息，也可污染日志。
+             */
+            newName =
+                    newName.replaceAll(
+                            "[\\p{Cntrl}]",
+                            ""
+                    );
+
             if (newName.isEmpty()) {
 
                 player.sendMessage(

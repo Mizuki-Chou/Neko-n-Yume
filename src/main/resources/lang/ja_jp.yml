@@ -94,6 +94,8 @@ admin:
   mumanight-status: "<yellow>🌑 夢魔の夜（現在のワールド）：</yellow> {0} <gray>使い方: /nekoyumeadmin mumanight <on|off></gray>"
   mumanight-on: "<dark_red>✔ 夢魔の夜を有効にしました。</dark_red>"
   mumanight-off: "<gold>✔ 夢魔の夜を無効にしました。</gold>"
+  mumanight-state-on: "有効"
+  mumanight-state-off: "無効"
   mumanight-usage: "<yellow>使い方: /nekoyumeadmin mumanight <on|off></yellow>"
 
 feed:
@@ -109,6 +111,7 @@ feed:
   tier-upgrade-fail: "<gray>ニャンダンの力が体内を巡りましたが、素質は変わりませんでした…</gray>"
   not-your-cat: "<red>🐱 これはあなたの猫ではありません。</red>"
   meowdan-expired: "<red>🐱 このニャンダンは期限切れで、もう使えません。</red>"
+  xp-pill-eat: "<gradient:#a7f3d0:#60a5fa>🍀 </gradient>{0}は{1}を食べて、<green>{2}</green>の経験値を獲得した！"
 
 pet:
   limit-reached: "<yellow>🐱 今日はもう猫を{0}回なでました！</yellow>"
@@ -145,6 +148,7 @@ skill:
 
 battle:
   recovering: "<red>🐱 </red>{0}はケガをしてしまい、<red>{1}秒間</red>動けません…"
+  boss-xp: "<gold>🏆 </gold>{0}は{1}を倒し、<green>{2}</green>の経験値を獲得した！"
 
 entity:
   summoning: "<yellow>🐱 猫を探しています。少しお待ちください！</yellow>"
@@ -364,6 +368,11 @@ behavior-name.free: "自由"
 meowdan-name.common: "§7✨ コモンニャンダン"
 meowdan-name.uncommon: "§a✨ アンコモンニャンダン"
 meowdan-name.rare: "§9✨ レアニャンダン"
+item.xp-pill.normal-name: "§a✨ 初級経験丸"
+item.xp-pill.elite-name: "§b✨ 高級経験丸"
+item.xp-pill.lore: "猫に与えると +{0} 経験値"
+entity-name.ender-dragon: "エンダードラゴン"
+entity-name.wither: "ウィザー"
 meowdan-name.epic: "§5✨ エピックニャンダン"
 meowdan-name.legendary: "§6✨ レジェンダリーニャンダン"
 food-name.cod: "生タラ"

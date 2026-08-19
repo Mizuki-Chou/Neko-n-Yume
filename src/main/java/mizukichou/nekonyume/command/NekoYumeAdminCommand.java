@@ -497,9 +497,21 @@ public class NekoYumeAdminCommand
 
         if (removed) {
 
+            /*
+             * 模板需要玩家名占位符：优先在线名，
+             * 否则回退到管理员输入的原始目标名。
+             */
+            Player online =
+                    Bukkit.getPlayer(
+                            playerUUID
+                    );
+
             sender.sendMessage(
                     lang.forSender(sender).message(
-                            "admin.remove-done"
+                            "admin.remove-done",
+                            online != null
+                                    ? online.getName()
+                                    : targetName
                     )
             );
 
@@ -677,9 +689,11 @@ public class NekoYumeAdminCommand
             sender.sendMessage(
                     lang.forSender(sender).message(
                             "admin.mumanight-status",
-                            enabled
-                                    ? "开启"
-                                    : "关闭"
+                            lang.forSender(sender).text(
+                                    enabled
+                                            ? "admin.mumanight-state-on"
+                                            : "admin.mumanight-state-off"
+                            )
                     )
             );
 

@@ -128,4 +128,26 @@ final class ConfigParseSupport {
                 value
         );
     }
+
+    /*
+     * 概率值钳制到 [0, 1]：
+     * 配置写 150 或 -0.5 都收敛为合法概率，
+     * 避免"必掉落 / 永不掉落"的意外行为。
+     */
+    static double unit(
+            double value
+    ) {
+
+        if (!Double.isFinite(value)) {
+            return 0.0;
+        }
+
+        return Math.max(
+                0.0,
+                Math.min(
+                        1.0,
+                        value
+                )
+        );
+    }
 }

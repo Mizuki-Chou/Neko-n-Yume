@@ -7,7 +7,6 @@ import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
-import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.util.SafeTeleport;
 import mizukichou.nekonyume.util.TargetGuard;
@@ -116,8 +115,7 @@ public class CatBattleTask implements Runnable {
             ConfigManager configManager,
             CatCache cache,
             CatBattleState battleState,
-            CatEntityService entityService,
-            Lang lang
+            CatEntityService entityService
     ) {
 
         this.logger = logger;

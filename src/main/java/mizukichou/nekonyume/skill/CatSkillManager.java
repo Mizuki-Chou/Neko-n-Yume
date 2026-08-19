@@ -454,12 +454,23 @@ public class CatSkillManager {
                 double max =
                         player.getMaxHealth();
 
+                /*
+                 * 双重镔：power 源自管理员配置，
+                 * 负值会导致 setHealth(负数) 抛 IllegalArgumentException，
+                 * 因此先镔到 [0, max] 再写入。
+                 */
+                double healed =
+                        Math.max(
+                                0.0,
+                                Math.min(
+                                        max,
+                                        player.getHealth()
+                                                + power
+                                )
+                        );
+
                 player.setHealth(
-                        Math.min(
-                                max,
-                                player.getHealth()
-                                        + power
-                        )
+                        healed
                 );
 
                 player.sendMessage(

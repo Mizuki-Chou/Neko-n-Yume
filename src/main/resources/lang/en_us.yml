@@ -94,6 +94,8 @@ admin:
   mumanight-status: "<yellow>🌑 Muma's Night (current world): </yellow> {0} <gray>Usage: /nekoyumeadmin mumanight <on|off></gray>"
   mumanight-on: "<dark_red>✔ Muma's Night enabled.</dark_red>"
   mumanight-off: "<gold>✔ Muma's Night disabled.</gold>"
+  mumanight-state-on: "ON"
+  mumanight-state-off: "OFF"
   mumanight-usage: "<yellow>Usage: /nekoyumeadmin mumanight <on|off></yellow>"
 
 feed:
@@ -109,6 +111,7 @@ feed:
   tier-upgrade-fail: "<gray>The meow dan's power swirled inside, but the heritage did not change…</gray>"
   not-your-cat: "<red>🐱 This isn't your cat.</red>"
   meowdan-expired: "<red>🐱 This meow dan has expired and can no longer be used.</red>"
+  xp-pill-eat: "<gradient:#a7f3d0:#60a5fa>🍀 </gradient>{0} ate {1} and gained <green>{2}</green> experience!"
 
 pet:
   limit-reached: "<yellow>🐱 You've already petted your cat {0} times today!</yellow>"
@@ -145,6 +148,7 @@ skill:
 
 battle:
   recovering: "<red>🐱 </red>{0} is injured and can't move for <red>{1} seconds</red>…"
+  boss-xp: "<gold>🏆 </gold>{0} defeated {1} and gained <green>{2}</green> experience!"
 
 entity:
   summoning: "<yellow>🐱 Looking for your cat, please wait a moment!</yellow>"
@@ -364,6 +368,11 @@ behavior-name.free: "Free"
 meowdan-name.common: "§7✨ Common Meow Dan"
 meowdan-name.uncommon: "§a✨ Uncommon Meow Dan"
 meowdan-name.rare: "§9✨ Rare Meow Dan"
+item.xp-pill.normal-name: "§a✨ Basic Experience Pill"
+item.xp-pill.elite-name: "§b✨ Advanced Experience Pill"
+item.xp-pill.lore: "Feed to your cat for +{0} experience"
+entity-name.ender-dragon: "Ender Dragon"
+entity-name.wither: "Wither"
 meowdan-name.epic: "§5✨ Epic Meow Dan"
 meowdan-name.legendary: "§6✨ Legendary Meow Dan"
 food-name.cod: "Raw Cod"

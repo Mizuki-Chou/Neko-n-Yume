@@ -43,7 +43,7 @@ public class YamlCatStore extends AbstractCatStore {
 
     private static final String PLAYERS_PATH = "players";
 
-    private static final int DATA_VERSION = 6;
+    private static final int DATA_VERSION = 7;
 
     private final CatStoreEnv env;
 
@@ -557,11 +557,23 @@ public class YamlCatStore extends AbstractCatStore {
      */
     public void awaitPendingSave() {
 
+        awaitPendingSave(
+                15_000L
+        );
+    }
+
+    /**
+     * 等待在飞快照写入完成，上限 timeoutMillis。
+     * 主线程调用——仅用于低频关键操作（建档 / 删档 / 关服）。
+     */
+    @Override
+    public void awaitPendingSave(long timeoutMillis) {
+
         synchronized (saverMonitor) {
 
             long deadline =
                     System.currentTimeMillis()
-                            + 15_000L;
+                            + timeoutMillis;
 
             while (pendingSnapshot.get() != null) {
 
@@ -591,6 +603,16 @@ public class YamlCatStore extends AbstractCatStore {
                 }
             }
         }
+    }
+
+    /**
+     * 最近一次磁盘写入是否失败。
+     * 业务层可通过它探测耐久性异常（0.7.4）。
+     */
+    @Override
+    public boolean isLastWriteFailed() {
+
+        return lastWriteFailed;
     }
 
 
@@ -831,6 +853,10 @@ public class YamlCatStore extends AbstractCatStore {
 
             if (version < 6) {
                 migrateV5ToV6();
+            }
+
+            if (version < 7) {
+                migrateV6ToV7();
             }
 
             data.set("data-version", DATA_VERSION);
@@ -1160,6 +1186,47 @@ public class YamlCatStore extends AbstractCatStore {
 
                 data.set(
                         path + ".achievements-pending",
+                        new java.util.ArrayList<String>()
+                );
+            }
+        }
+    }
+
+    /*
+     * v6 → v7（0.7.4 防重台账）：
+     * 成就奖励台账字段。
+     *
+     * achievements-rewarded 缺省为空列表；
+     * 补发路径"先记台账、后发奖励、最后清 pending"，
+     * 已记台账的成就绝不重复发奖。
+     */
+    private void migrateV6ToV7() {
+
+        ConfigurationSection playersSection =
+                data.getConfigurationSection(PLAYERS_PATH);
+
+        if (playersSection == null) {
+            return;
+        }
+
+        for (String key : playersSection.getKeys(false)) {
+
+            UUID playerUUID = parseUUID(key);
+
+            if (playerUUID == null) {
+                continue;
+            }
+
+            String path = catPath(playerUUID);
+
+            if (!data.contains(path)) {
+                continue;
+            }
+
+            if (!data.contains(path + ".achievements-rewarded")) {
+
+                data.set(
+                        path + ".achievements-rewarded",
                         new java.util.ArrayList<String>()
                 );
             }

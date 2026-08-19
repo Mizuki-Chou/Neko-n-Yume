@@ -394,6 +394,21 @@ public class PlayerDataManager implements CatStore {
     }
 
     @Override
+    public List<String> getAchievementsRewardedList(UUID playerUUID) {
+        return delegate.getAchievementsRewardedList(playerUUID);
+    }
+
+    @Override
+    public boolean isAchievementRewarded(UUID playerUUID, String id) {
+        return delegate.isAchievementRewarded(playerUUID, id);
+    }
+
+    @Override
+    public void addAchievementRewarded(UUID playerUUID, String id) {
+        delegate.addAchievementRewarded(playerUUID, id);
+    }
+
+    @Override
     public Set<UUID> getCatPlayers() {
         return delegate.getCatPlayers();
     }

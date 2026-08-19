@@ -3,6 +3,7 @@ package mizukichou.nekonyume.storage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -462,6 +463,60 @@ class MemoryCatStoreLifecycleTest {
         assertFalse(store.hasCat(player));
         assertTrue(
                 store.getAchievementsPendingList(player)
+                        .isEmpty()
+        );
+    }
+
+    @Test
+    void rewardedLedgerLifecycle() {
+
+        UUID player = UUID.randomUUID();
+
+        store.createCat(player);
+
+        /*
+         * 新建猫咪台账为空。
+         */
+        assertTrue(
+                store.getAchievementsRewardedList(player)
+                        .isEmpty()
+        );
+
+        assertFalse(
+                store.isAchievementRewarded(
+                        player,
+                        "FIRST_CLAIM"
+                )
+        );
+
+        /*
+         * 记账后查询命中；重复记账幂等。
+         */
+        store.addAchievementRewarded(player, "FIRST_CLAIM");
+        store.addAchievementRewarded(player, "FIRST_CLAIM");
+
+        assertTrue(
+                store.isAchievementRewarded(
+                        player,
+                        "FIRST_CLAIM"
+                )
+        );
+
+        assertEquals(
+                List.of("FIRST_CLAIM"),
+                store.getAchievementsRewardedList(player)
+        );
+
+        /*
+         * 台账写不复活：删档后记账静默 no-op。
+         */
+        assertTrue(store.removeCat(player));
+
+        store.addAchievementRewarded(player, "LEVEL_10");
+
+        assertFalse(store.hasCat(player));
+        assertTrue(
+                store.getAchievementsRewardedList(player)
                         .isEmpty()
         );
     }

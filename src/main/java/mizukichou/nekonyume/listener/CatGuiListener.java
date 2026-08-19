@@ -202,9 +202,15 @@ public class CatGuiListener implements Listener {
         Bukkit.getScheduler()
                 .runTask(
                         plugin,
-                        () -> guiManager.open(
-                                player
-                        )
+                        () -> {
+
+                            if (player.isOnline()) {
+
+                                guiManager.open(
+                                        player
+                                );
+                            }
+                        }
                 );
     }
 
@@ -336,9 +342,15 @@ public class CatGuiListener implements Listener {
         Bukkit.getScheduler()
                 .runTask(
                         plugin,
-                        () -> skillGuiManager.open(
-                                player
-                        )
+                        () -> {
+
+                            if (player.isOnline()) {
+
+                                skillGuiManager.open(
+                                        player
+                                );
+                            }
+                        }
                 );
     }
 }

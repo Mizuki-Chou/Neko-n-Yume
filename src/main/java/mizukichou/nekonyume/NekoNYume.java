@@ -33,6 +33,7 @@ import mizukichou.nekonyume.gift.GiftManager;
 import mizukichou.nekonyume.gui.CatGuiManager;
 import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.listener.AchievementListener;
+import mizukichou.nekonyume.listener.CatBattleLootListener;
 import mizukichou.nekonyume.listener.CatEntityListener;
 import mizukichou.nekonyume.listener.CatFoodListener;
 import mizukichou.nekonyume.listener.CatGuiListener;
@@ -657,6 +658,14 @@ public final class NekoNYume extends JavaPlugin {
                         ownerKey,
                         lang
                 ),
+                new CatBattleLootListener(
+                        configManager,
+                        catCache,
+                        catProgressionService,
+                        lang,
+                        catKey,
+                        ownerKey
+                ),
                 new CatEntityListener(
                         this,
                         getLogger(),
@@ -722,7 +731,15 @@ public final class NekoNYume extends JavaPlugin {
                                         catStore,
                                         catCache
                                 ),
-                                20L * 60L,
+                                /*
+                                 * 性能优化（0.7.4）：
+                                 * 初始延迟 45s（周期仍 60s）。
+                                 * 衰减由时间戳驱动（elapsed >= interval 才结算），
+                                 * 相位不影响衰减量；
+                                 * 错开自动保存/位置同步的 60s 网格，
+                                 * 避免三大任务同 tick 集中爆发。
+                                 */
+                                20L * 45L,
                                 20L * 60L
                         );
 
@@ -787,8 +804,7 @@ public final class NekoNYume extends JavaPlugin {
                                         configManager,
                                         catCache,
                                         battleState,
-                                        catEntityService,
-                                        lang
+                                        catEntityService
                                 ),
                                 10L,
                                 10L

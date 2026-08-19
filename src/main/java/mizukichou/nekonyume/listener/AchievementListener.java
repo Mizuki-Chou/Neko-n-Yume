@@ -158,6 +158,19 @@ public class AchievementListener implements Listener {
             return;
         }
 
+        /*
+         * 安全审查（0.7.4）：
+         * NPC（Citizens 等）不计入护主骑士——
+         * NPC 刷怪场不应成为成就进度来源。
+         */
+        if (event.getEntity()
+                .hasMetadata(
+                        "NPC"
+                )) {
+
+            return;
+        }
+
         EntityDamageEvent cause =
                 event.getEntity()
                         .getLastDamageCause();

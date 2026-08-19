@@ -76,10 +76,19 @@ public class PlayerQuitListener implements Listener {
         );
 
         /*
-         * 清理技能冷却表条目（§22 TODO）：
+         * 清理技能冷却表条目：
          * 防止长跑服务器上冷却 Map 累积离线玩家记录。
          */
         skillManager.clearCooldowns(
+                playerUUID
+        );
+
+        /*
+         * 释放召唤标记（0.7.4 修复）：
+         * 异步区块加载完成前下线会绕过回调的 finally，
+         * 残留标记会永久封锁该玩家的召唤功能。
+         */
+        entityService.clearSummoning(
                 playerUUID
         );
     }

@@ -81,6 +81,8 @@ public abstract class AbstractCatStore implements CatStore {
     protected static final String FIELD_ACHIEVEMENTS_PROGRESS = "achievements-progress";
     protected static final String FIELD_ACHIEVEMENTS_PENDING = "achievements-pending";
 
+    protected static final String FIELD_ACHIEVEMENTS_REWARDED = "achievements-rewarded";
+
     /*
      * 默认值。
      */
@@ -110,7 +112,7 @@ public abstract class AbstractCatStore implements CatStore {
     }
 
     /*
-     * §22 TODO：名字池查重。
+     * 名字池查重：
      *
      * 同名猫会干扰玩家辨识与按名字匹配的周边插件，
      * 建档时与全服已有名字对比，
@@ -446,9 +448,16 @@ public abstract class AbstractCatStore implements CatStore {
         createRaw(playerUUID, fields);
 
         /*
-         * 第一次创建猫咪属于关键操作，立即保存。
+         * 第一次创建猫咪属于关键操作：
+         * 提交快照后，阻塞至多 3 秒等待磁盘写入完成，
+         * 让"立即保存"的承诺真正成立（0.7.4）。
+         * 磁盘故障时有界降级：超时后继续运行，
+         * 保存线程会保留快照并每 5 秒重试。
          */
         saveNow();
+        awaitPendingSave(
+                3_000L
+        );
     }
 
     @Override
@@ -471,9 +480,14 @@ public abstract class AbstractCatStore implements CatStore {
         deleteRaw(playerUUID);
 
         /*
-         * 不可逆操作立即落盘。
+         * 不可逆操作：提交快照后阻塞至多 3 秒等待落盘（0.7.4）。
+         * 防止"删除成功但进程随即崩溃导致猫复活"的窗口；
+         * 磁盘故障时有界降级，保存线程保留快照重试。
          */
         saveNow();
+        awaitPendingSave(
+                3_000L
+        );
 
         return true;
     }
@@ -844,6 +858,21 @@ public abstract class AbstractCatStore implements CatStore {
     @Override
     public void removeAchievementPending(UUID playerUUID, String id) {
         achievements.removeAchievementPending(playerUUID, id);
+    }
+
+    @Override
+    public List<String> getAchievementsRewardedList(UUID playerUUID) {
+        return achievements.getRewardedList(playerUUID);
+    }
+
+    @Override
+    public boolean isAchievementRewarded(UUID playerUUID, String id) {
+        return achievements.isRewarded(playerUUID, id);
+    }
+
+    @Override
+    public void addAchievementRewarded(UUID playerUUID, String id) {
+        achievements.addRewarded(playerUUID, id);
     }
 
     @Override

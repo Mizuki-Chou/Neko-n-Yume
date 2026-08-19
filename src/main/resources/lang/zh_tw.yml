@@ -112,6 +112,8 @@ admin:
   mumanight-status: "<yellow>🌑 夢魔之夜（目前世界）：</yellow> {0} <gray>用法: /nekoyumeadmin mumanight <on|off></gray>"
   mumanight-on: "<dark_red>✔ 已開啟夢魔之夜。</dark_red>"
   mumanight-off: "<gold>✔ 已關閉夢魔之夜。</gold>"
+  mumanight-state-on: "開啟"
+  mumanight-state-off: "關閉"
   mumanight-usage: "<yellow>用法: /nekoyumeadmin mumanight <on|off></yellow>"
 
 #
@@ -130,6 +132,7 @@ feed:
   tier-upgrade-fail: "<gray>喵丹的力量在體內流轉，但底蘊沒有變化…</gray>"
   not-your-cat: "<red>🐱 這不是你的貓咪。</red>"
   meowdan-expired: "<red>🐱 這顆喵丹已經過期，無法使用了。</red>"
+  xp-pill-eat: "<gradient:#a7f3d0:#60a5fa>🍀 </gradient>{0}吃下了 {1}，獲得 <green>{2}</green> 點經驗！"
 
 #
 # ---------- 撫摸 ----------
@@ -181,6 +184,7 @@ skill:
 #
 battle:
   recovering: "<red>🐱 </red>{0}受傷了，<red>{1} 秒內無法繼續活動…</red>"
+  boss-xp: "<gold>🏆 </gold>{0}擊敗了 {1}，獲得 <green>{2}</green> 點經驗！"
 
 #
 # ---------- 實體 ----------
@@ -424,6 +428,11 @@ behavior-name.free: "自由"
 meowdan-name.common: "§7✨ 平凡喵丹"
 meowdan-name.uncommon: "§a✨ 精良喵丹"
 meowdan-name.rare: "§9✨ 獨特喵丹"
+item.xp-pill.normal-name: "§a✨ 初階經驗丸"
+item.xp-pill.elite-name: "§b✨ 高階經驗丸"
+item.xp-pill.lore: "餵給貓咪，+{0} 經驗"
+entity-name.ender-dragon: "終界龍"
+entity-name.wither: "凋零怪"
 meowdan-name.epic: "§5✨ 卓越喵丹"
 meowdan-name.legendary: "§6✨ 至極喵丹"
 food-name.cod: "生鱈魚"

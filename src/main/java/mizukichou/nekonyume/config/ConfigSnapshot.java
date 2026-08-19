@@ -65,6 +65,8 @@ public final class ConfigSnapshot {
 
     private final MumaNight mumaNight;
 
+    private final XpPill xpPill;
+
     public ConfigSnapshot(
             String language,
             Storage storage,
@@ -81,7 +83,8 @@ public final class ConfigSnapshot {
             Battle battle,
             Aura aura,
             JoinMessage joinMessage,
-            MumaNight mumaNight
+            MumaNight mumaNight,
+            XpPill xpPill
     ) {
 
         this.language = language;
@@ -100,6 +103,7 @@ public final class ConfigSnapshot {
         this.aura = aura;
         this.joinMessage = joinMessage;
         this.mumaNight = mumaNight;
+        this.xpPill = xpPill;
     }
 
     /*
@@ -564,6 +568,19 @@ public final class ConfigSnapshot {
 
         private final int eternityRebirthSeconds;
 
+        /*
+         * 0.7.4：战斗掉落经验（猫击杀时）。
+         */
+        private final int xpPerKillMin;
+
+        private final int xpPerKillMax;
+
+        private final int dragonXp;
+
+        private final int witherXpMin;
+
+        private final int witherXpMax;
+
         public Battle(
                 boolean enabled,
                 int baseDamage,
@@ -573,7 +590,12 @@ public final class ConfigSnapshot {
                 int weaknessSeconds,
                 int recoverySeconds,
                 int regenIntervalSeconds,
-                int eternityRebirthSeconds
+                int eternityRebirthSeconds,
+                int xpPerKillMin,
+                int xpPerKillMax,
+                int dragonXp,
+                int witherXpMin,
+                int witherXpMax
         ) {
 
             this.enabled = enabled;
@@ -585,6 +607,11 @@ public final class ConfigSnapshot {
             this.recoverySeconds = recoverySeconds;
             this.regenIntervalSeconds = regenIntervalSeconds;
             this.eternityRebirthSeconds = eternityRebirthSeconds;
+            this.xpPerKillMin = xpPerKillMin;
+            this.xpPerKillMax = xpPerKillMax;
+            this.dragonXp = dragonXp;
+            this.witherXpMin = witherXpMin;
+            this.witherXpMax = witherXpMax;
         }
     }
 
@@ -670,17 +697,51 @@ public final class ConfigSnapshot {
 
         private final double meowdanDropChance;
 
+        /*
+         * 0.7.4：经验丸掉落概率。
+         */
+        private final double xpPillDropChance;
+
+        private final double eliteXpPillDropChance;
+
         public MumaNight(
                 double chance,
                 double healthMultiplier,
                 double damageMultiplier,
-                double meowdanDropChance
+                double meowdanDropChance,
+                double xpPillDropChance,
+                double eliteXpPillDropChance
         ) {
 
             this.chance = chance;
             this.healthMultiplier = healthMultiplier;
             this.damageMultiplier = damageMultiplier;
             this.meowdanDropChance = meowdanDropChance;
+            this.xpPillDropChance = xpPillDropChance;
+            this.eliteXpPillDropChance = eliteXpPillDropChance;
+        }
+    }
+
+    /*
+     * ============================================================
+     * 经验丸（0.7.4）
+     * ============================================================
+     */
+
+    @Getter
+    public static final class XpPill {
+
+        private final int normalXp;
+
+        private final int eliteXp;
+
+        public XpPill(
+                int normalXp,
+                int eliteXp
+        ) {
+
+            this.normalXp = normalXp;
+            this.eliteXp = eliteXp;
         }
     }
 }

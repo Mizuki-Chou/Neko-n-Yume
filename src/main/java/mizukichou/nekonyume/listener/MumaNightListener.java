@@ -67,6 +67,10 @@ public class MumaNightListener implements Listener {
             manager.maybeDropMeowDan(
                     monster
             );
+
+            manager.maybeDropXpPills(
+                    monster
+            );
         }
     }
 }

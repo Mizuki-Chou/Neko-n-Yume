@@ -25,9 +25,10 @@ import java.util.logging.Logger;
  *
  * <p>
  * 0.7.1：按玩家客户端语言自动选择（Player.locale()）：
- * zh_* → zh_cn、en_* → en_us、ja_* → ja_jp，
- * 其余回退到 config 的 language 默认值。
- * 玩家可用 /nekoyume language &lt;auto|zh_cn|en_us|ja_jp&gt;
+ * zh_cn / zh_tw（含 zh_hk、zh_mo）→ zh_tw，其余 zh_* → zh_cn；
+ * en_* → en_us、ja_* → ja_jp；
+ * 不匹配任何支持语言（或 locale 为空）时回退 en_us（0.7.2 语义）。
+ * 玩家可用 /nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp&gt;
  * 设置个人覆盖（仅内存，重启后回到 auto）。
  * </p>
  *

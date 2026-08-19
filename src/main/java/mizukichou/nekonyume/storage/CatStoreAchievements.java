@@ -313,4 +313,78 @@ final class CatStoreAchievements {
                 entries
         );
     }
+
+    /*
+     * ============================================================
+     * 奖励台账（0.7.4 防重）
+     * ============================================================
+     *
+     * "先记台账、后发奖励"：补发路径先查台账，
+     * 已记台账的成就绝不重复发奖。
+     */
+
+    List<String> getRewardedList(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID == null) {
+            return List.of();
+        }
+
+        return store.getStringList(
+                playerUUID,
+                AbstractCatStore.FIELD_ACHIEVEMENTS_REWARDED
+        );
+    }
+
+    boolean isRewarded(
+            UUID playerUUID,
+            String id
+    ) {
+
+        return getRewardedList(
+                playerUUID
+        ).contains(
+                id
+        );
+    }
+
+    void addRewarded(
+            UUID playerUUID,
+            String id
+    ) {
+
+        if (playerUUID == null ||
+                id == null ||
+                id.isBlank() ||
+                !store.hasCat(
+                        playerUUID
+                )) {
+
+            return;
+        }
+
+        List<String> rewarded =
+                store.getStringList(
+                        playerUUID,
+                        AbstractCatStore.FIELD_ACHIEVEMENTS_REWARDED
+                );
+
+        if (rewarded.contains(
+                id
+        )) {
+
+            return;
+        }
+
+        rewarded.add(
+                id
+        );
+
+        store.setRaw(
+                playerUUID,
+                AbstractCatStore.FIELD_ACHIEVEMENTS_REWARDED,
+                rewarded
+        );
+    }
 }

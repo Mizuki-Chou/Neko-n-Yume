@@ -97,6 +97,129 @@ class ConfigLoaderTest {
         assertFalse(
                 config.getFood().getValues().isEmpty()
         );
+
+        /*
+         * 0.7.4：经验丸默认值。
+         */
+        assertEquals(
+                50,
+                config.getXpPill().getNormalXp()
+        );
+
+        assertEquals(
+                100,
+                config.getXpPill().getEliteXp()
+        );
+
+        assertEquals(
+                1,
+                config.getBattle().getXpPerKillMin()
+        );
+
+        assertEquals(
+                3,
+                config.getBattle().getXpPerKillMax()
+        );
+
+        assertEquals(
+                100,
+                config.getBattle().getDragonXp()
+        );
+
+        assertEquals(
+                30,
+                config.getBattle().getWitherXpMin()
+        );
+
+        assertEquals(
+                50,
+                config.getBattle().getWitherXpMax()
+        );
+
+        assertEquals(
+                0.03,
+                config.getMumaNight().getXpPillDropChance(),
+                1e-9
+        );
+
+        assertEquals(
+                0.01,
+                config.getMumaNight().getEliteXpPillDropChance(),
+                1e-9
+        );
+    }
+
+    @Test
+    void xpPillAndBattleXpAreParsedAndNormalized() {
+
+        ConfigSnapshot config =
+                load("""
+                        xp-pill:
+                          normal-xp: -10
+                          elite-xp: 500
+                        battle:
+                          xp-per-kill-min: 7
+                          xp-per-kill-max: 2
+                          dragon-xp: -3
+                          wither-xp-min: 40
+                          wither-xp-max: 10
+                        muma-night:
+                          xp-pill-drop-chance: 1.5
+                          elite-xp-pill-drop-chance: -0.2
+                        """);
+
+        /*
+         * 负值钳到 ≥1；min > max 时以 min 为准。
+         */
+        assertEquals(
+                1,
+                config.getXpPill().getNormalXp()
+        );
+
+        assertEquals(
+                500,
+                config.getXpPill().getEliteXp()
+        );
+
+        assertEquals(
+                7,
+                config.getBattle().getXpPerKillMin()
+        );
+
+        assertEquals(
+                7,
+                config.getBattle().getXpPerKillMax()
+        );
+
+        assertEquals(
+                0,
+                config.getBattle().getDragonXp()
+        );
+
+        assertEquals(
+                40,
+                config.getBattle().getWitherXpMin()
+        );
+
+        assertEquals(
+                40,
+                config.getBattle().getWitherXpMax()
+        );
+
+        /*
+         * 概率钳到 [0,1]。
+         */
+        assertEquals(
+                1.0,
+                config.getMumaNight().getXpPillDropChance(),
+                1e-9
+        );
+
+        assertEquals(
+                0.0,
+                config.getMumaNight().getEliteXpPillDropChance(),
+                1e-9
+        );
     }
 
     @Test

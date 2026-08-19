@@ -73,6 +73,11 @@ public class CatFoodManager {
     private final NamespacedKey meowDanKey;
     private final NamespacedKey meowDanGenKey;
 
+    /*
+     * 0.7.4：经验丸 PDC 身份键（值 = XpPillTier.id）。
+     */
+    private final NamespacedKey xpPillKey;
+
     public CatFoodManager(
             JavaPlugin plugin,
             CatStore store,
@@ -99,6 +104,12 @@ public class CatFoodManager {
                 new NamespacedKey(
                         plugin,
                         "nekonyume_meowdan_gen"
+                );
+
+        this.xpPillKey =
+                new NamespacedKey(
+                        plugin,
+                        "nekonyume_xp_pill"
                 );
 
         registerFoods();
@@ -507,6 +518,260 @@ public class CatFoodManager {
                 cat,
                 quality,
                 playerUUID
+        );
+
+        return true;
+    }
+
+    /*
+     * ============================================================
+     * 经验丸（0.7.4）
+     * ============================================================
+     *
+     * 初阶 / 高阶两档，喂给猫咪直接增加经验。
+     * 不影响饱食与好感（补充剂，不是食物）。
+     * 物品身份：PDC nekonyume_xp_pill = tier.id。
+     * 高阶额外带附魔光泽（setEnchantmentGlintOverride）。
+     */
+
+    public NamespacedKey getXpPillKey() {
+        return xpPillKey;
+    }
+
+    public ItemStack createXpPill(
+            XpPillTier tier,
+            int amount,
+            Player player
+    ) {
+
+        if (tier == null) {
+            tier = XpPillTier.NORMAL;
+        }
+
+        int safeAmount =
+                Math.max(
+                        1,
+                        Math.min(
+                                amount,
+                                MEOW_DAN_MAX_STACK
+                        )
+                );
+
+        ItemStack item =
+                new ItemStack(
+                        Material.EXPERIENCE_BOTTLE,
+                        safeAmount
+                );
+
+        ItemMeta meta =
+                item.getItemMeta();
+
+        if (meta != null) {
+
+            int xp =
+                    xpFor(
+                            tier
+                    );
+
+            meta.setDisplayName(
+                    lang.forPlayer(player).text(
+                            "item.xp-pill."
+                                    + tier.getId()
+                                    + "-name"
+                    )
+            );
+
+            meta.setLore(
+                    Arrays.asList(
+                            lang.forPlayer(player).text(
+                                    "item.xp-pill.lore",
+                                    String.valueOf(
+                                            xp
+                                    )
+                            )
+                    )
+            );
+
+            if (tier == XpPillTier.ELITE) {
+
+                meta.setEnchantmentGlintOverride(
+                        true
+                );
+            }
+
+            meta.getPersistentDataContainer()
+                    .set(
+                            xpPillKey,
+                            PersistentDataType.STRING,
+                            tier.getId()
+                    );
+
+            item.setItemMeta(
+                    meta
+            );
+        }
+
+        return item;
+    }
+
+    public boolean isXpPill(
+            ItemStack item
+    ) {
+
+        return getXpPillTier(
+                item
+        ) != null;
+    }
+
+    public XpPillTier getXpPillTier(
+            ItemStack item
+    ) {
+
+        if (item == null ||
+                item.getType().isAir()) {
+
+            return null;
+        }
+
+        ItemMeta meta =
+                item.getItemMeta();
+
+        if (meta == null) {
+            return null;
+        }
+
+        String id =
+                meta.getPersistentDataContainer()
+                        .get(
+                                xpPillKey,
+                                PersistentDataType.STRING
+                        );
+
+        return XpPillTier.fromId(
+                id
+        );
+    }
+
+    public int xpFor(
+            XpPillTier tier
+    ) {
+
+        if (tier == null) {
+            return 0;
+        }
+
+        ConfigSnapshot.XpPill config =
+                configManager.snapshot()
+                        .getXpPill();
+
+        return tier == XpPillTier.ELITE
+                ? config.getEliteXp()
+                : config.getNormalXp();
+    }
+
+    /**
+     * 喂食经验丸：只加经验，不动饱食 / 好感。
+     * 返回是否成功（物品已消耗 / 经验已发放）。
+     */
+    public boolean feedXpPill(
+            Player player,
+            ItemStack item
+    ) {
+
+        if (player == null ||
+                item == null) {
+
+            return false;
+        }
+
+        XpPillTier tier =
+                getXpPillTier(
+                        item
+                );
+
+        if (tier == null) {
+            return false;
+        }
+
+        UUID playerUUID =
+                player.getUniqueId();
+
+        if (!store.hasCat(playerUUID)) {
+            return false;
+        }
+
+        Cat cat =
+                cache.loadCat(
+                        player
+                );
+
+        if (cat == null) {
+            return false;
+        }
+
+        int xp =
+                xpFor(
+                        tier
+                );
+
+        if (xp <= 0) {
+            return false;
+        }
+
+        progression.gainExperience(
+                player,
+                cat,
+                xp
+        );
+
+        if (player.getGameMode() != GameMode.CREATIVE) {
+
+            if (item.getAmount() <= 1) {
+
+                item.setAmount(
+                        0
+                );
+
+            } else {
+
+                item.setAmount(
+                        item.getAmount() - 1
+                );
+            }
+        }
+
+        player.playSound(
+                player.getLocation(),
+                Sound.ENTITY_GENERIC_EAT,
+                1.0f,
+                1.0f
+        );
+
+        /*
+         * 猫名 / 经验数值为纯文本参数，经 Lang 占位符包装；
+         * 经验丸名称含 § 色码，进聊天组件前必须经
+         * LegacyComponentSerializer 转换（与喵丹路径一致），
+         * 避免 LegacyFormattingDetected 与字面 § 泄漏。
+         */
+        player.sendMessage(
+                lang.forPlayer(player).messageComponents(
+                        "feed.xp-pill-eat",
+                        Component.text(
+                                cat.getName()
+                        ),
+                        legacySerializer.deserialize(
+                                lang.forPlayer(player).text(
+                                        "item.xp-pill."
+                                                + tier.getId()
+                                                + "-name"
+                                )
+                        ),
+                        Component.text(
+                                String.valueOf(
+                                        xp
+                                )
+                        )
+                )
         );
 
         return true;
