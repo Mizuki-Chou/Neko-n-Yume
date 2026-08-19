@@ -41,8 +41,6 @@ import java.util.UUID;
  * <p>
  * 喵丹：PDC 品质 + 批次；批次不匹配即过期。
  * 0.6.2：吃喵丹有概率提升底蕴。
- * 0.7.1：喵丹物品文案按接收者语言生成；
- * 含 § 色码的喵丹名进聊天消息前经 LegacyComponentSerializer 转换。
  * </p>
  */
 public class CatFoodManager {
@@ -191,13 +189,6 @@ public class CatFoodManager {
         return list;
     }
 
-    /*
-     * 生成喵丹物品。
-     *
-     * player 决定物品文案语言（null = 默认语言）：
-     * 命令发放传目标玩家；
-     * 配方预览 / 怪物掉落传 null。
-     */
     public ItemStack createMeowDan(
             MeowDanQuality quality,
             int amount,

@@ -15,279 +15,195 @@ import java.util.logging.Logger;
 
 /**
  * 语言文本组件。
+ *
+ * <p>
  * 玩家可见文案全部集中在 lang/&lt;code&gt;.yml（jar 内建：
  * zh_cn / en_us / ja_jp），
  * 可用服务器端 plugins/NekoNYume/lang/&lt;code&gt;.yml 覆盖。
  * /nekoyumeadmin reload 时热重载。
+ * </p>
+ *
+ * <p>
  * 0.7.1：按玩家客户端语言自动选择（Player.locale()）：
  * zh_* → zh_cn、en_* → en_us、ja_* → ja_jp，
- * 其余（如 ko / fr / de …）统一回退英语（en_us）；
- * config 的 language 仅用于控制台/全局场景。
+ * 其余回退到 config 的 language 默认值。
  * 玩家可用 /nekoyume language &lt;auto|zh_cn|en_us|ja_jp&gt;
  * 设置个人覆盖（仅内存，重启后回到 auto）。
+ * </p>
+ *
+ * <p>
  * 注入安全铁律：
  * 模板只包含固定文案；动态参数通过占位符 {0} {1} …
  * 在 MiniMessage 解析完成后替换为 Component，
  * 玩家可控文本绝不会被当作标签解析。
+ * </p>
  */
 public final class Lang {
 
-    /*
-     * 支持的完整语言代码集（决定 resolveLocale 的映射）。
-     */
-    private static final String DEFAULT_CODE = "zh_cn";
+ private static final String DEFAULT_CODE = "zh_cn";
 
-    private final JavaPlugin plugin;
+ private final JavaPlugin plugin;
+ private final ConfigManager configManager;
+ private final Logger logger;
 
-    private final ConfigManager configManager;
+ private volatile String defaultCode =
+ DEFAULT_CODE;
 
-    private final Logger logger;
+ private final Map<String, LangMessages> cache =
+ new ConcurrentHashMap<>();
 
-    /*
-     * 默认语言（config: language），reload 时刷新。
-     */
-    private volatile String defaultCode =
-            DEFAULT_CODE;
+ private volatile LangMessages fallback;
 
-    /*
-     * 已加载语言实例缓存：code → messages。
-     * reload 时清空。
-     */
-    private final Map<String, LangMessages> cache =
-            new ConcurrentHashMap<>();
+ private final Map<UUID, String> overrides =
+ new ConcurrentHashMap<>();
 
-    /*
-     * 默认语言实例（控制台 / 广播回退等使用）。
-     */
-    private volatile LangMessages fallback;
+ public Lang(
+ JavaPlugin plugin,
+ ConfigManager configManager,
+ Logger logger ) {
 
-    /*
-     * 玩家个人语言覆盖（仅内存，重启后回到 auto）。
-     * "auto" = 跟随客户端语言。
-     */
-    private final Map<UUID, String> overrides =
-            new ConcurrentHashMap<>();
+ this.plugin = plugin;
+ this.configManager = configManager;
+ this.logger = logger;
 
-    public Lang(
-            JavaPlugin plugin,
-            ConfigManager configManager,
-            Logger logger
-    ) {
+ reload();
+ }
 
-        this.plugin = plugin;
-        this.configManager = configManager;
-        this.logger = logger;
+ public void reload() {
 
-        reload();
-    }
+ cache.clear();
 
-    /**
-     * 重载：
-     * 清空缓存、重读默认语言、
-     * 重新加载默认语言实例。
-     */
-    public void reload() {
+ String code =
+ configManager.snapshot()
+ .getLanguage();
 
-        cache.clear();
+ if (code == null ||
+ code.isBlank()) {
 
-        String code =
-                configManager.snapshot()
-                        .getLanguage();
+ code = DEFAULT_CODE;
+ }
 
-        if (code == null ||
-                code.isBlank()) {
+ defaultCode = code;
 
-            code = DEFAULT_CODE;
-        }
+ fallback =
+ messagesFor(
+ code );
+ }
 
-        defaultCode = code;
+ public LangMessages forSender(
+ CommandSender sender ) {
 
-        fallback =
-                messagesFor(
-                        code
-                );
-    }
+ if (sender instanceof Player player) {
 
-    /*
-     * ============================================================
-     * 语言解析
-     * ============================================================
-     */
+ return forPlayer(
+ player );
+ }
 
-    /**
-     * 按发送者解析语言：
-     * 玩家 → 个人覆盖 &gt; 客户端语言 &gt; 默认；
-     * 控制台 → 默认。
-     */
-    public LangMessages forSender(
-            CommandSender sender
-    ) {
+ return fallback;
+ }
 
-        if (sender instanceof Player player) {
+ public LangMessages forPlayer(
+ Player player ) {
 
-            return forPlayer(
-                    player
-            );
-        }
+ if (player == null) {
+ return fallback;
+ }
 
-        return fallback;
-    }
+ UUID playerUuid =
+ player.getUniqueId();
 
-    /**
-     * 按玩家解析语言。
-     */
-    public LangMessages forPlayer(
-            Player player
-    ) {
+ String override =
+ overrides.get(
+ playerUuid );
 
-        if (player == null) {
-            return fallback;
-        }
+ if (override != null &&
+ !"auto".equalsIgnoreCase(
+ override )) {
 
-        UUID playerUuid =
-                player.getUniqueId();
+ return messagesFor(
+ override );
+ }
 
-        String override =
-                overrides.get(
-                        playerUuid
-                );
+ return messagesFor(
+ resolveLocale(
+ player ) );
+ }
 
-        if (override != null &&
-                !"auto".equalsIgnoreCase(
-                        override
-                )) {
+ public LangMessages fallback() {
+ return fallback;
+ }
 
-            return messagesFor(
-                    override
-            );
-        }
+ public void setOverride(
+ UUID playerUuid,
+ String code ) {
 
-        return messagesFor(
-                resolveLocale(
-                        player
-                )
-        );
-    }
+ if (playerUuid == null) {
+ return;
+ }
 
-    /**
-     * 默认语言实例（控制台 / 全局场景）。
-     */
-    public LangMessages fallback() {
+ if (code == null ||
+ code.isBlank() ||
+ "auto".equalsIgnoreCase(
+ code )) {
 
-        return fallback;
-    }
+ overrides.remove(
+ playerUuid );
 
-    /*
-     * ============================================================
-     * 玩家个人覆盖（/nekoyume language）
-     * ============================================================
-     */
+ } else {
 
-    public void setOverride(
-            UUID playerUuid,
-            String code
-    ) {
+ overrides.put(
+ playerUuid,
+ code );
+ }
+ }
 
-        if (playerUuid == null) {
-            return;
-        }
+ public String getOverride(
+ UUID playerUuid ) {
 
-        if (code == null ||
-                code.isBlank() ||
-                "auto".equalsIgnoreCase(
-                        code
-                )) {
+ if (playerUuid == null) {
+ return "auto";
+ }
 
-            overrides.remove(
-                    playerUuid
-            );
+ return overrides.getOrDefault(
+ playerUuid,
+ "auto" );
+ }
 
-        } else {
+ public Component message(
+ String key,
+ String... rawArgs ) {
 
-            overrides.put(
-                    playerUuid,
-                    code
-            );
-        }
-    }
+ return fallback.message(
+ key,
+ rawArgs );
+ }
 
-    public String getOverride(
-            UUID playerUuid
-    ) {
+ public Component messageComponents(
+ String key,
+ Component... args ) {
 
-        if (playerUuid == null) {
-            return "auto";
-        }
+ return fallback.messageComponents(
+ key,
+ args );
+ }
 
-        return overrides.getOrDefault(
-                playerUuid,
-                "auto"
-        );
-    }
+ public String text(
+ String key,
+ String... args ) {
 
-    /*
-     * ============================================================
-     * 默认语言快捷方法（控制台 / 全局广播）
-     * ============================================================
-     */
+ return fallback.text(
+ key,
+ args );
+ }
 
-    public Component message(
-            String key,
-            String... rawArgs
-    ) {
+ public List<String> textList(
+ String key ) {
 
-        return fallback.message(
-                key,
-                rawArgs
-        );
-    }
+ return fallback.textList(
+ key );
+ }
 
-    public Component messageComponents(
-            String key,
-            Component... args
-    ) {
-
-        return fallback.messageComponents(
-                key,
-                args
-        );
-    }
-
-    public String text(
-            String key,
-            String... args
-    ) {
-
-        return fallback.text(
-                key,
-                args
-        );
-    }
-
-    public List<String> textList(
-            String key
-    ) {
-
-        return fallback.textList(
-                key
-        );
-    }
-
-    /*
-     * ============================================================
-     * 内部
-     * ============================================================
-     */
-
-    /*
-     * 客户端语言 → 插件语言代码。
-     *
-     * Player.locale() 返回 Adventure 的 Locale
-     * （如 zh_CN / en_US / ja_JP / zh_TW）。
-     * 按语言前缀映射：zh_* → zh_cn、en_* → en_us、
-     * ja_* → ja_jp，其余回退默认。
-     */
-    private String resolveLocale(
+ private String resolveLocale(
             Player player
     ) {
 
@@ -310,32 +226,46 @@ public final class Lang {
 
                 if (code.length() >= 2) {
 
+                    /*
+                     * 繁体中文（台湾 / 香港 / 澳门）→ zh_tw；
+                     * 其余 zh_* → zh_cn。
+                     */
+                    if ("zh".equals(
+                            code.substring(
+                                    0,
+                                    2
+                            )
+                    )) {
+
+                        if ("zh_tw".equals(code) ||
+                                "zh_hk".equals(code) ||
+                                "zh_mo".equals(code)) {
+
+                            return "zh_tw";
+                        }
+
+                        return "zh_cn";
+                    }
+
+                    /*
+                     * 不匹配任何支持语言时统一回退英语。
+                     */
                     return switch (
                             code.substring(
                                     0,
                                     2
                             )
-                            ) {
-
-                        case "zh" ->
-                                "zh_cn";
+                    ) {
 
                         case "en" ->
                                 "en_us";
 
                         case "ja" ->
                                 "ja_jp";
-                        /*
-                         * 不匹配任何支持语言时，
-                         * 统一回退英语（en_us）：
-                         * 英语是覆盖面最广的通用语言。
-                         * 服务器端 config 的 language
-                         * 仍作为控制台/全局场景的默认语言。
-                         */
+
                         default ->
                                 "en_us";
                     };
-
                 }
             }
 
@@ -349,27 +279,20 @@ public final class Lang {
         return defaultCode;
     }
 
-    /*
-     * 按代码取语言实例（惰性加载 + 缓存）。
-     * 代码不存在 / 加载失败时，LangMessages 内部回退 zh_cn。
-     */
     private LangMessages messagesFor(
-            String code
-    ) {
+ String code ) {
 
-        if (code == null ||
-                code.isBlank()) {
+ if (code == null ||
+ code.isBlank()) {
 
-            code = defaultCode;
-        }
+ code = defaultCode;
+ }
 
-        return cache.computeIfAbsent(
-                code,
-                c -> LangMessages.load(
-                        plugin,
-                        c,
-                        logger
-                )
-        );
-    }
+ return cache.computeIfAbsent(
+ code,
+ c -> LangMessages.load(
+ plugin,
+ c,
+ logger ) );
+ }
 }

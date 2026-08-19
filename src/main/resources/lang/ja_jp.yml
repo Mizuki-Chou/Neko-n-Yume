@@ -7,9 +7,6 @@
 # サーバー側上書きファイル: plugins/NekoNYume/lang/ja_jp.yml
 # /nekoyumeadmin reload で再読み込みされます。
 
-#
-# ---------- コマンド ----------
-#
 command:
   no-cat: "<red>🐱 まだ猫を飼っていません！</red>"
   unknown: "<yellow>使い方: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|language|achievements></yellow>"
@@ -26,7 +23,7 @@ command:
     <gray>/nekoyume gui</gray> - 猫パネルを開く
     <gray>/nekoyume skill</gray> - スキルパネルを開く
     <gray>/nekoyume tool</gray> - 猫じゃらしを受け取る
-    <gray>/nekoyume language &lt;auto|zh_cn|en_us|ja_jp&gt;</gray> - 言語を設定
+    <gray>/nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp&gt;</gray> - 言語を設定
     <gray>/nekoyume achievements</gray> - 実績の殿堂を見る
     <gray>/nekoyume help</gray> - ヘルプを表示
   claim:
@@ -60,16 +57,13 @@ command:
     received: "<gradient:#ff9de2:#a78bfa>🐱 猫じゃらしを手に入れました！右クリックで使えます！</gradient>"
     inventory-full: "<yellow>🐱 インベントリがいっぱいなので、猫じゃらしは足元に落ちました。</yellow>"
   language:
-    usage: "<yellow>使い方: /nekoyume language <auto|zh_cn|en_us|ja_jp></yellow>"
+    usage: "<yellow>使い方: /nekoyume language <auto|zh_cn|zh_tw|en_us|ja_jp></yellow>"
     set: "<gradient:#ff9de2:#a78bfa>🐱 プラグインの言語を</gradient>{0}に設定しました！"
     reset: "<gradient:#ff9de2:#a78bfa>🐱 プラグインの言語がMinecraftの言語設定に従うようになりました。</gradient>"
     unknown: "<red>❌ 不明な言語: {0}</red>"
   achievements:
     disabled: "<red>🏆 実績システムは無効になっています。</red>"
 
-#
-# ---------- 管理コマンド ----------
-#
 admin:
   no-permission: "<red>❌ このコマンドを実行する権限がありません！</red>"
   usage: "<yellow>使い方: /nekoyumeadmin <meowdan|cat|skill|mumanight|reload></yellow>"
@@ -102,9 +96,6 @@ admin:
   mumanight-off: "<gold>✔ 夢魔の夜を無効にしました。</gold>"
   mumanight-usage: "<yellow>使い方: /nekoyumeadmin mumanight <on|off></yellow>"
 
-#
-# ---------- ごはん ----------
-#
 feed:
   full: "<yellow>🐱 猫はもうお腹いっぱいです！</yellow>"
   ate-food: "<light_purple>🐱 </light_purple>{0}は<yellow>{1}</yellow>を食べました！"
@@ -119,9 +110,6 @@ feed:
   not-your-cat: "<red>🐱 これはあなたの猫ではありません。</red>"
   meowdan-expired: "<red>🐱 このニャンダンは期限切れで、もう使えません。</red>"
 
-#
-# ---------- なでる ----------
-#
 pet:
   limit-reached: "<yellow>🐱 今日はもう猫を{0}回なでました！</yellow>"
   petted: "<light_purple>🐱 </light_purple>{0}<white>があなたにすり寄りました！</white>"
@@ -129,9 +117,6 @@ pet:
   affection-max: "<red>❤ 好感度 <gray>は既に最大です ({0}/100)</gray>"
   progress: "<yellow>🐾 今日なでた回数：{0}/{1} <gray>| 残り{2}回</gray>"
 
-#
-# ---------- 成長 ----------
-#
 progression:
   level-up: "<gradient:#fde68a:#f59e0b>🎉 </gradient>{0}は<yellow>レベル{1}</yellow>に上がりました！"
   meow-power: "<gradient:#c4b5fd:#a78bfa>✨ ニャン光がひらめいた！</gradient>{0}は<light_purple>ニャン力{1}ポイント</light_purple>を獲得しました！"
@@ -142,16 +127,10 @@ progression:
   refresh-charge-fail: "<red>❌ {0}の消費に失敗しました。</red>"
   refresh-done: "<gradient:#c4b5fd:#a78bfa>✨ スキルスロットを更新しました：</gradient>{0} → {1}"
 
-#
-# ---------- プレゼント ----------
-#
 gift:
   received: "<gradient:#fde68a:#f59e0b>🎁 </gradient>{0}がプレゼントをくわえてきて、インベントリに入れてくれました！"
   content: "<gray>プレゼント内容: <white>{0} × {1}</white></gray>"
 
-#
-# ---------- スキル ----------
-#
 skill:
   missing: "<red>🐱 あなたの猫はこのスキルを持っていません。</red>"
   recovering: "<red>🐱 猫がケガをしていて、今はスキルを使えません。</red>"
@@ -164,15 +143,9 @@ skill:
   effect-starfall: "<gradient:#fde68a:#f59e0b>⭐ 「星墜とし」が放たれ、星々が降り注ぎます！</gradient>"
   effect-time-echo: "<gradient:#c4b5fd:#f59e0b>⏳ 「時のこだま」が発動し、二人のために時が巻き戻ります。</gradient>"
 
-#
-# ---------- 戦闘 ----------
-#
 battle:
   recovering: "<red>🐱 </red>{0}はケガをしてしまい、<red>{1}秒間</red>動けません…"
 
-#
-# ---------- エンティティ ----------
-#
 entity:
   summoning: "<yellow>🐱 猫を探しています。少しお待ちください！</yellow>"
   summon-error: "<red>🐱 猫の召喚中にエラーが発生しました。サーバーログを確認してください。</red>"
@@ -180,26 +153,17 @@ entity:
   chunk-fail: "<red>🐱 目的地のチャンクを読み込めませんでした。しばらくしてからもう一度お試しください。</red>"
   restored-new: "<yellow>🐱 元の猫の実体が見つからなかったため、<gray>同じ姿の猫を復元しました。</gray></yellow>"
 
-#
-# ---------- 夢魔の夜 ----------
-#
 muma:
   night-start-1: "<dark_red><bold>🌑 夢魔の夜が訪れた……</bold></dark_red>"
   night-start-2: "<red>野のモンスターが極めて危険になりました——ただし倒せばニャンダンを落とすかも！</red>"
   dawn: "<gold><bold>☀ 夜明けとともに、夢魔の夜は終わりました。</bold></gold>"
 
-#
-# ---------- 猫じゃらし ----------
-#
 tool:
   wand-name: "§d🐱 猫じゃらし"
   wand-lore: "§7右クリックで猫パネルを開く"
   claim-title: "§d🎉 猫を迎えました！"
   claim-subtitle: "§7§o猫と夢 · Neko n' Yume へようこそ"
 
-#
-# ---------- 入門ガイド ----------
-#
 book:
   title: "§d🐱 猫と夢 入門ガイド"
   author: "Mizuki Chou"
@@ -212,9 +176,6 @@ book:
   page-7: "§l§8🏆 実績\n\n§r§7猫とのふれあいのひとつひとつが\n§7実績を解放するかもしれません。\n§7/nekoyume achievements で\n§7実績の殿堂を開けます。"
   page-8: "§l§d🌙 夢魔の夜\n\n§r§7どんな夜にも訪れるかもしれません。\n§7夢魔の夜のモンスターは遥かに強いですが、\n§7倒せばニャンダンを落とすことがあります。\n§7🐱 冒険を楽しんでください！"
 
-#
-# ---------- 猫パネル（§ プレーン文字列） ----------
-#
 gui:
   title: "🐱 Neko n' Yume"
   close: "§c閉じる"
@@ -241,9 +202,6 @@ gui:
   mode-current: "§7✔ 現在のモード"
   click-passive: "<yellow>「{0}」はパッシブスキルで、自動で発動します。</yellow>"
 
-#
-# ---------- スキルパネル（§ プレーン文字列） ----------
-#
 skill-gui:
   title: "🐱 スキルパネル"
   close: "§c閉じる"
@@ -275,9 +233,6 @@ skill-gui:
   locked-name: "§8ロック中のスキルスロット"
   locked-hint: "§7解放条件:"
 
-#
-# ---------- 実績 ----------
-#
 achievement:
   unlock-title: "§e🏆 実績解放！"
   unlock-subtitle: "§6§l{0}"
@@ -302,9 +257,6 @@ achievement-gui:
   reward-meow: "+{0} ニャン力"
   reward-both: "+{0} 経験値, +{1} ニャン力"
 
-#
-# ---------- 列挙名のローカライズ（0.7.1） ----------
-#
 achievement-name.first-claim: "運命の出会い"
 achievement-desc.first-claim: "初めての猫を迎える"
 achievement-name.companion-days-3: "三日の約束"
@@ -439,3 +391,6 @@ checkpoint.hint-3: "ニャンランク30・レベル60"
 checkpoint.unknown: "不明"
 entity.name-normal: "§d🐱 {0} {1}"
 entity.name-recovering: "§c❤ {0}はケガ中・あと{1}秒で回復"
+
+cost.meow-power: "ニャン力"
+cost.player-points: "ポイント"

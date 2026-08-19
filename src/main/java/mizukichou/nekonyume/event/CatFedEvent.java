@@ -25,25 +25,9 @@ public class CatFedEvent extends Event {
     private final Player player;
     private final Cat cat;
     private final ItemStack item;
-
-    /*
-     * 本次实际增加的饱食度。
-     */
     private final int hungerGain;
-
-    /*
-     * 本次实际增加的好感度。
-     */
     private final int affectionGain;
-
-    /*
-     * 本次获得的经验。
-     */
     private final int xpGain;
-
-    /*
-     * 本次获得的喵力（0 或 1）。
-     */
     private final int meowGain;
 
     public CatFedEvent(
@@ -65,6 +49,18 @@ public class CatFedEvent extends Event {
         this.meowGain = meowGain;
     }
 
+    /**
+     * 本次实际增加的饱食度。
+     */
+    /**
+     * 本次实际增加的好感度。
+     */
+    /**
+     * 本次获得的经验。
+     */
+    /**
+     * 本次获得的喵力（0 或 1）。
+     */
     @Override
     public HandlerList getHandlers() {
         return handlers;
@@ -74,3 +70,4 @@ public class CatFedEvent extends Event {
         return handlers;
     }
 }
+

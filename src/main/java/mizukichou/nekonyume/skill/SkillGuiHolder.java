@@ -31,3 +31,4 @@ public final class SkillGuiHolder implements InventoryHolder {
         return null;
     }
 }
+

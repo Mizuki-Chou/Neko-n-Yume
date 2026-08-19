@@ -377,6 +377,7 @@ public class SkillGuiManager {
                         "skill-gui.hint-refresh",
                         skillManager
                                 .getRefreshCostDisplay(
+                                        lang.forPlayer(player),
                                         false
                                 )
                 ),
@@ -530,6 +531,7 @@ public class SkillGuiManager {
         String refreshCost =
                 skillManager
                         .getRefreshCostDisplay(
+                                lang.forPlayer(player),
                                 dreamSlot
                         );
 

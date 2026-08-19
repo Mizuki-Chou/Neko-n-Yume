@@ -26,7 +26,7 @@ command:
     <gray>/nekoyume gui</gray> - 打开猫咪面板
     <gray>/nekoyume skill</gray> - 打开技能面板
     <gray>/nekoyume tool</gray> - 领取快捷逗猫棒
-    <gray>/nekoyume language &lt;auto|zh_cn|en_us|ja_jp&gt;</gray> - 设置插件语言
+    <gray>/nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp&gt;</gray> - 设置插件语言
     <gray>/nekoyume achievements</gray> - 查看成就殿堂
     <gray>/nekoyume help</gray> - 显示帮助
 
@@ -67,7 +67,7 @@ command:
     inventory-full: "<yellow>🐱 背包已满，逗猫棒掉在了你的脚边。</yellow>"
 
   language:
-    usage: "<yellow>用法: /nekoyume language <auto|zh_cn|en_us|ja_jp></yellow>"
+    usage: "<yellow>用法: /nekoyume language <auto|zh_cn|zh_tw|en_us|ja_jp></yellow>"
     set: "<gradient:#ff9de2:#a78bfa>🐱 插件语言已切换为 </gradient>{0}！"
     reset: "<gradient:#ff9de2:#a78bfa>🐱 插件语言现在跟随你的 Minecraft 语言设置。</gradient>"
     unknown: "<red>❌ 未知语言: {0}</red>"
@@ -451,3 +451,5 @@ checkpoint.hint-3: "喵阶 30 且等级 60"
 checkpoint.unknown: "未知"
 entity.name-normal: "§d🐱 {0} {1}"
 entity.name-recovering: "§c❤ {0} 受伤了 · {1}s 后恢复"
+cost.meow-power: "喵力"
+cost.player-points: "点券"

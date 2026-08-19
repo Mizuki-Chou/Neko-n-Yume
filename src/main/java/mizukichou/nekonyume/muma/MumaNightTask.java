@@ -25,3 +25,4 @@ public class MumaNightTask implements Runnable {
         manager.tick();
     }
 }
+

@@ -1,3 +1,4 @@
+# 语言（lang/zh_cn.yml 为简体中文；可为其他语言添加 lang/<code>.yml）
 language: zh_cn
 
 join-message:
@@ -200,7 +201,7 @@ gift:
         amount: 1
         weight: 6
 
-# 成就（0.6.3）
+# 成就（0.7.0）
 #
 # 进度持久化于 players.yml（data-version v5），
 # 重启不丢进度。
@@ -320,3 +321,4 @@ muma-night:
   health-multiplier: 4.0
   damage-multiplier: 2.5
   meowdan-drop-chance: 0.15
+

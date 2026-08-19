@@ -398,6 +398,7 @@ public class CatProgressionService {
                     lang.forPlayer(player).message(
                             "progression.refresh-cant-afford",
                             skillManager.getRefreshCostDisplay(
+                                    lang.forPlayer(player),
                                     dreamSlot
                             )
                     )
@@ -444,7 +445,9 @@ public class CatProgressionService {
             player.sendMessage(
                     lang.forPlayer(player).message(
                             "progression.refresh-charge-fail",
-                            provider.getDisplayName()
+                            lang.forPlayer(player).text(
+                                    skillManager.costDisplayKey()
+                            )
                     )
             );
 

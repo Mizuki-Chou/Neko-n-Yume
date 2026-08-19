@@ -1062,7 +1062,7 @@ public class YamlCatStore extends AbstractCatStore {
     }
 
     /*
-     * v4 → v5（0.6.3）：
+     * v4 → v5（0.7.0）：
      * 成就系统字段。
      *
      * achievements-unlocked / achievements-progress
@@ -1155,3 +1155,4 @@ public class YamlCatStore extends AbstractCatStore {
         return playerPath(playerUUID) + ".cat";
     }
 }
+

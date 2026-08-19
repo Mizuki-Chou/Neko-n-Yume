@@ -30,7 +30,6 @@ import java.util.UUID;
  *
  * <p>
  * 0.7.0：配置改走 ConfigManager 快照；文案改走 Lang（pet.* 节）。
- * 0.7.1：消息按玩家客户端语言解析。
  * </p>
  */
 public class CatInteractionListener implements Listener {

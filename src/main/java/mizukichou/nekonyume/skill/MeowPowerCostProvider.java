@@ -82,3 +82,4 @@ public class MeowPowerCostProvider implements SkillRefreshCostProvider {
         return true;
     }
 }
+

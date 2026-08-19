@@ -61,3 +61,4 @@ public enum CatBehaviorMode {
         return FOLLOW;
     }
 }
+

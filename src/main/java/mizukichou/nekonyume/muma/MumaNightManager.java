@@ -37,7 +37,6 @@ import java.util.logging.Logger;
  * 0.6.2：监守者与 Boss 不强化；
  * 掉落分布 80/16/3/1/0。
  * 0.7.0：配置改走 ConfigManager 快照；广播文案改走 Lang。
- * 0.7.1：广播按每个玩家的客户端语言分流。
  * </p>
  */
 public class MumaNightManager {

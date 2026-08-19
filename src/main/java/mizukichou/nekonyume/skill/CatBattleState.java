@@ -645,3 +645,4 @@ public class CatBattleState {
                 .retainAll(owners);
     }
 }
+

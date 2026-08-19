@@ -39,3 +39,4 @@ public interface SkillRefreshCostProvider {
             int cost
     );
 }
+

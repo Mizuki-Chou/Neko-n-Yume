@@ -28,13 +28,6 @@ import java.util.logging.Logger;
  * 替换发生在解析后，因此参数中的任何
  * MiniMessage 标签字符都只会显示为纯文本。
  * </p>
- *
- * <p>
- * 0.7.1：类与方法改为 public，
- * 供其他包通过 Lang.forPlayer / forSender 直接使用。
- * 加载统一走 loadFromString（实例方法），
- * 规避 Reader 重载在新版 YAML 实现下的兼容问题。
- * </p>
  */
 public final class LangMessages {
 
@@ -311,23 +304,85 @@ public final class LangMessages {
             return key;
         }
 
-        String result =
-                template;
-
-        for (int i = 0;
-             i < args.length;
-             i++) {
-
-            result =
-                    result.replace(
-                            "{" + i + "}",
-                            args[i] == null
-                                    ? ""
-                                    : args[i]
-                    );
+        if (args.length == 0) {
+            return template;
         }
 
-        return result;
+        /*
+         * 单遍扫描替换：
+         * 只扫描模板中的 {n}，参数值不再被二次扫描，
+         * 避免参数值本身含 {1} 时被后续轮次串改。
+         */
+        StringBuilder builder =
+                new StringBuilder(
+                        template.length() + 16
+                );
+
+        int start = 0;
+
+        int i = 0;
+
+        while (i < template.length()) {
+
+            char current =
+                    template.charAt(i);
+
+            if (current == '{') {
+
+                int end =
+                        template.indexOf(
+                                '}',
+                                i + 1
+                        );
+
+                if (end > i + 1 &&
+                        isDigits(
+                                template.substring(
+                                        i + 1,
+                                        end
+                                )
+                        )) {
+
+                    int index =
+                            Integer.parseInt(
+                                    template.substring(
+                                            i + 1,
+                                            end
+                                    )
+                            );
+
+                    builder.append(
+                            template,
+                            start,
+                            i
+                    );
+
+                    builder.append(
+                            index < args.length
+                                    ? args[index] == null
+                                    ? ""
+                                    : args[index]
+                                    : ""
+                    );
+
+                    i = end + 1;
+
+                    start = i;
+
+                    continue;
+                }
+            }
+
+            i++;
+        }
+
+        builder.append(
+                template,
+                start,
+                template.length()
+        );
+
+        return builder.toString();
     }
 
     public List<String> textList(
@@ -433,12 +488,12 @@ public final class LangMessages {
         );
 
         return Component.text(
-                ""
-        ).style(
-                text.style()
-        ).children(
-                finalChildren
-        );
+                        ""
+                ).style(
+                        text.style()
+                ).children(
+                        finalChildren
+                );
     }
 
     /*

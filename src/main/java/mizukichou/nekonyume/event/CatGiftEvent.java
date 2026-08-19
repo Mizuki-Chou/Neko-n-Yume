@@ -62,3 +62,4 @@ public class CatGiftEvent extends Event {
         return handlers;
     }
 }
+

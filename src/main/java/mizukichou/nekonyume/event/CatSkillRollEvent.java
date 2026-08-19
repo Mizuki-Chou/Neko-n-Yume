@@ -66,3 +66,4 @@ public class CatSkillRollEvent extends Event {
         return handlers;
     }
 }
+

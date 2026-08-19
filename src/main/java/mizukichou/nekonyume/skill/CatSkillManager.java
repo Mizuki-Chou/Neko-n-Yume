@@ -7,6 +7,7 @@ import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.event.CatSkillActivatedEvent;
 import mizukichou.nekonyume.lang.Lang;
+import mizukichou.nekonyume.lang.LangMessages;
 import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.Bukkit;
 import org.bukkit.Particle;
@@ -39,7 +40,6 @@ import java.util.logging.Logger;
  * <p>
  * 受伤恢复期内禁止施放任何主动技能。
  * 0.7.0：配置改走 ConfigManager 快照；文案改走 Lang。
- * 0.7.1：消息按玩家客户端语言解析。
  * </p>
  */
 public class CatSkillManager {
@@ -148,13 +148,32 @@ public class CatSkillManager {
         return base;
     }
 
+    /*
+     * 刷新消耗展示（含单位，按玩家语言）。
+     * 0.7.1：消耗类型名走语言键
+     * （cost.meow-power / cost.player-points）。
+     */
     public String getRefreshCostDisplay(
+            LangMessages messages,
             boolean dreamSlot
     ) {
 
         return getRefreshCost(dreamSlot)
                 + " "
-                + refreshCostProvider.getDisplayName();
+                + messages.text(
+                        costDisplayKey()
+                );
+    }
+
+    public String costDisplayKey() {
+
+        return "player-points".equalsIgnoreCase(
+                configManager.snapshot()
+                        .getSkills()
+                        .getRefreshCostType()
+        )
+                ? "cost.player-points"
+                : "cost.meow-power";
     }
 
     /*

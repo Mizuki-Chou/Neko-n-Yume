@@ -1706,3 +1706,4 @@ public abstract class AbstractCatStore implements CatStore {
         );
     }
 }
+

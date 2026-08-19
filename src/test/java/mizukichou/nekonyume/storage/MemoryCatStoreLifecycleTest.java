@@ -49,7 +49,6 @@ class MemoryCatStoreLifecycleTest {
                         )
         );
         assertEquals(1, store.getCatLevel(player));
-
         assertEquals(50, store.getCatAffection(player));
         assertEquals(100, store.getCatHunger(player));
         assertEquals(100, store.getCatHealth(player));
@@ -251,7 +250,7 @@ class MemoryCatStoreLifecycleTest {
 
     /*
      * ============================================================
-     * 成就（0.6.3）
+     * 成就（0.7.0）
      * ============================================================
      */
 
@@ -351,3 +350,4 @@ class MemoryCatStoreLifecycleTest {
         );
     }
 }
+

@@ -95,3 +95,4 @@ class CatSkillsTest {
         assertEquals(2, skills.size());
     }
 }
+

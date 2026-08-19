@@ -5,7 +5,6 @@ import net.kyori.adventure.text.TextComponent;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
-import java.io.StringReader;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -50,8 +49,6 @@ class LangMessagesTest {
                 logger
         );
     }
-
-
 
     @Test
     void simpleMessageWithoutArgs() {
@@ -243,6 +240,24 @@ class LangMessagesTest {
     }
 
     @Test
+    void textArgsAreNotRescanned() {
+
+        LangMessages messages =
+                messages(
+                        "pair: \"{0} / {1}\""
+                );
+
+        assertEquals(
+                "{1} / 999",
+                messages.text(
+                        "pair",
+                        "{1}",
+                        "999"
+                )
+        );
+    }
+
+    @Test
     void textListReturnsEntries() {
 
         LangMessages messages =
@@ -255,30 +270,6 @@ class LangMessagesTest {
                 messages.textList(
                         "list"
                 )
-        );
-    }
-
-    @Test
-    void rawArgsAreWrappedAsPlainText() {
-
-        LangMessages messages =
-                messages(
-                        "name: \"名字: {0}\""
-                );
-
-        Component result =
-                messages.message(
-                        "name",
-                        "§c带色码的名字"
-                );
-
-        assertEquals(
-                "名字: §c带色码的名字",
-                plain(result)
-        );
-
-        assertTrue(
-                plain(result).contains("§")
         );
     }
 
@@ -350,5 +341,29 @@ class LangMessagesTest {
         }
 
         return null;
+    }
+
+    @Test
+    void rawArgsAreWrappedAsPlainText() {
+
+        LangMessages messages =
+                messages(
+                        "name: \"名字: {0}\""
+                );
+
+        Component result =
+                messages.message(
+                        "name",
+                        "§c带色码的名字"
+                );
+
+        assertEquals(
+                "名字: §c带色码的名字",
+                plain(result)
+        );
+
+        assertTrue(
+                plain(result).contains("§")
+        );
     }
 }

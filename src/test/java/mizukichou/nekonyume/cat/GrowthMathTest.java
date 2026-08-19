@@ -83,3 +83,4 @@ class GrowthMathTest {
         assertEquals(1, cat.getMeowRank());
     }
 }
+

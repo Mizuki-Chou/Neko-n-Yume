@@ -138,11 +138,8 @@ public class NekoYumeCommand
             /*
              * 获取猫咪名字
              *
-             * 建档时从名字池随机抽取
-             * （Marisa / Eleven / Undecim / Mikan /
-             *   Sora / Nikki / Orange / Lemon）
+             * 新猫默认是 Mikan
              */
-
             String name =
                     store.getCatName(
                             player.getUniqueId()
@@ -643,7 +640,7 @@ public class NekoYumeCommand
 
             switch (code) {
 
-                case "auto", "zh_cn", "en_us", "ja_jp" -> {
+                case "auto", "zh_cn", "zh_tw", "en_us", "ja_jp" -> {
                 }
 
                 default -> {
@@ -998,6 +995,7 @@ public class NekoYumeCommand
                     args[1],
                     "auto",
                     "zh_cn",
+                    "zh_tw",
                     "en_us",
                     "ja_jp"
             );

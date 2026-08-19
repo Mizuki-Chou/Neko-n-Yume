@@ -659,6 +659,7 @@ public final class NekoNYume extends JavaPlugin {
                         catGuiManager,
                         catStore,
                         catEntityService,
+                        achievementService,
                         toolKey,
                         lang
                 ),

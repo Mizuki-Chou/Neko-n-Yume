@@ -50,7 +50,6 @@ class ConfigLoaderTest {
         );
     }
 
-
     @Test
     void defaultsFillMissingSections() {
 

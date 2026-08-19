@@ -25,3 +25,4 @@ permissions:
   nekoyume.admin:
     description: Neko n' Yume administrator permission
     default: op
+

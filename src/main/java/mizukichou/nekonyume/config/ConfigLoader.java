@@ -24,15 +24,6 @@ import java.util.logging.Logger;
  * 管理员写错配置不会让插件崩溃。
  * 本类不持有任何状态，可单元测试。
  * </p>
- *
- * <p>
- * 注意：材质名解析使用 matchMaterialSafe（枚举遍历）、
- * 空气判定使用 isAir（枚举常量比较），
- * 而非 Material.matchMaterial / Material.isAir——
- * 后者访问 Bukkit Registry，
- * 在无服务器实例的单元测试中会抛
- * IllegalStateException（No RegistryAccess implementation found）。
- * </p>
  */
 public final class ConfigLoader {
 
@@ -943,10 +934,30 @@ public final class ConfigLoader {
      */
 
     /*
+     * 安全"空气"判定（避免 Registry 依赖）：
+     *
+     * Material.isAir() 内部经 asBlockType() 惰性访问 Registry，
+     * 在没有服务器实例的单元测试中会抛
+     * IllegalStateException（No RegistryAccess implementation found）。
+     * 空气仅三种：AIR / CAVE_AIR / VOID_AIR，
+     * 用枚举常量直接比较即可，纯 JVM 逻辑，
+     * 单元测试与生产环境行为一致。
+     */
+    private static boolean isAir(
+            Material material
+    ) {
+
+        return material == Material.AIR ||
+                material == Material.CAVE_AIR ||
+                material == Material.VOID_AIR;
+    }
+
+    /*
      * 安全材质解析（避免 Registry 依赖）：
      *
      * Material.matchMaterial / getMaterial 内部访问 Bukkit Registry，
-     * 在没有服务器实例的单元测试中会抛 IllegalStateException。
+     * 在没有服务器实例的单元测试中会抛 IllegalStateException
+     * （类初始化失败 → ExceptionInInitializerError / NoClassDefFoundError）。
      * 这里改为遍历枚举常量，纯 JVM 逻辑，
      * 单元测试与生产环境行为完全一致。
      */
@@ -971,25 +982,6 @@ public final class ConfigLoader {
         }
 
         return null;
-    }
-
-    /*
-     * 安全"空气"判定（避免 Registry 依赖）：
-     *
-     * Material.isAir() 内部经 asBlockType() 惰性访问 Registry，
-     * 在没有服务器实例的单元测试中会抛
-     * IllegalStateException（No RegistryAccess implementation found）。
-     * 空气仅三种：AIR / CAVE_AIR / VOID_AIR，
-     * 用枚举常量直接比较即可，纯 JVM 逻辑，
-     * 单元测试与生产环境行为一致。
-     */
-    private static boolean isAir(
-            Material material
-    ) {
-
-        return material == Material.AIR ||
-                material == Material.CAVE_AIR ||
-                material == Material.VOID_AIR;
     }
 
     private static String mapString(

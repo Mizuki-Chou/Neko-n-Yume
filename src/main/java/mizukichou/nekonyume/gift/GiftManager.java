@@ -30,8 +30,6 @@ import java.util.UUID;
  * 每天登录后判定一次（由 PlayerJoinListener 延迟调用）。
  * 所有数值与礼物池来自 config.yml 的 gift 节。
  * 0.7.0：配置改走 ConfigManager 快照；文案改走 Lang。
- * 0.7.1：消息按玩家客户端语言解析；
- * 含 § 色码的喵丹名进聊天消息前经 LegacyComponentSerializer 转换。
  * </p>
  */
 public class GiftManager {

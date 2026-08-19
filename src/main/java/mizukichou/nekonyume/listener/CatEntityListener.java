@@ -40,7 +40,6 @@ import java.util.logging.Logger;
  *
  * <p>
  * 0.7.0：配置改走 ConfigManager 快照；文案改走 Lang。
- * 0.7.1：恢复期提示按主人客户端语言解析。
  * </p>
  */
 public class CatEntityListener implements Listener {

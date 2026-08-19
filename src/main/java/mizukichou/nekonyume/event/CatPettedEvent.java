@@ -23,25 +23,9 @@ public class CatPettedEvent extends Event {
 
     private final Player player;
     private final Cat cat;
-
-    /*
-     * 被抚摸的 Bukkit 猫实体。
-     */
     private final org.bukkit.entity.Cat entityCat;
-
-    /*
-     * 本次实际增加的好感度。
-     */
     private final int affectionGain;
-
-    /*
-     * 本次获得的经验。
-     */
     private final int xpGain;
-
-    /*
-     * 本次获得的喵力（0 或 1）。
-     */
     private final int meowGain;
 
     public CatPettedEvent(
@@ -61,6 +45,18 @@ public class CatPettedEvent extends Event {
         this.meowGain = meowGain;
     }
 
+    /**
+     * 被抚摸的 Bukkit 猫实体。
+     */
+    /**
+     * 本次实际增加的好感度。
+     */
+    /**
+     * 本次获得的经验。
+     */
+    /**
+     * 本次获得的喵力（0 或 1）。
+     */
     @Override
     public HandlerList getHandlers() {
         return handlers;
@@ -70,3 +66,4 @@ public class CatPettedEvent extends Event {
         return handlers;
     }
 }
+

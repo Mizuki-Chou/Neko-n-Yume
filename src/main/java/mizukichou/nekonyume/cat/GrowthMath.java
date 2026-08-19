@@ -186,3 +186,4 @@ public final class GrowthMath {
         return rank;
     }
 }
+

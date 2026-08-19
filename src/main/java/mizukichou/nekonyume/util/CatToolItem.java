@@ -17,8 +17,6 @@ import java.util.List;
  * 统一入口：命令发放与工作台合成共用，
  * 保证 PDC 标记与外观完全一致。
  * 0.7.0：物品名与 lore 改走 Lang（tool.wand-name / tool.wand-lore）。
- * 0.7.1：物品文案按接收者语言生成
- * （player 为 null 时使用默认语言，用于配方结果）。
  * </p>
  */
 public final class CatToolItem {

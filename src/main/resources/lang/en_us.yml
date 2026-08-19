@@ -7,9 +7,6 @@
 # Server-side override file: plugins/NekoNYume/lang/en_us.yml
 # Hot-reloaded by /nekoyumeadmin reload.
 
-#
-# ---------- Commands ----------
-#
 command:
   no-cat: "<red>🐱 You don't have a cat yet!</red>"
   unknown: "<yellow>Usage: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|language|achievements></yellow>"
@@ -26,7 +23,7 @@ command:
     <gray>/nekoyume gui</gray> - Open the cat panel
     <gray>/nekoyume skill</gray> - Open the skill panel
     <gray>/nekoyume tool</gray> - Get a quick-access cat wand
-    <gray>/nekoyume language &lt;auto|zh_cn|en_us|ja_jp&gt;</gray> - Set your language
+    <gray>/nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp&gt;</gray> - Set your language
     <gray>/nekoyume achievements</gray> - View the achievement hall
     <gray>/nekoyume help</gray> - Show this help
   claim:
@@ -60,16 +57,13 @@ command:
     received: "<gradient:#ff9de2:#a78bfa>🐱 You received a cat wand. Right-click to use it!</gradient>"
     inventory-full: "<yellow>🐱 Your inventory is full, so the wand dropped at your feet.</yellow>"
   language:
-    usage: "<yellow>Usage: /nekoyume language <auto|zh_cn|en_us|ja_jp></yellow>"
+    usage: "<yellow>Usage: /nekoyume language <auto|zh_cn|zh_tw|en_us|ja_jp></yellow>"
     set: "<gradient:#ff9de2:#a78bfa>🐱 Plugin language set to </gradient>{0}!"
     reset: "<gradient:#ff9de2:#a78bfa>🐱 Plugin language will now follow your Minecraft language.</gradient>"
     unknown: "<red>❌ Unknown language: {0}</red>"
   achievements:
     disabled: "<red>🏆 The achievement system is disabled.</red>"
 
-#
-# ---------- Admin commands ----------
-#
 admin:
   no-permission: "<red>❌ You don't have permission to run this command!</red>"
   usage: "<yellow>Usage: /nekoyumeadmin <meowdan|cat|skill|mumanight|reload></yellow>"
@@ -102,9 +96,6 @@ admin:
   mumanight-off: "<gold>✔ Muma's Night disabled.</gold>"
   mumanight-usage: "<yellow>Usage: /nekoyumeadmin mumanight <on|off></yellow>"
 
-#
-# ---------- Feeding ----------
-#
 feed:
   full: "<yellow>🐱 Your cat is already full!</yellow>"
   ate-food: "<light_purple>🐱 </light_purple>{0} ate <yellow>{1}</yellow>!"
@@ -119,9 +110,6 @@ feed:
   not-your-cat: "<red>🐱 This isn't your cat.</red>"
   meowdan-expired: "<red>🐱 This meow dan has expired and can no longer be used.</red>"
 
-#
-# ---------- Petting ----------
-#
 pet:
   limit-reached: "<yellow>🐱 You've already petted your cat {0} times today!</yellow>"
   petted: "<light_purple>🐱 </light_purple>{0}<white> nuzzled you!</white>"
@@ -129,9 +117,6 @@ pet:
   affection-max: "<red>❤ Affection <gray>is already at maximum ({0}/100)</gray>"
   progress: "<yellow>🐾 Pets today: {0}/{1} <gray>| {2} remaining</gray>"
 
-#
-# ---------- Progression ----------
-#
 progression:
   level-up: "<gradient:#fde68a:#f59e0b>🎉 </gradient>{0} reached <yellow>level {1}</yellow>!"
   meow-power: "<gradient:#c4b5fd:#a78bfa>✨ Meow flash!</gradient>{0} gained <light_purple>{1} meow power</light_purple>!"
@@ -142,16 +127,10 @@ progression:
   refresh-charge-fail: "<red>❌ Failed to deduct {0}.</red>"
   refresh-done: "<gradient:#c4b5fd:#a78bfa>✨ Skill slot refreshed: </gradient>{0} → {1}"
 
-#
-# ---------- Gifts ----------
-#
 gift:
   received: "<gradient:#fde68a:#f59e0b>🎁 </gradient>{0} brought you a gift and put it in your inventory!"
   content: "<gray>Gift contents: <white>{0} × {1}</white></gray>"
 
-#
-# ---------- Skills ----------
-#
 skill:
   missing: "<red>🐱 Your cat doesn't have this skill.</red>"
   recovering: "<red>🐱 Your cat is injured and can't use skills right now.</red>"
@@ -164,15 +143,9 @@ skill:
   effect-starfall: "<gradient:#fde68a:#f59e0b>⭐ 「Starfall」 unleashed — the stars come crashing down!</gradient>"
   effect-time-echo: "<gradient:#c4b5fd:#f59e0b>⏳ 「Time Echo」 triggered — time flows backward for you both.</gradient>"
 
-#
-# ---------- Battle ----------
-#
 battle:
   recovering: "<red>🐱 </red>{0} is injured and can't move for <red>{1} seconds</red>…"
 
-#
-# ---------- Entities ----------
-#
 entity:
   summoning: "<yellow>🐱 Looking for your cat, please wait a moment!</yellow>"
   summon-error: "<red>🐱 Something went wrong while summoning your cat. Please check the server log.</red>"
@@ -180,26 +153,17 @@ entity:
   chunk-fail: "<red>🐱 Failed to load your cat's destination chunk. Please try again later.</red>"
   restored-new: "<yellow>🐱 The original cat entity was nowhere to be found, <gray>so an identical cat has been restored.</gray></yellow>"
 
-#
-# ---------- Muma's Night ----------
-#
 muma:
   night-start-1: "<dark_red><bold>🌑 The Muma's Night has descended…</bold></dark_red>"
   night-start-2: "<red>Monsters in the wild have become extremely dangerous — but slaying them may drop Meow Dans!</red>"
   dawn: "<gold><bold>☀ Dawn breaks, and the Muma's Night comes to an end.</bold></gold>"
 
-#
-# ---------- Cat wand ----------
-#
 tool:
   wand-name: "§d🐱 Cat Wand"
   wand-lore: "§7Right-click to open the cat panel"
   claim-title: "§d🎉 You got a cat!"
   claim-subtitle: "§7§oWelcome to Neko n' Yume · Cat & Dream"
 
-#
-# ---------- Beginner's book ----------
-#
 book:
   title: "§d🐱 Neko n' Yume Beginner's Guide"
   author: "Mizuki Chou"
@@ -212,9 +176,6 @@ book:
   page-7: "§l§8🏆 Achievements\n\n§r§7Every interaction with your cat\n§7may unlock achievements.\n§7Type /nekoyume achievements\n§7to open the achievement hall."
   page-8: "§l§d🌙 Muma's Night\n\n§r§7It may descend on any night.\n§7During Muma's Night monsters are far stronger,\n§7but slaying them can drop Meow Dans.\n§7🐱 Good luck on your adventures!"
 
-#
-# ---------- Cat panel (§ plain strings) ----------
-#
 gui:
   title: "🐱 Neko n' Yume"
   close: "§cClose"
@@ -241,9 +202,6 @@ gui:
   mode-current: "§7✔ Current mode"
   click-passive: "<yellow>「{0}」 is a passive skill and works automatically.</yellow>"
 
-#
-# ---------- Skill panel (§ plain strings) ----------
-#
 skill-gui:
   title: "🐱 Skill Panel"
   close: "§cClose"
@@ -275,9 +233,6 @@ skill-gui:
   locked-name: "§8Locked skill slot"
   locked-hint: "§7Unlock condition:"
 
-#
-# ---------- Achievements ----------
-#
 achievement:
   unlock-title: "§e🏆 Achievement Unlocked!"
   unlock-subtitle: "§6§l{0}"
@@ -302,9 +257,6 @@ achievement-gui:
   reward-meow: "+{0} Meow Power"
   reward-both: "+{0} EXP, +{1} Meow Power"
 
-#
-# ---------- Enum name localization (0.7.1) ----------
-#
 achievement-name.first-claim: "Fated Meeting"
 achievement-desc.first-claim: "Claim your first cat"
 achievement-name.companion-days-3: "Three-Day Promise"
@@ -439,3 +391,6 @@ checkpoint.hint-3: "Meow rank 30 & level 60"
 checkpoint.unknown: "Unknown"
 entity.name-normal: "§d🐱 {0} {1}"
 entity.name-recovering: "§c❤ {0} is injured · recovers in {1}s"
+
+cost.meow-power: "Meow Power"
+cost.player-points: "points"

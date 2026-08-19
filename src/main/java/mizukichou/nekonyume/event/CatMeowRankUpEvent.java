@@ -48,3 +48,4 @@ public class CatMeowRankUpEvent extends Event {
         return handlers;
     }
 }
+

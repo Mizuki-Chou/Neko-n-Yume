@@ -730,3 +730,4 @@ public class CatCache {
         logicalCat.setSkills(skills);
     }
 }
+

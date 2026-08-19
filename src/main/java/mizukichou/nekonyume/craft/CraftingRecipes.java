@@ -32,7 +32,6 @@ import java.util.List;
  * <p>
  * 逗猫棒：1 木棍 + 1 生鳕鱼 → 逗猫棒。
  * 0.7.0：物品外观文案统一走 Lang。
- * 0.7.1：配方占位物品使用默认语言（无玩家上下文）。
  * </p>
  */
 public class CraftingRecipes {

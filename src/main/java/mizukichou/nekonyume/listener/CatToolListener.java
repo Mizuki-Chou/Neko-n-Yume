@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.listener;
 
+import mizukichou.nekonyume.achievement.AchievementService;
 import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.gui.CatGuiManager;
 import mizukichou.nekonyume.lang.Lang;
@@ -36,7 +37,6 @@ import java.util.Map;
  *
  * <p>
  * 0.7.0：title 与入门书文案改走 Lang（tool.* 与 book.* 节）。
- * 0.7.1：title 与入门书按玩家客户端语言生成。
  * </p>
  */
 public class CatToolListener implements Listener {
@@ -44,6 +44,7 @@ public class CatToolListener implements Listener {
     private final CatGuiManager guiManager;
     private final CatStore store;
     private final CatEntityService entityService;
+    private final AchievementService achievementService;
     private final Lang lang;
 
     private final NamespacedKey toolKey;
@@ -52,6 +53,7 @@ public class CatToolListener implements Listener {
             CatGuiManager guiManager,
             CatStore store,
             CatEntityService entityService,
+            AchievementService achievementService,
             NamespacedKey toolKey,
             Lang lang
     ) {
@@ -59,6 +61,7 @@ public class CatToolListener implements Listener {
         this.guiManager = guiManager;
         this.store = store;
         this.entityService = entityService;
+        this.achievementService = achievementService;
         this.toolKey = toolKey;
         this.lang = lang;
     }
@@ -163,6 +166,14 @@ public class CatToolListener implements Listener {
                     player.getUniqueId()
             );
 
+            /*
+             * 成就：领取动作立即判定「相遇即是缘」
+             * （与 /nekoyume claim 路径一致）。
+             */
+            achievementService.checkAll(
+                    player
+            );
+
             String name =
                     store.getCatName(
                             player.getUniqueId()
@@ -223,7 +234,7 @@ public class CatToolListener implements Listener {
      *
      * 文字面向玩家：活泼、口语化、零技术词汇。
      * 背包放不下时自动掉落在脚边。
-     * 页面内容来自 lang 的 book.page.1 ~ 8。
+     * 页面内容来自 lang/zh_cn.yml 的 book.page.1 ~ 8。
      */
 
     private void giveTutorialBook(
@@ -264,7 +275,7 @@ public class CatToolListener implements Listener {
 
             pages.add(
                     lang.forPlayer(player).text(
-                            "book.page-" + page
+                            "book.page." + page
                     )
             );
         }

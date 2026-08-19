@@ -18,7 +18,6 @@ import org.bukkit.persistence.PersistentDataType;
  *
  * <p>
  * 0.7.0：文案改走 Lang（feed.not-your-cat / feed.meowdan-expired）。
- * 0.7.1：消息按玩家客户端语言解析。
  * </p>
  */
 public class CatFoodListener implements Listener {

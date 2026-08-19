@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>
  * 覆盖：
- * 重启往返 / v1→v5 迁移 / 损坏 fail-fast 不覆盖 /
+ * 重启往返 / v1→v4 迁移 / 损坏 fail-fast 不覆盖 /
  * 备份修剪 / 残留 tmp 清理 / 空文件处理 /
  * 删除持久化 / 读不建档 / future-version 拒启。
  * </p>
@@ -111,7 +111,7 @@ class YamlCatStoreLifecycleTest {
         store.markGiftChecked(player);
 
         /*
-         * 成就（0.6.3）。
+         * 成就（0.7.0）。
          */
         store.addAchievementUnlocked(player, "FIRST_CLAIM");
         store.addAchievementUnlocked(player, "FIRST_CLAIM");
@@ -384,7 +384,6 @@ class YamlCatStoreLifecycleTest {
 
     @Test
     void futureVersionFailsFastAndKeepsOriginal() throws IOException {
-
         String content = """
                 data-version: 99
                 players:
