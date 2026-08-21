@@ -2,12 +2,18 @@ package mizukichou.nekonyume.task;
 
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatEquipItem;
 import mizukichou.nekonyume.cat.CatPersonality;
+import mizukichou.nekonyume.cat.EquipBonusAttribute;
 import mizukichou.nekonyume.config.ConfigManager;
+import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -58,6 +64,15 @@ public class CatHungerTask implements Runnable {
     private final CatStore store;
     private final CatCache cache;
 
+    /*
+     * 羁绊纪元（0.8.0）：饥饿好感衰减节流表（玩家 UUID → 上次扣减时间）。
+     * 与饥饿 tick 解耦：旧实现每 5 分钟扣一次，日喂两次仍好感净亏损；
+     * 现按 care.hunger-affection-loss-minutes 节流，与喂食节奏对齐。
+     * 纯节奏状态，重启丢失无影响；每轮 run 按现存玩家收敛。
+     */
+    private final Map<UUID, Long> lastStarveLossAt =
+            new HashMap<>();
+
     public CatHungerTask(
             ConfigManager configManager,
             CatStore store,
@@ -81,12 +96,19 @@ public class CatHungerTask implements Runnable {
                         .getIntervalMillis();
 
         /*
+         * 一次性取玩家集合：循环与节流表收敛共用，
+         * 避免每轮两次全量键遍历。
+         */
+        Set<UUID> players =
+                store.getCatPlayers();
+
+        /*
          * ========================================================
          * 遍历所有拥有猫咪的玩家
          * ========================================================
          */
         for (UUID playerUUID :
-                store.getCatPlayers()) {
+                players) {
 
             /*
              * ====================================================
@@ -136,6 +158,15 @@ public class CatHungerTask implements Runnable {
                 );
             }
         }
+
+        /*
+         * 收敛节流表：只保留仍有猫数据的玩家，
+         * 防止长时间运行后表无限增长。
+         */
+        lastStarveLossAt.keySet()
+                .retainAll(
+                        players
+                );
     }
 
     /*
@@ -163,12 +194,52 @@ public class CatHungerTask implements Runnable {
             return;
         }
 
+        /*
+         * 羁绊纪元（0.8.0）：日常衰减与饥饿结算相互独立。
+         */
+        applyDailyDecayOnline(
+                cat,
+                playerUUID
+        );
+
         long effectiveInterval =
                 effectiveInterval(
                         cat.getPersonality()
                                 .getHungerRate(),
                         baseInterval
                 );
+
+        /*
+         * 装备（0.8.0）：围巾的饥饿衰减减缓。
+         */
+        CatEquipItem equip =
+                cat.getEquippedItem();
+
+        if (equip != null &&
+                equip.getHungerSlowPercent() > 0) {
+
+            effectiveInterval =
+                    applyHungerSlow(
+                            effectiveInterval,
+                            equip.getHungerSlowPercent()
+                    );
+        }
+
+        /*
+         * 附加属性（0.8.0）：暖炉的饥饿衰减减缓。
+         */
+        EquipBonusAttribute equipBonus =
+                cat.getEquippedBonus();
+
+        if (equipBonus != null &&
+                equipBonus.getHungerSlowPercent() > 0) {
+
+            effectiveInterval =
+                    applyHungerSlow(
+                            effectiveInterval,
+                            equipBonus.getHungerSlowPercent()
+                    );
+        }
 
         long elapsed =
                 now - lastUpdate;
@@ -213,7 +284,9 @@ public class CatHungerTask implements Runnable {
         );
 
         int affectionLoss =
-                affectionLoss(
+                pacedAffectionLoss(
+                        playerUUID,
+                        now,
                         newHunger
                 );
 
@@ -278,6 +351,11 @@ public class CatHungerTask implements Runnable {
             return;
         }
 
+        applyDailyDecayOffline(
+                playerUUID,
+                catId
+        );
+
         double hungerRate =
                 CatPersonality.fromCatId(
                                 catId
@@ -289,6 +367,46 @@ public class CatHungerTask implements Runnable {
                         hungerRate,
                         baseInterval
                 );
+
+        /*
+         * 装备（0.8.0）：围巾的饥饿衰减减缓（离线同样生效）。
+         */
+        CatEquipItem equip =
+                CatEquipItem.fromCode(
+                        store.getCatEquipment(
+                                playerUUID
+                        )
+                );
+
+        if (equip != null &&
+                equip.getHungerSlowPercent() > 0) {
+
+            effectiveInterval =
+                    applyHungerSlow(
+                            effectiveInterval,
+                            equip.getHungerSlowPercent()
+                    );
+        }
+
+        /*
+         * 附加属性（0.8.0）：暖炉的饥饿衰减减缓（离线同样生效）。
+         */
+        EquipBonusAttribute equipBonus =
+                EquipBonusAttribute.fromCode(
+                        store.getCatEquipmentBonus(
+                                playerUUID
+                        )
+                );
+
+        if (equipBonus != null &&
+                equipBonus.getHungerSlowPercent() > 0) {
+
+            effectiveInterval =
+                    applyHungerSlow(
+                            effectiveInterval,
+                            equipBonus.getHungerSlowPercent()
+                    );
+        }
 
         long elapsed =
                 now - lastUpdate;
@@ -334,7 +452,9 @@ public class CatHungerTask implements Runnable {
         );
 
         int affectionLoss =
-                affectionLoss(
+                pacedAffectionLoss(
+                        playerUUID,
+                        now,
                         newHunger
                 );
 
@@ -366,6 +486,202 @@ public class CatHungerTask implements Runnable {
      * ============================================================
      */
 
+    /*
+     * 羁绊纪元（0.8.0）：好感日常衰减。
+     *
+     * 每猫每服务器日只结算一次（离线同样结算）；
+     * 好感已归零时跳过且不写结算日期（维持零写优化）；
+     * 性格化：贪吃 -1 加重、悠闲 -1 减轻，其余走配置默认。
+     */
+
+    private void applyDailyDecayOnline(
+            Cat cat,
+            UUID playerUUID
+    ) {
+
+        ConfigSnapshot.Care care =
+                configManager.snapshot()
+                        .getCare();
+
+        int decay =
+                decayFor(
+                        cat.getPersonality(),
+                        care
+                );
+
+        if (decay <= 0) {
+            return;
+        }
+
+        /*
+         * 装备（0.8.0）：围巾的每日好感衰减减免。
+         */
+        CatEquipItem equip =
+                cat.getEquippedItem();
+
+        if (equip != null &&
+                equip.getAffectionDecayReduce() > 0) {
+
+            decay =
+                    Math.max(
+                            0,
+                            decay
+                                    - equip.getAffectionDecayReduce()
+                    );
+        }
+
+        if (decay <= 0) {
+            return;
+        }
+
+        String today =
+                java.time.LocalDate.now()
+                        .toString();
+
+        if (today.equals(
+                store.getAffectionDecayDate(
+                        playerUUID
+                )
+        )) {
+
+            return;
+        }
+
+        if (cat.getAffection() <= 0) {
+            return;
+        }
+
+        cat.removeAffection(
+                decay
+        );
+
+        store.setCatAffection(
+                playerUUID,
+                cat.getAffection()
+        );
+
+        store.setAffectionDecayDate(
+                playerUUID,
+                today
+        );
+    }
+
+    private void applyDailyDecayOffline(
+            UUID playerUUID,
+            UUID catId
+    ) {
+
+        ConfigSnapshot.Care care =
+                configManager.snapshot()
+                        .getCare();
+
+        int decay =
+                decayFor(
+                        CatPersonality.fromCatId(
+                                catId
+                        ),
+                        care
+                );
+
+        if (decay <= 0) {
+            return;
+        }
+
+        /*
+         * 装备（0.8.0）：围巾的每日好感衰减减免（离线同样生效）。
+         */
+        CatEquipItem equip =
+                CatEquipItem.fromCode(
+                        store.getCatEquipment(
+                                playerUUID
+                        )
+                );
+
+        if (equip != null &&
+                equip.getAffectionDecayReduce() > 0) {
+
+            decay =
+                    Math.max(
+                            0,
+                            decay
+                                    - equip.getAffectionDecayReduce()
+                    );
+        }
+
+        if (decay <= 0) {
+            return;
+        }
+
+        String today =
+                java.time.LocalDate.now()
+                        .toString();
+
+        if (today.equals(
+                store.getAffectionDecayDate(
+                        playerUUID
+                )
+        )) {
+
+            return;
+        }
+
+        int affection =
+                store.getCatAffection(
+                        playerUUID
+                );
+
+        if (affection <= 0) {
+            return;
+        }
+
+        store.setCatAffection(
+                playerUUID,
+                Math.max(
+                        0,
+                        affection - decay
+                )
+        );
+
+        store.setAffectionDecayDate(
+                playerUUID,
+                today
+        );
+    }
+
+    private int decayFor(
+            CatPersonality personality,
+            ConfigSnapshot.Care care
+    ) {
+
+        int base =
+                care.getAffectionDailyDecay();
+
+        if (base <= 0) {
+            return 0;
+        }
+
+        switch (personality) {
+
+            case GOURMAND -> {
+
+                return base + 1;
+            }
+
+            case LAZY -> {
+
+                return Math.max(
+                        1,
+                        base - 1
+                );
+            }
+
+            default -> {
+
+                return base;
+            }
+        }
+    }
+
     private long effectiveInterval(
             double hungerRate,
             long baseInterval
@@ -385,6 +701,49 @@ public class CatHungerTask implements Runnable {
                 : interval;
     }
 
+    /*
+     * 装备（0.8.0）：围巾的饥饿衰减减缓。
+     *
+     * 纯函数（供单测）：间隔按 (1 - slow%/100) 放大；
+     * 防御钳制 slowPercent ∈ [0, 90]，异常输入原样返回。
+     */
+
+    static long applyHungerSlow(
+            long intervalMillis,
+            int slowPercent
+    ) {
+
+        if (intervalMillis <= 0) {
+            return intervalMillis;
+        }
+
+        int clamped =
+                Math.max(
+                        0,
+                        Math.min(
+                                90,
+                                slowPercent
+                        )
+                );
+
+        if (clamped <= 0) {
+            return intervalMillis;
+        }
+
+        double factor =
+                1.0 - clamped / 100.0;
+
+        long slowed =
+                (long) Math.round(
+                        intervalMillis / factor
+                );
+
+        return Math.max(
+                intervalMillis,
+                slowed
+        );
+    }
+
     private int affectionLoss(
             int newHunger
     ) {
@@ -398,5 +757,79 @@ public class CatHungerTask implements Runnable {
         }
 
         return 0;
+    }
+
+    /*
+     * 羁绊纪元（0.8.0）：按配置间隔节流后的饥饿好感衰减。
+     */
+
+    private int pacedAffectionLoss(
+            UUID playerUUID,
+            long now,
+            int newHunger
+    ) {
+
+        int base =
+                affectionLoss(
+                        newHunger
+                );
+
+        if (base <= 0) {
+            return 0;
+        }
+
+        long intervalMillis =
+                configManager.snapshot()
+                        .getCare()
+                        .getHungerAffectionLossMinutes()
+                        * 60_000L;
+
+        if (intervalMillis <= 0) {
+            return 0;
+        }
+
+        Long last =
+                lastStarveLossAt.get(
+                        playerUUID
+                );
+
+        if (!shouldApplyStarveLoss(
+                now,
+                last == null
+                        ? 0L
+                        : last,
+                intervalMillis
+        )) {
+
+            return 0;
+        }
+
+        lastStarveLossAt.put(
+                playerUUID,
+                now
+        );
+
+        return base;
+    }
+
+    /*
+     * 纯判定函数（供单测）：距上次扣减是否已满一个节流间隔。
+     *
+     * <p>
+     * 哨兵分支：now 与 lastAt 同时为 0 表示时间戳从未
+     * 初始化（首次判定），立即应用。生产中 now 为当前
+     * 毫秒时间戳，该分支不会触发，无行为影响。
+     * </p>
+     */
+
+    static boolean shouldApplyStarveLoss(
+            long now,
+            long lastAt,
+            long intervalMillis
+    ) {
+
+        return intervalMillis > 0 &&
+                (now - lastAt >= intervalMillis ||
+                        (now == 0L && lastAt == 0L));
     }
 }

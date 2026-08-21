@@ -14,6 +14,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -53,6 +54,15 @@ public class CatEntityRestorer {
     private final PendingWorldRestores pendingWorldRestores =
             new PendingWorldRestores();
 
+    /*
+     * 召唤代际（0.8.0 P0-2 修复）：
+     * 每次召唤 / 退出都会递增。在途异步回调携带自己的
+     * 代际 token，回到主线程后若代际已过期则直接丢弃结果，
+     * 实现真正的异步取消语义（退出清标记不再重新打开竞争窗口）。
+     */
+    private final ConcurrentHashMap<UUID, Long> summonGeneration =
+            new ConcurrentHashMap<>();
+
     public CatEntityRestorer(
             JavaPlugin plugin,
             Logger logger,
@@ -70,6 +80,49 @@ public class CatEntityRestorer {
         this.variantService = variantService;
         this.lang = lang;
         this.binding = binding;
+    }
+
+    /*
+     * ============================================================
+     * 召唤代际（0.8.0 P0-2）
+     * ============================================================
+     */
+
+    long beginSummon(
+            UUID playerUUID
+    ) {
+
+        return summonGeneration.merge(
+                playerUUID,
+                1L,
+                Long::sum
+        );
+    }
+
+    boolean isCurrentSummon(
+            UUID playerUUID,
+            long token
+    ) {
+
+        return playerUUID != null &&
+                summonGeneration.getOrDefault(
+                        playerUUID,
+                        0L
+                ) == token;
+    }
+
+    void invalidateSummons(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID != null) {
+
+            summonGeneration.merge(
+                    playerUUID,
+                    1L,
+                    Long::sum
+            );
+        }
     }
 
     /*
@@ -620,7 +673,8 @@ public class CatEntityRestorer {
     void findCat(
             Player player,
             String name,
-            Consumer<Boolean> callback
+            Consumer<Boolean> callback,
+            long summonToken
     ) {
 
         UUID playerUUID =
@@ -666,7 +720,8 @@ public class CatEntityRestorer {
         loadLastKnownChunk(
                 player,
                 name,
-                callback
+                callback,
+                summonToken
         );
     }
 
@@ -679,7 +734,8 @@ public class CatEntityRestorer {
     private void loadLastKnownChunk(
             Player player,
             String name,
-            Consumer<Boolean> callback
+            Consumer<Boolean> callback,
+            long summonToken
     ) {
 
         UUID playerUUID =
@@ -770,6 +826,19 @@ public class CatEntityRestorer {
                                     () -> {
 
                                         try {
+
+                                            /*
+                                             * 0.8.0 P0-2：代际校验。
+                                             * 退出/新召唤后，旧流水线的结果直接丢弃。
+                                             */
+                                            if (!isCurrentSummon(
+                                                    playerUUID,
+                                                    summonToken
+                                            ) ||
+                                                    !player.isOnline()) {
+
+                                                return;
+                                            }
 
                                             org.bukkit.entity.Cat oldCat =
                                                     findCatInChunk(
@@ -876,6 +945,19 @@ public class CatEntityRestorer {
                                     () -> {
 
                                         try {
+
+                                            /*
+                                             * 0.8.0 P0-2：代际校验。
+                                             * 退出/新召唤后，旧流水线的结果直接丢弃。
+                                             */
+                                            if (!isCurrentSummon(
+                                                    playerUUID,
+                                                    summonToken
+                                            ) ||
+                                                    !player.isOnline()) {
+
+                                                return;
+                                            }
 
                                             logger.warning(
                                                     "Failed to load cat chunk for "

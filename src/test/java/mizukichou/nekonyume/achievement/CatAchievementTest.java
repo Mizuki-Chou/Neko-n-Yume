@@ -113,6 +113,21 @@ class CatAchievementTest {
         );
 
         /*
+         * 羁绊纪元（0.8.0）。
+         */
+        assertEquals(
+                150,
+                CatAchievement.AFFECTION_60
+                        .getDefaultRewardXp()
+        );
+
+        assertEquals(
+                50,
+                CatAchievement.AFFECTION_100
+                        .getDefaultRewardMeowPower()
+        );
+
+        /*
          * 奖励二选一：要么纯经验，要么纯喵力，
          * 且每个成就必有奖励。
          */
@@ -235,6 +250,21 @@ class CatAchievementTest {
                 CatAchievement.MONSTER_KILL_50
                         .getThreshold()
         );
+
+        /*
+         * 羁绊纪元（0.8.0）。
+         */
+        assertEquals(
+                60,
+                CatAchievement.AFFECTION_60
+                        .getThreshold()
+        );
+
+        assertEquals(
+                100,
+                CatAchievement.AFFECTION_100
+                        .getThreshold()
+        );
     }
 
     @Test
@@ -255,6 +285,18 @@ class CatAchievementTest {
         assertEquals(
                 "monster-kill-50",
                 CatAchievement.MONSTER_KILL_50
+                        .getConfigId()
+        );
+
+        assertEquals(
+                "affection-60",
+                CatAchievement.AFFECTION_60
+                        .getConfigId()
+        );
+
+        assertEquals(
+                "affection-100",
+                CatAchievement.AFFECTION_100
                         .getConfigId()
         );
     }

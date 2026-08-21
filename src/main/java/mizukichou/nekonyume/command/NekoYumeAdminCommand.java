@@ -5,6 +5,7 @@ import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.CatProgressionService;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.MeowDanQuality;
+import mizukichou.nekonyume.gui.AdminGiveGuiManager;
 import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.muma.MumaNightManager;
 import mizukichou.nekonyume.storage.CatStore;
@@ -52,6 +53,7 @@ public class NekoYumeAdminCommand
     private final CatProgressionService progression;
     private final CatFoodManager foodManager;
     private final MumaNightManager mumaNightManager;
+    private final AdminGiveGuiManager giveGuiManager;
     private final Lang lang;
 
     /*
@@ -69,6 +71,7 @@ public class NekoYumeAdminCommand
             CatProgressionService progression,
             CatFoodManager foodManager,
             MumaNightManager mumaNightManager,
+            AdminGiveGuiManager giveGuiManager,
             Lang lang
     ) {
 
@@ -79,6 +82,7 @@ public class NekoYumeAdminCommand
         this.progression = progression;
         this.foodManager = foodManager;
         this.mumaNightManager = mumaNightManager;
+        this.giveGuiManager = giveGuiManager;
         this.lang = lang;
     }
 
@@ -172,6 +176,30 @@ public class NekoYumeAdminCommand
                     lang.forSender(sender).message(
                             "admin.reload-done"
                     )
+            );
+
+            return true;
+        }
+
+        /*
+         * /nekoyumeadmin give（0.8.0）
+         * 打开管理发放面板。
+         */
+        if (args[0].equalsIgnoreCase("give")) {
+
+            if (!(sender instanceof Player player)) {
+
+                sender.sendMessage(
+                        lang.forSender(sender).message(
+                                "admin.player-only"
+                        )
+                );
+
+                return true;
+            }
+
+            giveGuiManager.open(
+                    player
             );
 
             return true;
@@ -794,6 +822,7 @@ public class NekoYumeAdminCommand
                     "cat",
                     "skill",
                     "mumanight",
+                    "give",
                     "reload"
             );
         }

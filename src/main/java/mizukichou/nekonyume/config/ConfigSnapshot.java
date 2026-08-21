@@ -67,6 +67,10 @@ public final class ConfigSnapshot {
 
     private final XpPill xpPill;
 
+    private final Care care;
+
+    private final Drops drops;
+
     public ConfigSnapshot(
             String language,
             Storage storage,
@@ -84,7 +88,9 @@ public final class ConfigSnapshot {
             Aura aura,
             JoinMessage joinMessage,
             MumaNight mumaNight,
-            XpPill xpPill
+            XpPill xpPill,
+            Care care,
+            Drops drops
     ) {
 
         this.language = language;
@@ -104,6 +110,8 @@ public final class ConfigSnapshot {
         this.joinMessage = joinMessage;
         this.mumaNight = mumaNight;
         this.xpPill = xpPill;
+        this.care = care;
+        this.drops = drops;
     }
 
     /*
@@ -211,16 +219,12 @@ public final class ConfigSnapshot {
     @Getter
     public static final class Affection {
 
-        private final int feedBase;
-
         private final int petBase;
 
         public Affection(
-                int feedBase,
                 int petBase
         ) {
 
-            this.feedBase = feedBase;
             this.petBase = petBase;
         }
     }
@@ -242,17 +246,25 @@ public final class ConfigSnapshot {
 
         private final int rankCurveOffset;
 
+        private final int feedGain;
+
+        private final int petGain;
+
         public Meow(
                 int petChance,
                 int feedChance,
                 int feedChanceLimit,
-                int rankCurveOffset
+                int rankCurveOffset,
+                int feedGain,
+                int petGain
         ) {
 
             this.petChance = petChance;
             this.feedChance = feedChance;
             this.feedChanceLimit = feedChanceLimit;
             this.rankCurveOffset = rankCurveOffset;
+            this.feedGain = feedGain;
+            this.petGain = petGain;
         }
     }
 
@@ -695,30 +707,15 @@ public final class ConfigSnapshot {
 
         private final double damageMultiplier;
 
-        private final double meowdanDropChance;
-
-        /*
-         * 0.7.4：经验丸掉落概率。
-         */
-        private final double xpPillDropChance;
-
-        private final double eliteXpPillDropChance;
-
         public MumaNight(
                 double chance,
                 double healthMultiplier,
-                double damageMultiplier,
-                double meowdanDropChance,
-                double xpPillDropChance,
-                double eliteXpPillDropChance
+                double damageMultiplier
         ) {
 
             this.chance = chance;
             this.healthMultiplier = healthMultiplier;
             this.damageMultiplier = damageMultiplier;
-            this.meowdanDropChance = meowdanDropChance;
-            this.xpPillDropChance = xpPillDropChance;
-            this.eliteXpPillDropChance = eliteXpPillDropChance;
         }
     }
 
@@ -742,6 +739,150 @@ public final class ConfigSnapshot {
 
             this.normalXp = normalXp;
             this.eliteXp = eliteXp;
+        }
+    }
+
+    /*
+     * ============================================================
+     * 羁绊纪元（0.8.0）
+     * ============================================================
+     *
+     * 好感 / 饥饿 / 心情 / 羁绊的全部玩法数值。
+     * 缺失节使用默认值；解析见 CareConfigParser。
+     */
+
+    @Getter
+    public static final class Care {
+
+        private final Map<CatMood, Double> moodDamagePercent;
+
+        private final Map<CatMood, Double> moodXpPercent;
+
+        private final int affectionDailyDecay;
+
+        private final int feedHungryAffection;
+
+        private final int feedNormalAffection;
+
+        private final int hungrySkillThreshold;
+
+        private final int starvingFightThreshold;
+
+        private final int hungryFeedThreshold;
+
+        private final List<Integer> bondTierThresholds;
+
+        private final List<Integer> bondXpPercent;
+
+        private final List<Integer> bondCooldownPercent;
+
+        private final List<Integer> bondDamagePercent;
+
+        private final int defeatHealthLoss;
+
+        private final int feedHealthRestore;
+
+        private final int hungerAffectionLossMinutes;
+
+        public Care(
+                Map<CatMood, Double> moodDamagePercent,
+                Map<CatMood, Double> moodXpPercent,
+                int affectionDailyDecay,
+                int feedHungryAffection,
+                int feedNormalAffection,
+                int hungrySkillThreshold,
+                int starvingFightThreshold,
+                int hungryFeedThreshold,
+                List<Integer> bondTierThresholds,
+                List<Integer> bondXpPercent,
+                List<Integer> bondCooldownPercent,
+                List<Integer> bondDamagePercent,
+                int defeatHealthLoss,
+                int feedHealthRestore,
+                int hungerAffectionLossMinutes
+        ) {
+
+            this.moodDamagePercent = moodDamagePercent;
+            this.moodXpPercent = moodXpPercent;
+            this.affectionDailyDecay = affectionDailyDecay;
+            this.feedHungryAffection = feedHungryAffection;
+            this.feedNormalAffection = feedNormalAffection;
+            this.hungrySkillThreshold = hungrySkillThreshold;
+            this.starvingFightThreshold = starvingFightThreshold;
+            this.hungryFeedThreshold = hungryFeedThreshold;
+            this.bondTierThresholds = bondTierThresholds;
+            this.bondXpPercent = bondXpPercent;
+            this.bondCooldownPercent = bondCooldownPercent;
+            this.bondDamagePercent = bondDamagePercent;
+            this.defeatHealthLoss = defeatHealthLoss;
+            this.feedHealthRestore = feedHealthRestore;
+            this.hungerAffectionLossMinutes =
+                    hungerAffectionLossMinutes;
+        }
+    }
+
+    /*
+     * ============================================================
+     * 掉落（0.8.0）
+     * ============================================================
+     *
+     * 平时（梦魔夜以外）与梦魔夜的 NekoNYume 物品掉落：
+     * 是否开启、喵丹概率与五品质权重（平凡→至极）、
+     * 初阶/高阶经验丸概率、猫猫装备袋概率。
+     * 权重为相对值，滚动时自动按总和归一。
+     */
+    @Getter
+    public static final class Drops {
+
+        private final DropSet general;
+
+        private final DropSet mumaNight;
+
+        public Drops(
+                DropSet general,
+                DropSet mumaNight
+        ) {
+
+            this.general = general;
+            this.mumaNight = mumaNight;
+        }
+
+        /*
+         * 单一状态下的掉落集合（不可变）。
+         */
+        @Getter
+        public static final class DropSet {
+
+            private final boolean enabled;
+
+            private final double meowdanChance;
+
+            private final int[] meowdanQualityWeights;
+
+            private final double xpPillChance;
+
+            private final double eliteXpPillChance;
+
+            private final double equipBagChance;
+
+            public DropSet(
+                    boolean enabled,
+                    double meowdanChance,
+                    int[] meowdanQualityWeights,
+                    double xpPillChance,
+                    double eliteXpPillChance,
+                    double equipBagChance
+            ) {
+
+                this.enabled = enabled;
+                this.meowdanChance = meowdanChance;
+                this.meowdanQualityWeights =
+                        meowdanQualityWeights;
+                this.xpPillChance = xpPillChance;
+                this.eliteXpPillChance =
+                        eliteXpPillChance;
+                this.equipBagChance = equipBagChance;
+            }
         }
     }
 }

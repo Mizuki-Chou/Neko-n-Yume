@@ -43,7 +43,18 @@ public class YamlCatStore extends AbstractCatStore {
 
     private static final String PLAYERS_PATH = "players";
 
-    private static final int DATA_VERSION = 7;
+    /*
+     * 当前数据格式版本。
+     *
+     * v5 → v6：成就补发队列字段（achievements-pending）。
+     * v6 → v7：成就奖励台账字段（achievements-rewarded）。
+     * v7 → v8：羁绊纪元好感日常衰减锚点（affection-decay-date）
+     *         + 唯一装备位（equipment，空串=未装备）
+     *         + 装备附加属性（equipment-bonus，空串=无），
+     *         0.8.0 一次写入。
+     * 这些均为可选字段，读侧缺省为空列表 / 空串。
+     */
+    private static final int DATA_VERSION = 8;
 
     private final CatStoreEnv env;
 
@@ -859,6 +870,11 @@ public class YamlCatStore extends AbstractCatStore {
                 migrateV6ToV7();
             }
 
+            if (version < 8) {
+
+                migrateV7ToV8();
+            }
+
             data.set("data-version", DATA_VERSION);
 
             /*
@@ -1232,6 +1248,77 @@ public class YamlCatStore extends AbstractCatStore {
             }
         }
     }
+
+    /*
+     * v7 → v8（0.8.0 羁绊纪元）：
+     * 好感日常衰减锚点字段。
+     *
+     * 初始值写入迁移当天的日期：
+     * 避免升级后首个 tick 对全部存量猫“无差别扣一次”。
+     * 读侧缺省空串（首次结算照常生效）。
+     */
+
+    /*
+     * v7 → v8（0.8.0 羁绊纪元 + 装备系统）：
+     * 为每只猫补三个字段：
+     * - affection-decay-date：日衰减锚点（补为今日，当天不再衰减）；
+     * - equipment：唯一装备位（空串 = 未装备）；
+     * - equipment-bonus：装备附加属性（空串 = 无，与装备位绑定）。
+     */
+    private void migrateV7ToV8() {
+
+        ConfigurationSection playersSection =
+                data.getConfigurationSection(PLAYERS_PATH);
+
+        if (playersSection == null) {
+            return;
+        }
+
+        String today =
+                java.time.LocalDate.now()
+                        .toString();
+
+        for (String key : playersSection.getKeys(false)) {
+
+            UUID playerUUID = parseUUID(key);
+
+            if (playerUUID == null) {
+                continue;
+            }
+
+            String path = catPath(playerUUID);
+
+            if (!data.contains(path)) {
+                continue;
+            }
+
+            if (!data.contains(path + ".affection-decay-date")) {
+
+                data.set(
+                        path + ".affection-decay-date",
+                        today
+                );
+            }
+
+            if (!data.contains(path + ".equipment")) {
+
+                data.set(
+                        path + ".equipment",
+                        ""
+                );
+            }
+
+            if (!data.contains(path + ".equipment-bonus")) {
+
+                data.set(
+                        path + ".equipment-bonus",
+                        ""
+                );
+            }
+        }
+    }
+
+
 
     private int cumulativeXpForLevel(int level) {
 

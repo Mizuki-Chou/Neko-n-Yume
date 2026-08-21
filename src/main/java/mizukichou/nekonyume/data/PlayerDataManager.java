@@ -246,6 +246,16 @@ public class PlayerDataManager implements CatStore {
     }
 
     @Override
+    public String getAffectionDecayDate(UUID playerUUID) {
+        return delegate.getAffectionDecayDate(playerUUID);
+    }
+
+    @Override
+    public void setAffectionDecayDate(UUID playerUUID, String date) {
+        delegate.setAffectionDecayDate(playerUUID, date);
+    }
+
+    @Override
     public String getCatBehaviorMode(UUID playerUUID) {
         return delegate.getCatBehaviorMode(playerUUID);
     }
@@ -283,6 +293,26 @@ public class PlayerDataManager implements CatStore {
     @Override
     public void setCatVariant(UUID playerUUID, String variant) {
         delegate.setCatVariant(playerUUID, variant);
+    }
+
+    @Override
+    public String getCatEquipment(UUID playerUUID) {
+        return delegate.getCatEquipment(playerUUID);
+    }
+
+    @Override
+    public void setCatEquipment(UUID playerUUID, String equipment) {
+        delegate.setCatEquipment(playerUUID, equipment);
+    }
+
+    @Override
+    public String getCatEquipmentBonus(UUID playerUUID) {
+        return delegate.getCatEquipmentBonus(playerUUID);
+    }
+
+    @Override
+    public void setCatEquipmentBonus(UUID playerUUID, String bonus) {
+        delegate.setCatEquipmentBonus(playerUUID, bonus);
     }
 
     @Override

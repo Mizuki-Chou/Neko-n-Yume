@@ -147,6 +147,20 @@ public interface CatStore {
     void markGiftChecked(UUID playerUUID);
 
     /*
+     * ---------- 日常衰减结算（0.8.0） ----------
+     *
+     * 好感日常衰减的结算锚点（世界日期字符串）；
+     * 空串表示尚未结算。
+     */
+
+    String getAffectionDecayDate(UUID playerUUID);
+
+    void setAffectionDecayDate(
+            UUID playerUUID,
+            String date
+    );
+
+    /*
      * ---------- 行为模式 ----------
      */
 
@@ -173,6 +187,22 @@ public interface CatStore {
     String getCatVariant(UUID playerUUID);
 
     void setCatVariant(UUID playerUUID, String variant);
+
+    /*
+     * ---------- 装备（0.8.0，唯一装备位） ----------
+     */
+
+    String getCatEquipment(UUID playerUUID);
+
+    void setCatEquipment(UUID playerUUID, String equipment);
+
+    /*
+     * ---------- 装备附加属性（0.8.0，与装备位绑定） ----------
+     */
+
+    String getCatEquipmentBonus(UUID playerUUID);
+
+    void setCatEquipmentBonus(UUID playerUUID, String bonus);
 
     /*
      * ---------- 实体绑定 ----------

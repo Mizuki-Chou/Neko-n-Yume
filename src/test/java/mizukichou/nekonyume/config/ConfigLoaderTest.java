@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.logging.Logger;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -136,15 +137,74 @@ class ConfigLoaderTest {
                 config.getBattle().getWitherXpMax()
         );
 
+        /*
+         * 0.8.0：掉落配置（drops 节）默认值。
+         */
+        ConfigSnapshot.Drops.DropSet mumaDrops =
+                config.getDrops().getMumaNight();
+
+        assertTrue(mumaDrops.isEnabled());
+
+        assertEquals(
+                0.15,
+                mumaDrops.getMeowdanChance(),
+                1e-9
+        );
+
         assertEquals(
                 0.03,
-                config.getMumaNight().getXpPillDropChance(),
+                mumaDrops.getXpPillChance(),
                 1e-9
         );
 
         assertEquals(
                 0.01,
-                config.getMumaNight().getEliteXpPillDropChance(),
+                mumaDrops.getEliteXpPillChance(),
+                1e-9
+        );
+
+        assertEquals(
+                0.02,
+                mumaDrops.getEquipBagChance(),
+                1e-9
+        );
+
+        assertArrayEquals(
+                new int[]{
+                        80,
+                        16,
+                        3,
+                        1,
+                        0
+                },
+                mumaDrops.getMeowdanQualityWeights()
+        );
+
+        ConfigSnapshot.Drops.DropSet generalDrops =
+                config.getDrops().getGeneral();
+
+        assertFalse(generalDrops.isEnabled());
+
+        assertEquals(
+                0.05,
+                generalDrops.getMeowdanChance(),
+                1e-9
+        );
+
+        assertArrayEquals(
+                new int[]{
+                        80,
+                        16,
+                        3,
+                        0,
+                        0
+                },
+                generalDrops.getMeowdanQualityWeights()
+        );
+
+        assertEquals(
+                0.0,
+                generalDrops.getEquipBagChance(),
                 1e-9
         );
     }
@@ -207,17 +267,22 @@ class ConfigLoaderTest {
         );
 
         /*
-         * 概率钳到 [0,1]。
+         * 概率钳到 [0,1]；缺新键时回退旧键
+         * （muma-night.xp-pill-drop-chance，0.7.x 兼容）。
          */
         assertEquals(
                 1.0,
-                config.getMumaNight().getXpPillDropChance(),
+                config.getDrops()
+                        .getMumaNight()
+                        .getXpPillChance(),
                 1e-9
         );
 
         assertEquals(
                 0.0,
-                config.getMumaNight().getEliteXpPillDropChance(),
+                config.getDrops()
+                        .getMumaNight()
+                        .getEliteXpPillChance(),
                 1e-9
         );
     }
@@ -230,8 +295,6 @@ class ConfigLoaderTest {
                         growth:
                           pet-xp-min: -5
                           pet-xp-max: 1
-                        affection:
-                          feed-base: 999
                         daily:
                           pet-limit: 0
                         """);
@@ -247,11 +310,6 @@ class ConfigLoaderTest {
         assertEquals(
                 1,
                 config.getGrowth().getPetXpMax()
-        );
-
-        assertEquals(
-                100,
-                config.getAffection().getFeedBase()
         );
 
         assertEquals(
@@ -576,6 +634,197 @@ class ConfigLoaderTest {
                 0.2,
                 config.getMumaNight().getChance(),
                 0.0001
+        );
+    }
+
+    @Test
+    void careSectionParsesWithDefaultsAndClamps() {
+
+        ConfigSnapshot config =
+                load("");
+
+        ConfigSnapshot.Care care =
+                config.getCare();
+
+        /*
+         * 缺失节时全部默认值。
+         */
+        assertEquals(
+                2,
+                care.getAffectionDailyDecay()
+        );
+
+        assertEquals(
+                8,
+                care.getFeedHungryAffection()
+        );
+
+        assertEquals(
+                2,
+                care.getFeedNormalAffection()
+        );
+
+        assertEquals(
+                20,
+                care.getHungrySkillThreshold()
+        );
+
+        assertEquals(
+                0,
+                care.getStarvingFightThreshold()
+        );
+
+        assertEquals(
+                20,
+                care.getHungryFeedThreshold()
+        );
+
+        assertEquals(
+                15,
+                care.getMoodDamagePercent()
+                        .get(CatMood.ECSTATIC),
+                0.0001
+        );
+
+        assertEquals(
+                -20,
+                care.getMoodDamagePercent()
+                        .get(CatMood.SAD),
+                0.0001
+        );
+
+        assertEquals(
+                10,
+                care.getMoodXpPercent()
+                        .get(CatMood.ECSTATIC),
+                0.0001
+        );
+
+        assertEquals(
+                java.util.List.of(
+                        20,
+                        40,
+                        60,
+                        80,
+                        100
+                ),
+                care.getBondTierThresholds()
+        );
+
+        assertEquals(
+                6,
+                care.getBondXpPercent().size()
+        );
+
+        assertEquals(
+                10,
+                care.getDefeatHealthLoss()
+        );
+
+        assertEquals(
+                5,
+                care.getFeedHealthRestore()
+        );
+
+        /*
+         * 饥饿好感衰减节流间隔（0.8.0）：默认 180 分钟。
+         */
+        assertEquals(
+                180,
+                care.getHungerAffectionLossMinutes()
+        );
+
+        /*
+         * 覆盖 + 钳制：
+         * 百分比 200 → 100；衰减 50 → 10；门槛 -1 保留（关闭）。
+         */
+        ConfigSnapshot overridden =
+                load("""
+                        care:
+                          mood-damage-percent:
+                            ECSTATIC: 200
+                          affection-daily-decay: 50
+                          hungry-skill-threshold: -1
+                          hunger-affection-loss-minutes: 3000
+                        """);
+
+        ConfigSnapshot.Care oc =
+                overridden.getCare();
+
+        assertEquals(
+                100,
+                oc.getMoodDamagePercent()
+                        .get(CatMood.ECSTATIC),
+                0.0001
+        );
+
+        assertEquals(
+                10,
+                oc.getAffectionDailyDecay()
+        );
+
+        assertEquals(
+                -1,
+                oc.getHungrySkillThreshold()
+        );
+
+        /*
+         * 其余心情键保持默认（覆盖只影响指定键）。
+         */
+        assertEquals(
+                -20,
+                oc.getMoodDamagePercent()
+                        .get(CatMood.SAD),
+                0.0001
+        );
+
+        /*
+         * 节流间隔钳制：3000 → 1440（上限一天）。
+         */
+        assertEquals(
+                1440,
+                oc.getHungerAffectionLossMinutes()
+        );
+    }
+
+    @Test
+    void careInvalidThresholdsFallBackToDefaults() {
+
+        ConfigSnapshot config =
+                load("""
+                        care:
+                          bond-tier-thresholds: [100, 80, 60]
+                          bond-xp-percent: [1, 2]
+                        """);
+
+        ConfigSnapshot.Care care =
+                config.getCare();
+
+        /*
+         * 非严格递增阈值 → 回退默认；
+         * 与阈值数量不匹配的增益数组 → 回退默认。
+         */
+        assertEquals(
+                java.util.List.of(
+                        20,
+                        40,
+                        60,
+                        80,
+                        100
+                ),
+                care.getBondTierThresholds()
+        );
+
+        assertEquals(
+                java.util.List.of(
+                        0,
+                        0,
+                        5,
+                        10,
+                        10,
+                        10
+                ),
+                care.getBondXpPercent()
         );
     }
 }

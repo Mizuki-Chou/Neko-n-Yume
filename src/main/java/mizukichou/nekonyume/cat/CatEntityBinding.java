@@ -265,10 +265,22 @@ public class CatEntityBinding {
 
         if (logical != null) {
 
+            /*
+             * 装备（0.8.0）：装备生命加成计入最大生命。
+             */
+            CatEquipItem equip =
+                    logical.getEquippedItem();
+
+            double equipHealthBonus =
+                    equip == null
+                            ? 0.0
+                            : equip.getCatHealthBonus();
+
             double scaled =
                     10.0
                             + logical.getLevel()
-                            / 4.0;
+                            / 4.0
+                            + equipHealthBonus;
 
             org.bukkit.attribute.AttributeInstance attribute =
                     cat.getAttribute(

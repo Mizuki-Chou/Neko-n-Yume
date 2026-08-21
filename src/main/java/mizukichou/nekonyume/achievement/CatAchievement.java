@@ -249,6 +249,32 @@ public enum CatAchievement {
             50,
             0,
             5
+    ),
+
+    /* ============================================================
+     * 羁绊纪元（0.8.0）
+     * ============================================================ */
+
+    AFFECTION_60(
+            "亲密无间",
+            "与猫咪的好感度达到 60",
+            Material.PINK_DYE,
+            Metric.AFFECTION,
+            null,
+            60,
+            150,
+            0
+    ),
+
+    AFFECTION_100(
+            "灵魂羁绊",
+            "与猫咪的好感度达到 100",
+            Material.NETHER_STAR,
+            Metric.AFFECTION,
+            null,
+            100,
+            0,
+            50
     );
 
     /*
@@ -296,7 +322,12 @@ public enum CatAchievement {
 
         MEOW_RANK,
 
-        COUNTER
+        COUNTER,
+
+        /*
+         * 羁绊纪元（0.8.0）：当前好感值（一次性解锁，不要求保持）。
+         */
+        AFFECTION
     }
 
     private final String displayName;

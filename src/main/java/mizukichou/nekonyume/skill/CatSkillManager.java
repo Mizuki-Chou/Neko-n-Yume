@@ -1,8 +1,11 @@
 package mizukichou.nekonyume.skill;
 
 import mizukichou.nekonyume.cat.Cat;
+import mizukichou.nekonyume.cat.CareMath;
 import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatEquipItem;
 import mizukichou.nekonyume.cat.CatSkill;
+import mizukichou.nekonyume.cat.EquipBonusAttribute;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.event.CatSkillActivatedEvent;
@@ -244,14 +247,87 @@ public class CatSkillManager {
         }
 
         long remaining =
-                getCooldownMillis(skill)
-                        - (System.currentTimeMillis()
-                        - last);
+                (long) Math.ceil(
+                        getCooldownMillis(skill)
+                                * cooldownFactor(
+                                player
+                        )
+                                - (System.currentTimeMillis()
+                                - last)
+                );
 
         return Math.max(
                 0,
                 remaining
         );
+    }
+
+    /*
+     * 羁绊纪元（0.8.0）：
+     * 羁绊减冷却只作用于剩余冷却判定，
+     * 时间戳式冷却表无需在激活时重算。
+     */
+
+    private double cooldownFactor(
+            Player player
+    ) {
+
+        if (player == null) {
+            return 1.0;
+        }
+
+        ConfigSnapshot config =
+                configManager.snapshot();
+
+        Cat cat =
+                cache.getCat(player);
+
+        if (cat == null) {
+            return 1.0;
+        }
+
+        double factor =
+                CareMath.cooldownFactor(
+                        CareMath.bondFor(
+                                cat,
+                                config.getCare()
+                        ),
+                        config.getCare()
+                );
+
+        /*
+         * 装备（0.8.0）：名牌的技能冷却减免。
+         */
+        CatEquipItem equip =
+                cat.getEquippedItem();
+
+        if (equip != null &&
+                equip.getCooldownReductionPercent() > 0) {
+
+            factor =
+                    CareMath.applyCooldownReduction(
+                            factor,
+                            equip.getCooldownReductionPercent()
+                    );
+        }
+
+        /*
+         * 附加属性（0.8.0）：时流的技能冷却减免。
+         */
+        EquipBonusAttribute equipBonus =
+                cat.getEquippedBonus();
+
+        if (equipBonus != null &&
+                equipBonus.getCooldownReductionPercent() > 0) {
+
+            factor =
+                    CareMath.applyCooldownReduction(
+                            factor,
+                            equipBonus.getCooldownReductionPercent()
+                    );
+        }
+
+        return factor;
     }
 
     public int getRemainingCooldownSeconds(
@@ -359,6 +435,29 @@ public class CatSkillManager {
             return false;
         }
 
+        /*
+         * 羁绊纪元（0.8.0）：
+         * 饥饿到门槛以下无法使用主动技能。
+         * 阈值 -1 = 关闭。
+         */
+        int hungrySkillThreshold =
+                configManager.snapshot()
+                        .getCare()
+                        .getHungrySkillThreshold();
+
+        if (hungrySkillThreshold >= 0 &&
+                cat.getHunger() <= hungrySkillThreshold) {
+
+            player.sendMessage(
+                    lang.forPlayer(player).message(
+                            "skill.hungry",
+                            cat.getName()
+                    )
+            );
+
+            return false;
+        }
+
         if (isOnCooldown(player, skill)) {
 
             player.sendMessage(
@@ -451,13 +550,34 @@ public class CatSkillManager {
                                 6
                         );
 
+                ConfigSnapshot.Care care =
+                        configManager.snapshot()
+                                .getCare();
+
+                /*
+                 * 羁绊纪元（0.8.0）：
+                 * 治疗量随心情缩放（半敏感），
+                 * 先缩放再钳制，不会放大负值。
+                 */
+                int scaledPower =
+                        Math.max(
+                                0,
+                                (int) Math.round(
+                                        power
+                                                * CareMath.healingMultiplier(
+                                                cat.getMood(),
+                                                care
+                                        )
+                                )
+                        );
+
                 double max =
                         player.getMaxHealth();
 
                 /*
-                 * 双重镔：power 源自管理员配置，
+                 * 双重钳制：power 源自管理员配置，
                  * 负值会导致 setHealth(负数) 抛 IllegalArgumentException，
-                 * 因此先镔到 [0, max] 再写入。
+                 * 因此先钳到 [0, max] 再写入。
                  */
                 double healed =
                         Math.max(
@@ -465,7 +585,7 @@ public class CatSkillManager {
                                 Math.min(
                                         max,
                                         player.getHealth()
-                                                + power
+                                                + scaledPower
                                 )
                         );
 
@@ -477,7 +597,7 @@ public class CatSkillManager {
                         lang.forPlayer(player).message(
                                 "skill.effect-healing",
                                 String.valueOf(
-                                        power
+                                        scaledPower
                                 )
                         )
                 );

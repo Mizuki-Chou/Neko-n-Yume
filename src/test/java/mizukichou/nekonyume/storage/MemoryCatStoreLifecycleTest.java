@@ -520,4 +520,198 @@ class MemoryCatStoreLifecycleTest {
                         .isEmpty()
         );
     }
+
+    /*
+     * 装备位（0.8.0）生命周期：读写、幂等、卸下、写不复活。
+     */
+    @Test
+    void equipmentLifecycle() {
+
+        UUID player = UUID.randomUUID();
+
+        store.createCat(player);
+
+        /*
+         * 新建猫咪未装备。
+         */
+        assertEquals(
+                "",
+                store.getCatEquipment(player)
+        );
+
+        /*
+         * 装备与覆盖。
+         */
+        store.setCatEquipment(player, "collar-epic");
+
+        assertEquals(
+                "collar-epic",
+                store.getCatEquipment(player)
+        );
+
+        store.setCatEquipment(player, "bell-legendary");
+
+        assertEquals(
+                "bell-legendary",
+                store.getCatEquipment(player)
+        );
+
+        /*
+         * 卸下（空串与 null 等价）。
+         */
+        store.setCatEquipment(player, "");
+
+        assertEquals(
+                "",
+                store.getCatEquipment(player)
+        );
+
+        store.setCatEquipment(player, "collar-common");
+        store.setCatEquipment(player, null);
+
+        assertEquals(
+                "",
+                store.getCatEquipment(player)
+        );
+
+        /*
+         * 写不复活：删档后写入静默 no-op。
+         */
+        store.flush();
+
+        assertTrue(
+                store.removeCat(player)
+        );
+
+        store.setCatEquipment(player, "collar-epic");
+
+        assertFalse(store.hasCat(player));
+
+        assertEquals(
+                "",
+                store.getCatEquipment(player)
+        );
+    }
+
+    /*
+     * 装备附加属性（0.8.0）生命周期：读写、幂等、卸下、写不复活。
+     */
+    @Test
+    void equipmentBonusLifecycle() {
+
+        UUID player = UUID.randomUUID();
+
+        store.createCat(player);
+
+        /*
+         * 新建猫咪无附加属性。
+         */
+        assertEquals(
+                "",
+                store.getCatEquipmentBonus(player)
+        );
+
+        /*
+         * 写入与覆盖。
+         */
+        store.setCatEquipmentBonus(player, "starlight");
+
+        assertEquals(
+                "starlight",
+                store.getCatEquipmentBonus(player)
+        );
+
+        store.setCatEquipmentBonus(player, "bloodmoon");
+
+        assertEquals(
+                "bloodmoon",
+                store.getCatEquipmentBonus(player)
+        );
+
+        /*
+         * 卸下（空串与 null 等价）。
+         */
+        store.setCatEquipmentBonus(player, "");
+
+        assertEquals(
+                "",
+                store.getCatEquipmentBonus(player)
+        );
+
+        store.setCatEquipmentBonus(player, "starlight");
+        store.setCatEquipmentBonus(player, null);
+
+        assertEquals(
+                "",
+                store.getCatEquipmentBonus(player)
+        );
+
+        /*
+         * 写不复活：删档后写入静默 no-op。
+         */
+        store.flush();
+
+        assertTrue(
+                store.removeCat(player)
+        );
+
+        store.setCatEquipmentBonus(player, "starlight");
+
+        assertFalse(store.hasCat(player));
+
+        assertEquals(
+                "",
+                store.getCatEquipmentBonus(player)
+        );
+    }
+
+    @Test
+    void affectionDecayDateLifecycle() {
+
+        UUID player = UUID.randomUUID();
+
+        store.createCat(player);
+
+        /*
+         * 0.8.0：新建猫咪锚点初始化为今日，
+         * 建档当天不重复结算衰减。
+         */
+        assertEquals(
+                java.time.LocalDate.now()
+                        .toString(),
+                store.getAffectionDecayDate(player)
+        );
+
+        /*
+         * 写入与覆盖。
+         */
+        store.setAffectionDecayDate(player, "2026-08-19");
+
+        assertEquals(
+                "2026-08-19",
+                store.getAffectionDecayDate(player)
+        );
+
+        store.setAffectionDecayDate(player, "2026-08-20");
+
+        assertEquals(
+                "2026-08-20",
+                store.getAffectionDecayDate(player)
+        );
+
+        /*
+         * 写不复活：删档后写入静默 no-op，读取回默认空串。
+         */
+        store.flush();
+
+        assertTrue(store.removeCat(player));
+
+        store.setAffectionDecayDate(player, "2026-08-21");
+
+        assertFalse(store.hasCat(player));
+        assertEquals(
+                "",
+                store.getAffectionDecayDate(player)
+        );
+    }
 }

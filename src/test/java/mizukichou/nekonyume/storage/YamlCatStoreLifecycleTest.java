@@ -75,7 +75,7 @@ class YamlCatStoreLifecycleTest {
         assertTrue(Files.exists(file));
         assertTrue(
                 Files.readString(file)
-                        .contains("data-version: 7")
+                        .contains("data-version: 8")
         );
     }
 
@@ -269,10 +269,80 @@ class YamlCatStoreLifecycleTest {
                 List.of("FIRST_CLAIM"),
                 reopenedThird.getAchievementsRewardedList(player)
         );
+
+        /*
+         * 羁绊纪元（0.8.0）日衰减锚点跨重启往返。
+         */
+        reopenedThird.setAffectionDecayDate(
+                player,
+                "2026-08-20"
+        );
+
+        flushAndAwait(
+                reopenedThird
+        );
+
+        YamlCatStore reopenedFourth =
+                newStore();
+
+        assertEquals(
+                "2026-08-20",
+                reopenedFourth.getAffectionDecayDate(player)
+        );
+
+        /*
+         * 装备位（0.8.0）跨重启往返。
+         */
+        reopenedFourth.setCatEquipment(
+                player,
+                "collar-epic"
+        );
+
+        reopenedFourth.setCatEquipmentBonus(
+                player,
+                "starlight"
+        );
+
+        flushAndAwait(
+                reopenedFourth
+        );
+
+        YamlCatStore reopenedFifth =
+                newStore();
+
+        assertEquals(
+                "collar-epic",
+                reopenedFifth.getCatEquipment(player)
+        );
+
+        assertEquals(
+                "starlight",
+                reopenedFifth.getCatEquipmentBonus(player)
+        );
+
+        reopenedFifth.setCatEquipment(
+                player,
+                ""
+        );
+
+        reopenedFifth.setCatEquipmentBonus(
+                player,
+                ""
+        );
+
+        assertEquals(
+                "",
+                reopenedFifth.getCatEquipment(player)
+        );
+
+        assertEquals(
+                "",
+                reopenedFifth.getCatEquipmentBonus(player)
+        );
     }
 
     @Test
-    void migrationV1ToV7() throws IOException {
+    void migrationV1ToV8() throws IOException {
 
         String yaml = """
                 data-version: 1
@@ -336,6 +406,16 @@ class YamlCatStoreLifecycleTest {
                         .isEmpty()
         );
 
+        assertTrue(
+                store.getAchievementsPendingList(player)
+                        .isEmpty()
+        );
+
+        assertTrue(
+                store.getAchievementsRewardedList(player)
+                        .isEmpty()
+        );
+
         assertEquals(
                 0,
                 store.getAchievementProgress(
@@ -350,7 +430,7 @@ class YamlCatStoreLifecycleTest {
                 );
 
         assertTrue(
-                written.contains("data-version: 7")
+                written.contains("data-version: 8")
         );
     }
 
@@ -384,7 +464,7 @@ class YamlCatStoreLifecycleTest {
     }
 
     @Test
-    void migrationV4ToV7AddsAchievementSection() throws IOException {
+    void migrationV4ToV8AddsAchievementSection() throws IOException {
 
         String yaml = """
                 data-version: 4
@@ -430,7 +510,7 @@ class YamlCatStoreLifecycleTest {
                 );
 
         assertTrue(
-                written.contains("data-version: 7")
+                written.contains("data-version: 8")
         );
 
         assertTrue(
@@ -444,10 +524,14 @@ class YamlCatStoreLifecycleTest {
         assertTrue(
                 written.contains("achievements-pending")
         );
+
+        assertTrue(
+                written.contains("achievements-rewarded")
+        );
     }
 
     @Test
-    void migrationV5ToV7AddsPendingField() throws IOException {
+    void migrationV5ToV8AddsPendingField() throws IOException {
 
         String yaml = """
                 data-version: 5
@@ -476,8 +560,9 @@ class YamlCatStoreLifecycleTest {
                 );
 
         /*
-         * v5 数据迁移到 v6：
-         * 既有成就数据原样保留，pending 字段补为空列表。
+         * v5 数据迁移到 v8：
+         * 既有成就数据原样保留，
+         * pending / rewarded / decay-date 字段补为空。
          */
         assertEquals(
                 List.of("FIRST_CLAIM"),
@@ -497,13 +582,18 @@ class YamlCatStoreLifecycleTest {
                         .isEmpty()
         );
 
+        assertTrue(
+                store.getAchievementsRewardedList(player)
+                        .isEmpty()
+        );
+
         String written =
                 Files.readString(
                         tempDir.resolve("players.yml")
                 );
 
         assertTrue(
-                written.contains("data-version: 7")
+                written.contains("data-version: 8")
         );
 
         assertTrue(
@@ -516,7 +606,7 @@ class YamlCatStoreLifecycleTest {
     }
 
     @Test
-    void migrationV6ToV7AddsRewardedField() throws IOException {
+    void migrationV6ToV8AddsRewardedAndDecayDate() throws IOException {
 
         String yaml = """
                 data-version: 6
@@ -545,8 +635,10 @@ class YamlCatStoreLifecycleTest {
                 );
 
         /*
-         * v6 数据迁移到 v7：
-         * unlocked / pending 原样保留，rewarded 补为空列表。
+         * v6 数据迁移到 v8：
+         * unlocked / pending 原样保留，
+         * rewarded 补为空列表，affection-decay-date 补为今日，
+         * equipment 补为空串。
          */
         assertEquals(
                 List.of("FIRST_CLAIM"),
@@ -563,17 +655,173 @@ class YamlCatStoreLifecycleTest {
                         .isEmpty()
         );
 
+        assertEquals(
+                java.time.LocalDate.now()
+                        .toString(),
+                store.getAffectionDecayDate(player)
+        );
+
         String written =
                 Files.readString(
                         tempDir.resolve("players.yml")
                 );
 
         assertTrue(
-                written.contains("data-version: 7")
+                written.contains("data-version: 8")
         );
 
         assertTrue(
                 written.contains("achievements-rewarded")
+        );
+
+        assertTrue(
+                written.contains("affection-decay-date")
+        );
+
+        assertTrue(
+                written.contains("equipment")
+        );
+    }
+
+    @Test
+    void migrationV7ToV8AddsDecayDateAndEquipment() throws IOException {
+
+        String yaml = """
+                data-version: 7
+                players:
+                  11111111-1111-1111-1111-111111111111:
+                   cat:
+                    id: 22222222-2222-2222-2222-222222222222
+                    name: OldCat
+                    level: 3
+                    achievements-unlocked:
+                     - FIRST_CLAIM
+                    achievements-rewarded:
+                     - FIRST_CLAIM
+                """;
+
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                yaml
+        );
+
+        YamlCatStore store = newStore();
+
+        UUID player =
+                UUID.fromString(
+                        "11111111-1111-1111-1111-111111111111"
+                );
+
+        /*
+         * v7 数据迁移到 v8：
+         * rewarded 原样保留，affection-decay-date 补为今日，
+         * equipment 与 equipment-bonus 补为空串。
+         */
+        assertTrue(
+                store.isAchievementRewarded(
+                        player,
+                        "FIRST_CLAIM"
+                )
+        );
+
+        assertEquals(
+                java.time.LocalDate.now()
+                        .toString(),
+                store.getAffectionDecayDate(player)
+        );
+
+        assertEquals(
+                "",
+                store.getCatEquipment(player)
+        );
+
+        assertEquals(
+                "",
+                store.getCatEquipmentBonus(player)
+        );
+
+        String written =
+                Files.readString(
+                        tempDir.resolve("players.yml")
+                );
+
+        assertTrue(
+                written.contains("data-version: 8")
+        );
+
+        assertTrue(
+                written.contains("affection-decay-date")
+        );
+
+        assertTrue(
+                written.contains("equipment")
+        );
+
+        assertTrue(
+                written.contains("equipment-bonus")
+        );
+    }
+
+    @Test
+    void v8FileLoadsAsCurrentVersionWithoutMigration() throws IOException {
+
+        String yaml = """
+                data-version: 8
+                players:
+                  11111111-1111-1111-1111-111111111111:
+                   cat:
+                    id: 22222222-2222-2222-2222-222222222222
+                    name: OldCat
+                    level: 3
+                    affection-decay-date: 2026-08-20
+                """;
+
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                yaml
+        );
+
+        YamlCatStore store = newStore();
+
+        UUID player =
+                UUID.fromString(
+                        "11111111-1111-1111-1111-111111111111"
+                );
+
+        /*
+         * v8 即当前版本：不触发迁移、不回写文件；
+         * 既有字段原样保留，equipment / equipment-bonus
+         * 读侧缺省为空串（兼容中间开发版写入的 v8 文件）。
+         */
+        assertEquals(
+                "2026-08-20",
+                store.getAffectionDecayDate(player)
+        );
+
+        assertEquals(
+                "",
+                store.getCatEquipment(player)
+        );
+
+        assertEquals(
+                "",
+                store.getCatEquipmentBonus(player)
+        );
+
+        String written =
+                Files.readString(
+                        tempDir.resolve("players.yml")
+                );
+
+        assertTrue(
+                written.contains("data-version: 8")
+        );
+
+        /*
+         * 当前版本不触发迁移回写：文件中不应出现装备字段。
+         */
+        assertFalse(
+                written.contains("equipment")
         );
     }
 

@@ -271,8 +271,8 @@ public class CatBattleLootListener implements Listener {
     /*
      * 经验结算（0.7.4）：
      * 末影龙 > 凋零 > 普通敌对生物；
-     * 协助击杀的和平生物不算数（与成就击杀口径一致）。\n
-     * 区间做了防御性归一，绝不给 nextInt 传递上界 < 下界。\n
+     * 协助击杀的和平生物不算数（与成就击杀口径一致）。
+     * 区间做了防御性归一，绝不给 nextInt 传递上界 < 下界。
      */
     private int xpFor(
             Entity victim,

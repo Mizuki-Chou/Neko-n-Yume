@@ -74,6 +74,59 @@ public class CatProgressionService {
         ConfigSnapshot config =
                 configManager.snapshot();
 
+        /*
+         * 羁绊纪元（0.8.0）：
+         * 心情 × 羁绊经验倍率作用于全部经验来源。
+         */
+        amount =
+                CareMath.applyExperience(
+                        amount,
+                        CareMath.experienceMultiplier(
+                                cat.getMood(),
+                                CareMath.bondFor(
+                                        cat,
+                                        config.getCare()
+                                ),
+                                config.getCare()
+                        )
+                );
+
+        /*
+         * 装备（0.8.0）：名牌的经验获取加成（与心情/羁绊倍率相乘）。
+         */
+        CatEquipItem equip =
+                cat.getEquippedItem();
+
+        if (equip != null &&
+                equip.getXpBonusPercent() > 0) {
+
+            amount =
+                    CareMath.applyExperience(
+                            amount,
+                            1.0
+                                    + equip.getXpBonusPercent()
+                                    / 100.0
+                    );
+        }
+
+        /*
+         * 附加属性（0.8.0）：贪婪的经验获取加成。
+         */
+        EquipBonusAttribute equipBonus =
+                cat.getEquippedBonus();
+
+        if (equipBonus != null &&
+                equipBonus.getXpBonusPercent() > 0) {
+
+            amount =
+                    CareMath.applyExperience(
+                            amount,
+                            1.0
+                                    + equipBonus.getXpBonusPercent()
+                                    / 100.0
+                    );
+        }
+
         int fromLevel = cat.getLevel();
 
         int gained =

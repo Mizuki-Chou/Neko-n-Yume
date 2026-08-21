@@ -3,6 +3,7 @@ package mizukichou.nekonyume.task;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
 import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatEquipItem;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
@@ -149,6 +150,19 @@ public class CatAuraTask implements Runnable {
                 radius = 15;
             }
 
+            /*
+             * 装备（0.8.0）：铃铛的光环半径加成。
+             */
+            CatEquipItem equip =
+                    logicalCat.getEquippedItem();
+
+            if (equip != null &&
+                    equip.getAuraBonus() > 0) {
+
+                radius +=
+                        equip.getAuraBonus();
+            }
+
             double distSq =
                     cat.getLocation()
                             .distanceSquared(
@@ -179,6 +193,15 @@ public class CatAuraTask implements Runnable {
             if (logicalCat.hasSkill(
                     CatSkill.WARMTH
             )) {
+
+                speedAmp++;
+            }
+
+            /*
+             * 装备（0.8.0）：卓越/至极铃铛的光环加速。
+             */
+            if (equip != null &&
+                    equip.isAuraSpeed()) {
 
                 speedAmp++;
             }

@@ -2,11 +2,15 @@ package mizukichou.nekonyume.task;
 
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
+import mizukichou.nekonyume.cat.CareMath;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEntityService;
+import mizukichou.nekonyume.cat.CatEquipItem;
 import mizukichou.nekonyume.cat.CatSkill;
+import mizukichou.nekonyume.cat.EquipBonusAttribute;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.util.SafeTeleport;
 import mizukichou.nekonyume.util.TargetGuard;
@@ -18,6 +22,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
+import org.bukkit.attribute.Attribute;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
@@ -98,11 +103,19 @@ public class CatBattleTask implements Runnable {
      */
     private static final int INVISIBILITY_REFRESH_TICKS = 40;
 
+    /*
+     * 近战攻击间隔下限（tick）：
+     * 毛线球的间隔缩减不会把攻速压到低于 4 次/秒。
+     */
+    private static final long MIN_ATTACK_INTERVAL_TICKS = 5L;
+
     private final Logger logger;
     private final ConfigManager configManager;
     private final CatCache cache;
     private final CatBattleState battleState;
     private final CatEntityService entityService;
+
+    private final Lang lang;
 
     /*
      * 任务内统一随机源（不用 Math.random）。
@@ -115,7 +128,8 @@ public class CatBattleTask implements Runnable {
             ConfigManager configManager,
             CatCache cache,
             CatBattleState battleState,
-            CatEntityService entityService
+            CatEntityService entityService,
+            Lang lang
     ) {
 
         this.logger = logger;
@@ -123,6 +137,7 @@ public class CatBattleTask implements Runnable {
         this.cache = cache;
         this.battleState = battleState;
         this.entityService = entityService;
+        this.lang = lang;
     }
 
     @Override
@@ -320,9 +335,10 @@ public class CatBattleTask implements Runnable {
 
             /*
              * 恢复期外：血量不满时缓慢回血
-             * （每 4 秒 1 点）。
+             * （每 4 秒 1 点，围巾至极翻倍）。
              */
             tickRegen(
+                    logicalCat,
                     cat,
                     entityUuid
             );
@@ -340,6 +356,57 @@ public class CatBattleTask implements Runnable {
             );
 
             return;
+        }
+
+        /*
+         * 羁绊纪元（0.8.0）：
+         * 饥饿到门槛以下拒绝索敌（守在主人身边不上前）。
+         * 阈值 -1 = 关闭。
+         * 状态变化只提示一次。
+         */
+        int starvingThreshold =
+                configManager.snapshot()
+                        .getCare()
+                        .getStarvingFightThreshold();
+
+        if (starvingThreshold >= 0 &&
+                logicalCat.getHunger() <= starvingThreshold) {
+
+            battleState.setChasing(
+                    entityUuid,
+                    false
+            );
+
+            if (battleState.markStarvingAlerted(
+                    entityUuid
+            )) {
+
+                Player starvingOwner =
+                        Bukkit.getPlayer(
+                                logicalCat.getOwnerUuid()
+                        );
+
+                if (starvingOwner != null &&
+                        starvingOwner.isOnline()) {
+
+                    starvingOwner.sendMessage(
+                            lang.forPlayer(starvingOwner)
+                                    .message(
+                                            "battle.starving",
+                                            logicalCat.getName()
+                                    )
+                    );
+                }
+            }
+
+            return;
+        }
+
+        if (logicalCat.getHunger() > starvingThreshold) {
+
+            battleState.clearStarvingAlerted(
+                    entityUuid
+            );
         }
 
         Player owner =
@@ -494,6 +561,34 @@ public class CatBattleTask implements Runnable {
                     (long) (intervalTicks * 0.8);
         }
 
+        /*
+         * 装备（0.8.0）：毛线球的攻击间隔缩减（下限保护）；
+         * 附加属性「迅影」同样计入。
+         */
+        CatEquipItem intervalEquip =
+                logicalCat.getEquippedItem();
+
+        EquipBonusAttribute intervalBonus =
+                logicalCat.getEquippedBonus();
+
+        int intervalReduction =
+                (intervalEquip == null
+                        ? 0
+                        : intervalEquip.getAttackIntervalReductionTicks())
+                        + (intervalBonus == null
+                        ? 0
+                        : intervalBonus.getAttackIntervalReductionTicks());
+
+        if (intervalReduction > 0) {
+
+            intervalTicks =
+                    Math.max(
+                            MIN_ATTACK_INTERVAL_TICKS,
+                            intervalTicks
+                                    - intervalReduction
+                    );
+        }
+
         long intervalMs =
                 intervalTicks * 50L;
 
@@ -541,6 +636,55 @@ public class CatBattleTask implements Runnable {
         );
 
         /*
+         * 装备（0.8.0）：至极项圈吸血自愈（治疗猫自身）；
+         * 附加属性「血月」同样计入。
+         */
+        CatEquipItem equip =
+                logicalCat.getEquippedItem();
+
+        EquipBonusAttribute bonus =
+                logicalCat.getEquippedBonus();
+
+        int lifestealPercent =
+                (equip == null
+                        ? 0
+                        : equip.getLifestealPercent())
+                        + (bonus == null
+                        ? 0
+                        : bonus.getLifestealPercent());
+
+        if (lifestealPercent > 0 &&
+                cat.isValid() &&
+                !cat.isDead()) {
+
+            double lifesteal =
+                    damage
+                            * lifestealPercent
+                            / 100.0;
+
+            if (lifesteal > 0.0) {
+
+                org.bukkit.attribute.AttributeInstance maxAttribute =
+                        cat.getAttribute(
+                                Attribute.MAX_HEALTH
+                        );
+
+                double maxHealth =
+                        maxAttribute == null
+                                ? cat.getHealth()
+                                : maxAttribute.getValue();
+
+                cat.setHealth(
+                        Math.min(
+                                maxHealth,
+                                cat.getHealth()
+                                        + lifesteal
+                        )
+                );
+            }
+        }
+
+        /*
          * 汲取：伤害 20% 治疗主人。
          */
         if (logicalCat.hasSkill(
@@ -576,6 +720,7 @@ public class CatBattleTask implements Runnable {
      */
 
     private void tickRegen(
+            Cat logicalCat,
             org.bukkit.entity.Cat cat,
             UUID entityUuid
     ) {
@@ -605,10 +750,28 @@ public class CatBattleTask implements Runnable {
                 entityUuid
         );
 
+        /*
+         * 装备（0.8.0）：至极围巾的缓慢回血加成。
+         */
+        double regenAmount = 1.0;
+
+        CatEquipItem equip =
+                logicalCat.getEquippedItem();
+
+        if (equip != null &&
+                equip.getRegenBoostPercent() > 0) {
+
+            regenAmount =
+                    1.0
+                            + equip.getRegenBoostPercent()
+                            / 100.0;
+        }
+
         cat.setHealth(
                 Math.min(
                         max,
-                        cat.getHealth() + 1.0
+                        cat.getHealth()
+                                + regenAmount
                 )
         );
     }
@@ -830,6 +993,32 @@ public class CatBattleTask implements Runnable {
         }
 
         /*
+         * 装备（0.8.0）：项圈的近战伤害加成。
+         */
+        CatEquipItem equip =
+                logicalCat.getEquippedItem();
+
+        if (equip != null &&
+                equip.getDamageBonus() > 0) {
+
+            damage +=
+                    equip.getDamageBonus();
+        }
+
+        /*
+         * 附加属性（0.8.0）：星辉的近战伤害加成。
+         */
+        EquipBonusAttribute bonus =
+                logicalCat.getEquippedBonus();
+
+        if (bonus != null &&
+                bonus.getDamageBonus() > 0) {
+
+            damage +=
+                    bonus.getDamageBonus();
+        }
+
+        /*
          * 月华：夜晚 +20%。
          */
         if (logicalCat.hasSkill(
@@ -847,6 +1036,27 @@ public class CatBattleTask implements Runnable {
                         (int) (damage * 1.2);
             }
         }
+
+        /*
+         * 羁绊纪元（0.8.0）：
+         * 心情 × 羁绊战斗倍率，四舍五入后保底 1。
+         */
+        ConfigSnapshot.Care care =
+                configManager.snapshot()
+                        .getCare();
+
+        damage =
+                CareMath.applyDamage(
+                        damage,
+                        CareMath.battleDamageMultiplier(
+                                logicalCat.getMood(),
+                                CareMath.bondFor(
+                                        logicalCat,
+                                        care
+                                ),
+                                care
+                        )
+                );
 
         return Math.max(
                 1,
@@ -969,6 +1179,55 @@ public class CatBattleTask implements Runnable {
                     owner,
                     damage * 0.2
             );
+        }
+
+        /*
+         * 装备（0.8.0）：至极项圈吸血自愈（远程同样生效）；
+         * 附加属性「血月」同样计入。
+         */
+        CatEquipItem equip =
+                logicalCat.getEquippedItem();
+
+        EquipBonusAttribute bonus =
+                logicalCat.getEquippedBonus();
+
+        int lifestealPercent =
+                (equip == null
+                        ? 0
+                        : equip.getLifestealPercent())
+                        + (bonus == null
+                        ? 0
+                        : bonus.getLifestealPercent());
+
+        if (lifestealPercent > 0 &&
+                cat.isValid() &&
+                !cat.isDead()) {
+
+            double lifesteal =
+                    damage
+                            * lifestealPercent
+                            / 100.0;
+
+            if (lifesteal > 0.0) {
+
+                org.bukkit.attribute.AttributeInstance maxAttribute =
+                        cat.getAttribute(
+                                Attribute.MAX_HEALTH
+                        );
+
+                double maxHealth =
+                        maxAttribute == null
+                                ? cat.getHealth()
+                                : maxAttribute.getValue();
+
+                cat.setHealth(
+                        Math.min(
+                                maxHealth,
+                                cat.getHealth()
+                                        + lifesteal
+                        )
+                );
+            }
         }
     }
 

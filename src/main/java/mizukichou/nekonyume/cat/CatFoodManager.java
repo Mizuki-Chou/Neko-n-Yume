@@ -60,6 +60,7 @@ public class CatFoodManager {
     private final CatCache cache;
     private final ConfigManager configManager;
     private final CatProgressionService progression;
+    private final CatEntityService entityService;
     private final Lang lang;
 
     /*
@@ -78,12 +79,28 @@ public class CatFoodManager {
      */
     private final NamespacedKey xpPillKey;
 
+    /*
+     * 0.8.0：装备 PDC 身份键（值 = CatEquipItem.code）。
+     */
+    private final NamespacedKey equipKey;
+
+    /*
+     * 0.8.0：装备附加属性 PDC 键（值 = EquipBonusAttribute.code）。
+     */
+    private final NamespacedKey equipBonusKey;
+
+    /*
+     * 0.8.0：猫猫装备袋 PDC 身份键（值 = BYTE 1）。
+     */
+    private final NamespacedKey equipBagKey;
+
     public CatFoodManager(
             JavaPlugin plugin,
             CatStore store,
             CatCache cache,
             ConfigManager configManager,
             CatProgressionService progression,
+            CatEntityService entityService,
             Lang lang
     ) {
 
@@ -92,6 +109,7 @@ public class CatFoodManager {
         this.cache = cache;
         this.configManager = configManager;
         this.progression = progression;
+        this.entityService = entityService;
         this.lang = lang;
 
         this.meowDanKey =
@@ -110,6 +128,24 @@ public class CatFoodManager {
                 new NamespacedKey(
                         plugin,
                         "nekonyume_xp_pill"
+                );
+
+        this.equipKey =
+                new NamespacedKey(
+                        plugin,
+                        "nekonyume_equip"
+                );
+
+        this.equipBonusKey =
+                new NamespacedKey(
+                        plugin,
+                        "nekonyume_equip_bonus"
+                );
+
+        this.equipBagKey =
+                new NamespacedKey(
+                        plugin,
+                        "nekonyume_equip_bag"
                 );
 
         registerFoods();
@@ -669,6 +705,896 @@ public class CatFoodManager {
                 : config.getNormalXp();
     }
 
+    /*
+     * ============================================================
+     * 装备（0.8.0）
+     * ============================================================
+     */
+
+    public ItemStack createEquipment(
+            CatEquipItem equip,
+            int amount,
+            Player player
+    ) {
+
+        if (equip == null ||
+                amount <= 0) {
+
+            throw new IllegalArgumentException(
+                    "equip == null || amount <= 0"
+            );
+        }
+
+        int safeAmount =
+                Math.min(
+                        amount,
+                        64
+                );
+
+        ItemStack item =
+                new ItemStack(
+                        equip.getType().getMaterial(),
+                        safeAmount
+                );
+
+        ItemMeta meta =
+                item.getItemMeta();
+
+        if (meta == null) {
+            return item;
+        }
+
+        String name =
+                lang.forPlayer(player).text(
+                        equip.getLangKey()
+                );
+
+        meta.setDisplayName(
+                equip.getQuality().getColorCode()
+                        + "✨ "
+                        + name
+        );
+
+        java.util.List<String> lore =
+                new java.util.ArrayList<>();
+
+        lore.add(
+                lang.forPlayer(player).text(
+                        "equip-lore."
+                                + equip.getType().getId()
+                )
+        );
+
+        if (equip.getDamageBonus() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.damage",
+                            String.valueOf(
+                                    equip.getDamageBonus()
+                            )
+                    )
+            );
+        }
+
+        if (equip.getAuraBonus() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.aura",
+                            String.valueOf(
+                                    equip.getAuraBonus()
+                            )
+                    )
+            );
+        }
+
+        if (equip.getMeowBonus() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.meow",
+                            String.valueOf(
+                                    equip.getMeowBonus()
+                            )
+                    )
+            );
+        }
+
+        if (equip.getCatHealthBonus() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.health",
+                            String.valueOf(
+                                    equip.getCatHealthBonus()
+                            )
+                    )
+            );
+        }
+
+        if (equip.getDamageReductionPercent() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.reduction",
+                            String.valueOf(
+                                    equip.getDamageReductionPercent()
+                            )
+                    )
+            );
+        }
+
+        if (equip.getLifestealPercent() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.lifesteal",
+                            String.valueOf(
+                                    equip.getLifestealPercent()
+                            )
+                    )
+            );
+        }
+
+        if (equip.isAuraSpeed()) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.aura-speed"
+                    )
+            );
+        }
+
+        if (equip.getFeedAffectionBonus() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.feed-affection",
+                            String.valueOf(
+                                    equip.getFeedAffectionBonus()
+                            )
+                    )
+            );
+        }
+
+        if (equip.getHungerSlowPercent() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.hunger-slow",
+                            String.valueOf(
+                                    equip.getHungerSlowPercent()
+                            )
+                    )
+            );
+        }
+
+        if (equip.getXpBonusPercent() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.xp",
+                            String.valueOf(
+                                    equip.getXpBonusPercent()
+                            )
+                    )
+            );
+        }
+
+        if (equip.getCooldownReductionPercent() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.cooldown",
+                            String.valueOf(
+                                    equip.getCooldownReductionPercent()
+                            )
+                    )
+            );
+        }
+
+        if (equip.getAttackIntervalReductionTicks() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.attack-speed",
+                            String.valueOf(
+                                    equip.getAttackIntervalReductionTicks()
+                            )
+                    )
+            );
+        }
+
+        if (equip.getAffectionDecayReduce() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.decay-reduce",
+                            String.valueOf(
+                                    equip.getAffectionDecayReduce()
+                            )
+                    )
+            );
+        }
+
+        if (equip.getRegenBoostPercent() > 0) {
+
+            lore.add(
+                    lang.forPlayer(player).text(
+                            "equip-lore.regen",
+                            String.valueOf(
+                                    equip.getRegenBoostPercent()
+                            )
+                    )
+            );
+        }
+
+        meta.setLore(
+                lore
+        );
+
+        meta.setCustomModelData(
+                equip.getCustomModelData()
+        );
+
+        meta.getPersistentDataContainer()
+                .set(
+                        equipKey,
+                        PersistentDataType.STRING,
+                        equip.getCode()
+                );
+
+        item.setItemMeta(
+                meta
+        );
+
+        return item;
+    }
+
+    public boolean isEquipment(
+            ItemStack item
+    ) {
+
+        return getEquipment(
+                item
+        ) != null;
+    }
+
+    public CatEquipItem getEquipment(
+            ItemStack item
+    ) {
+
+        if (item == null ||
+                item.getType().isAir()) {
+
+            return null;
+        }
+
+        ItemMeta meta =
+                item.getItemMeta();
+
+        if (meta == null) {
+            return null;
+        }
+
+        String code =
+                meta.getPersistentDataContainer()
+                        .get(
+                                equipKey,
+                                PersistentDataType.STRING
+                        );
+
+        return CatEquipItem.fromCode(
+                code
+        );
+    }
+
+    /*
+     * 读取物品的附加属性；未知/空返回 null。
+     */
+    public EquipBonusAttribute getEquipmentBonus(
+            ItemStack item
+    ) {
+
+        if (item == null ||
+                item.getType().isAir()) {
+
+            return null;
+        }
+
+        ItemMeta meta =
+                item.getItemMeta();
+
+        if (meta == null) {
+            return null;
+        }
+
+        String code =
+                meta.getPersistentDataContainer()
+                        .get(
+                                equipBonusKey,
+                                PersistentDataType.STRING
+                        );
+
+        return EquipBonusAttribute.fromCode(
+                code
+        );
+    }
+
+    /*
+     * 给物品附上附加属性：炫彩色 lore 行 + PDC 身份。
+     *
+     * 只追加、不重roll——与觉醒（roll）严格分离：
+     * 展示/归还路径可以安全复用，不会误触随机。
+     */
+    public void applyBonusAttribute(
+            ItemStack item,
+            EquipBonusAttribute bonus,
+            Player player
+    ) {
+
+        if (item == null ||
+                bonus == null ||
+                player == null) {
+
+            return;
+        }
+
+        ItemMeta meta =
+                item.getItemMeta();
+
+        if (meta == null) {
+            return;
+        }
+
+        java.util.List<String> lore =
+                meta.getLore() == null
+                        ? new java.util.ArrayList<>()
+                        : new java.util.ArrayList<>(
+                        meta.getLore()
+                );
+
+        lore.add("");
+
+        lore.add(
+                EquipBonusAttribute.rainbow(
+                        "✦ "
+                                + lang.forPlayer(player).text(
+                                bonus.getLangKey()
+                        )
+                                + "："
+                                + lang.forPlayer(player).text(
+                                bonus.getDescKey(),
+                                String.valueOf(
+                                        bonus.getDisplayValue()
+                                )
+                        )
+                )
+        );
+
+        meta.setLore(
+                lore
+        );
+
+        meta.getPersistentDataContainer()
+                .set(
+                        equipBonusKey,
+                        PersistentDataType.STRING,
+                        bonus.getCode()
+                );
+
+        item.setItemMeta(
+                meta
+        );
+    }
+
+    /*
+     * 获取途径专用：生成一件装备并觉醒 roll。
+     *
+     * 至极品质有 ROLL_PERCENT 概率携带附加属性；
+     * 其余品质永不携带。
+     * 所有未来获取途径（掉落、任务、礼包等）都应走本方法，
+     * 保证“获得的一瞬间”语义统一（拾取物品不会重roll）。
+     */
+    public ItemStack createAcquisition(
+            CatEquipItem equip,
+            Player player
+    ) {
+
+        ItemStack item =
+                createEquipment(
+                        equip,
+                        1,
+                        player
+                );
+
+        if (equip.getQuality()
+                == MeowDanQuality.LEGENDARY) {
+
+            EquipBonusAttribute bonus =
+                    EquipBonusAttribute.roll(
+                            random
+                    );
+
+            if (bonus != null) {
+
+                applyBonusAttribute(
+                        item,
+                        bonus,
+                        player
+                );
+            }
+        }
+
+        return item;
+    }
+
+    /*
+     * 归还路径专用：按已存档的附加属性重建装备（不重roll）。
+     */
+    public ItemStack createEquippedReturn(
+            CatEquipItem equip,
+            EquipBonusAttribute bonus,
+            Player player
+    ) {
+
+        ItemStack item =
+                createEquipment(
+                        equip,
+                        1,
+                        player
+                );
+
+        if (bonus != null) {
+
+            applyBonusAttribute(
+                    item,
+                    bonus,
+                    player
+            );
+        }
+
+        return item;
+    }
+
+    /*
+     * 发放装备（背包优先，满则掉落在脚边）。
+     * 觉醒 roll 在本方法内发生；返回实际发放的物品。
+     */
+    public ItemStack grantEquipment(
+            Player player,
+            CatEquipItem equip
+    ) {
+
+        if (player == null ||
+                equip == null) {
+
+            throw new IllegalArgumentException(
+                    "player == null || equip == null"
+            );
+        }
+
+        ItemStack item =
+                createAcquisition(
+                        equip,
+                        player
+                );
+
+        java.util.Map<Integer, ItemStack> left =
+                player.getInventory()
+                        .addItem(
+                                item
+                        );
+
+        if (!left.isEmpty()) {
+
+            for (ItemStack rest :
+                    left.values()) {
+
+                player.getWorld()
+                        .dropItemNaturally(
+                                player.getLocation(),
+                                rest
+                        );
+            }
+        }
+
+        return item;
+    }
+
+    /*
+     * ============================================================
+     * 猫猫装备袋（0.8.0 梦魔之夜）
+     * ============================================================
+     *
+     * 掉落概率见 config.yml 的 drops 节
+     * （梦魔夜 drops.muma-night.equip-bag-chance 默认 0.02，
+     * 平时 drops.general.equip-bag-chance 默认 0）；
+     * 右键打开自动抽取一件装备（品质 40/30/20/7.5/2.5）。
+     * 物品身份：PDC nekonyume_equip_bag = BYTE 1。
+     */
+
+    public static final int EQUIP_BAG_MODEL_DATA = 92050;
+
+    public ItemStack createEquipBag(
+            int amount,
+            Player player
+    ) {
+
+        int safeAmount =
+                Math.max(
+                        1,
+                        Math.min(
+                                amount,
+                                64
+                        )
+                );
+
+        ItemStack item =
+                new ItemStack(
+                        Material.BUNDLE,
+                        safeAmount
+                );
+
+        ItemMeta meta =
+                item.getItemMeta();
+
+        if (meta != null) {
+
+            meta.setDisplayName(
+                    "§d✨ "
+                            + lang.forPlayer(player).text(
+                            "equip-bag.name"
+                    )
+            );
+
+            meta.setLore(
+                    Arrays.asList(
+                            lang.forPlayer(player).text(
+                                    "equip-bag.lore-1"
+                            ),
+                            lang.forPlayer(player).text(
+                                    "equip-bag.lore-2"
+                            )
+                    )
+            );
+
+            meta.setCustomModelData(
+                    EQUIP_BAG_MODEL_DATA
+            );
+
+            meta.getPersistentDataContainer()
+                    .set(
+                            equipBagKey,
+                            PersistentDataType.BYTE,
+                            (byte) 1
+                    );
+
+            item.setItemMeta(
+                    meta
+            );
+        }
+
+        return item;
+    }
+
+    public boolean isEquipBag(
+            ItemStack item
+    ) {
+
+        if (item == null ||
+                !item.hasItemMeta()) {
+
+            return false;
+        }
+
+        return item.getItemMeta()
+                .getPersistentDataContainer()
+                .has(
+                        equipBagKey,
+                        PersistentDataType.BYTE
+                );
+    }
+
+    /*
+     * 觉醒播报（彩虹“至宝降世”）：发放路径共用。
+     */
+    public void announceEquipBonus(
+            Player player,
+            EquipBonusAttribute bonus
+    ) {
+
+        if (player == null ||
+                bonus == null) {
+
+            return;
+        }
+
+        player.sendMessage(
+                legacySerializer.deserialize(
+                        EquipBonusAttribute.rainbow(
+                                lang.forPlayer(player).text(
+                                        "equip-bonus.obtained",
+                                        lang.forPlayer(player).text(
+                                                bonus.getLangKey()
+                                        )
+                                )
+                        )
+                )
+        );
+    }
+
+    /*
+     * 穿戴装备（0.8.0）：唯一装备位，替换时旧装备归还玩家。
+     * 返回是否成功（物品已消耗 / 装备已生效）。
+     */
+    public boolean equipCat(
+            Player player,
+            org.bukkit.entity.Cat entity,
+            CatEquipItem equip
+    ) {
+
+        if (player == null ||
+                entity == null ||
+                equip == null) {
+
+            return false;
+        }
+
+        UUID playerUUID =
+                player.getUniqueId();
+
+        if (!store.hasCat(playerUUID)) {
+            return false;
+        }
+
+        Cat cat =
+                cache.loadCat(
+                        player
+                );
+
+        if (cat == null) {
+            return false;
+        }
+
+        /*
+         * 附加属性：从手中物品读取（PDC），与装备位绑定。
+         */
+        EquipBonusAttribute bonus =
+                getEquipmentBonus(
+                        player.getInventory()
+                                .getItemInMainHand()
+                );
+
+        if (!applyEquipCore(
+                player,
+                playerUUID,
+                cat,
+                equip,
+                bonus
+        )) {
+
+            return false;
+        }
+
+        /*
+         * 消耗手持物品（创造模式不消耗）。
+         */
+        if (player.getGameMode()
+                != GameMode.CREATIVE) {
+
+            ItemStack hand =
+                    player.getInventory()
+                            .getItemInMainHand();
+
+            if (hand != null &&
+                    !hand.getType().isAir()) {
+
+                hand.setAmount(
+                        hand.getAmount() <= 1
+                                ? 0
+                                : hand.getAmount() - 1
+                );
+            }
+        }
+
+        /*
+         * 刷新战斗相关状态（最大生命）。
+         */
+        entityService.refreshEquipStats(
+                player,
+                cat,
+                entity
+        );
+
+        return true;
+    }
+
+    /*
+     * 装备界面快捷穿戴（0.8.0）：
+     * 点击背包任意槽位中的装备直接穿上。
+     *
+     * <p>
+     * source 为被点击的背包槽位物品（活引用），
+     * 穿戴成功后扣减 1（创造模式不扣）。
+     * 实体刷新由调用方（装备界面）负责。
+     * </p>
+     */
+    public boolean equipFromStack(
+            Player player,
+            Cat cat,
+            CatEquipItem equip,
+            ItemStack source
+    ) {
+
+        if (player == null ||
+                cat == null ||
+                equip == null ||
+                source == null ||
+                source.getType().isAir()) {
+
+            return false;
+        }
+
+        UUID playerUUID =
+                player.getUniqueId();
+
+        if (!store.hasCat(playerUUID)) {
+            return false;
+        }
+
+        EquipBonusAttribute bonus =
+                getEquipmentBonus(
+                        source
+                );
+
+        if (!applyEquipCore(
+                player,
+                playerUUID,
+                cat,
+                equip,
+                bonus
+        )) {
+
+            return false;
+        }
+
+        if (player.getGameMode()
+                != GameMode.CREATIVE) {
+
+            source.setAmount(
+                    source.getAmount() <= 1
+                            ? 0
+                            : source.getAmount() - 1
+            );
+        }
+
+        return true;
+    }
+
+    /*
+     * 共用穿戴核心（0.8.0）：
+     * 旧装备捕获、同名同属性拦截、状态写入、旧装备归还与提示。
+     *
+     * <p>
+     * 不负责：物品消耗、实体刷新（调用方各司其职）。
+     * </p>
+     */
+    private boolean applyEquipCore(
+            Player player,
+            UUID playerUUID,
+            Cat cat,
+            CatEquipItem equip,
+            EquipBonusAttribute bonus
+    ) {
+
+        CatEquipItem old =
+                cat.getEquippedItem();
+
+        EquipBonusAttribute oldBonus =
+                cat.getEquippedBonus();
+
+        if (old == equip &&
+                java.util.Objects.equals(
+                        oldBonus,
+                        bonus
+                )) {
+
+            player.sendMessage(
+                    lang.forPlayer(player).message(
+                            "equip.same",
+                            lang.forPlayer(player).text(
+                                    equip.getLangKey()
+                            )
+                    )
+            );
+
+            return false;
+        }
+
+        cat.setEquippedItem(
+                equip
+        );
+
+        cat.setEquippedBonus(
+                bonus
+        );
+
+        store.setCatEquipment(
+                playerUUID,
+                equip.getCode()
+        );
+
+        store.setCatEquipmentBonus(
+                playerUUID,
+                bonus == null
+                        ? ""
+                        : bonus.getCode()
+        );
+
+        if (old != null) {
+
+            giveOrDrop(
+                    player,
+                    createEquippedReturn(
+                            old,
+                            oldBonus,
+                            player
+                    )
+            );
+
+            player.sendMessage(
+                    lang.forPlayer(player).message(
+                            "equip.replaced",
+                            lang.forPlayer(player).text(
+                                    old.getLangKey()
+                            )
+                    )
+            );
+        }
+
+        player.sendMessage(
+                lang.forPlayer(player).message(
+                        "equip.done",
+                        lang.forPlayer(player).text(
+                                equip.getLangKey()
+                        )
+                )
+        );
+
+        return true;
+    }
+
+    /*
+     * 背包优先，满了掉在脚边。
+     */
+    private void giveOrDrop(
+            Player player,
+            ItemStack item
+    ) {
+
+        java.util.Map<Integer, ItemStack> left =
+                player.getInventory()
+                        .addItem(
+                                item
+                        );
+
+        if (left.isEmpty()) {
+            return;
+        }
+
+        for (ItemStack rest :
+                left.values()) {
+
+            player.getWorld()
+                    .dropItemNaturally(
+                            player.getLocation(),
+                            rest
+                    );
+        }
+    }
+
     /**
      * 喂食经验丸：只加经验，不动饱食 / 好感。
      * 返回是否成功（物品已消耗 / 经验已发放）。
@@ -1045,9 +1971,39 @@ public class CatFoodManager {
         ConfigSnapshot config =
                 configManager.snapshot();
 
+        ConfigSnapshot.Care care =
+                config.getCare();
+
+        /*
+         * 羁绊纪元（0.8.0）：
+         * 喂食好感改为饥饿相关：
+         * 饥饿（低于 care.hungry-feed-threshold）时喂食获得“雪中送炭”高好感，
+         * 非饥饿喂食只获得少量陪伴好感；性格加成保留。
+         */
+        boolean hungryFeed =
+                currentHunger
+                        < care.getHungryFeedThreshold();
+
+        int baseAffection =
+                hungryFeed
+                        ? care.getFeedHungryAffection()
+                        : care.getFeedNormalAffection();
+
+        /*
+         * 装备（0.8.0）：至极铃铛每次喂食额外好感。
+         */
+        CatEquipItem equip =
+                cat.getEquippedItem();
+
+        if (equip != null &&
+                equip.getFeedAffectionBonus() > 0) {
+
+            baseAffection +=
+                    equip.getFeedAffectionBonus();
+        }
+
         cat.addAffection(
-                config.getAffection()
-                        .getFeedBase()
+                baseAffection
                         + personality
                         .getFeedAffectionBonus()
         );
@@ -1055,6 +2011,24 @@ public class CatFoodManager {
         int actualAffectionGain =
                 cat.getAffection()
                         - oldAffection;
+
+        /*
+         * 羁绊纪元（0.8.0）：喂食恢复逻辑健康。
+         */
+        int healthRestore =
+                care.getFeedHealthRestore();
+
+        if (healthRestore > 0) {
+
+            cat.addHealth(
+                    healthRestore
+            );
+
+            store.setCatHealth(
+                    playerUUID,
+                    cat.getHealth()
+            );
+        }
 
         cat.markFed();
 
@@ -1119,15 +2093,43 @@ public class CatFoodManager {
                             + personality
                             .getFeedMeowChanceBonus();
 
+            /*
+             * 装备（0.8.0）：铃铛的喵力概率加成。
+             * equip 变量已在好感段声明，此处直接复用。
+             */
+            if (equip != null) {
+
+                chance +=
+                        equip.getMeowBonus();
+            }
+
+            /*
+             * 附加属性（0.8.0）：共鸣的喵力概率加成。
+             */
+            EquipBonusAttribute equipBonus =
+                    cat.getEquippedBonus();
+
+            if (equipBonus != null) {
+
+                chance +=
+                        equipBonus.getMeowBonus();
+            }
+
             if (chance > 0 &&
                     random.nextInt(100) < chance) {
 
-                meowGain = 1;
+                /*
+                 * 0.8.0 数值修正：
+                 * 触发量由配置决定（meow.feed-gain，默认2），
+                 * 与刷新费用形成合理比例。
+                 */
+                meowGain =
+                        meowConfig.getFeedGain();
 
                 progression.grantMeowPower(
                         player,
                         cat,
-                        1
+                        meowGain
                 );
             }
         }
@@ -1187,6 +2189,31 @@ public class CatFoodManager {
                         )
                 )
         );
+
+        /*
+         * 羁绊纪元（0.8.0）：雪中送炭提示。
+         */
+        if (hungryFeed) {
+
+            player.sendMessage(
+                    lang.forPlayer(player).message(
+                            "feed.hungry-bonus",
+                            cat.getName()
+                    )
+            );
+
+            player.getWorld()
+                    .spawnParticle(
+                            Particle.HEART,
+                            player.getLocation()
+                                    .add(0, 2, 0),
+                            10,
+                            0.4,
+                            0.4,
+                            0.4,
+                            0.02
+                    );
+        }
 
         return true;
     }

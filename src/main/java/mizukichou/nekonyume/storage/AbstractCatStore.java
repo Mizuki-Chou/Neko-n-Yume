@@ -67,10 +67,15 @@ public abstract class AbstractCatStore implements CatStore {
     protected static final String FIELD_MEOW_RANK = "meow-rank";
     protected static final String FIELD_FEED_COUNT = "feed-count";
     protected static final String FIELD_FEED_DATE = "feed-date";
+
+    protected static final String FIELD_AFFECTION_DECAY_DATE = "affection-decay-date";
+
     protected static final String FIELD_BEHAVIOR_MODE = "behavior-mode";
     protected static final String FIELD_TIER = "tier";
     protected static final String FIELD_SKILLS = "skills";
     protected static final String FIELD_VARIANT = "variant";
+    protected static final String FIELD_EQUIPMENT = "equipment";
+    protected static final String FIELD_EQUIPMENT_BONUS = "equipment-bonus";
     protected static final String FIELD_ENTITY_UUID = "entity-uuid";
     protected static final String FIELD_GIFT_DATE = "gift-date";
     protected static final String FIELD_WORLD_UUID = "world-uuid";
@@ -256,9 +261,25 @@ public abstract class AbstractCatStore implements CatStore {
 
         Object value = getRaw(playerUUID, field);
 
-        return value instanceof String s
-                ? s
-                : def;
+        if (value instanceof String s) {
+            return s;
+        }
+
+        /*
+         * YAML 时间戳防御（0.8.0）：SnakeYAML 会把
+         * 形如 2026-08-20 的裸标量解析为 java.util.Date，
+         * 导致日期字符串字段（好感衰减锚点/礼物日期/每日
+         * 计数日期）在重启后读不到。这里统一还原为 ISO
+         * 日期字符串，保证跨重启一致。
+         */
+        if (value instanceof java.util.Date date) {
+
+            return new java.text.SimpleDateFormat(
+                    "yyyy-MM-dd"
+            ).format(date);
+        }
+
+        return def;
     }
 
     protected final int getInt(
@@ -438,6 +459,15 @@ public abstract class AbstractCatStore implements CatStore {
         fields.put(FIELD_MEOW_RANK, 0);
         fields.put(FIELD_FEED_COUNT, 0);
         fields.put(FIELD_FEED_DATE, today);
+
+        /*
+         * 羁绊纪元（0.8.0）：日衰减锚点初始化为今日，
+         * 新猫不会在建立当天就被扣好感（与迁移路径同语义）。
+         */
+        fields.put(
+                FIELD_AFFECTION_DECAY_DATE,
+                today
+        );
         fields.put(FIELD_BEHAVIOR_MODE, "FOLLOW");
         fields.put(
                 FIELD_TIER,
@@ -753,6 +783,16 @@ public abstract class AbstractCatStore implements CatStore {
     }
 
     @Override
+    public String getAffectionDecayDate(UUID playerUUID) {
+        return interactions.getAffectionDecayDate(playerUUID);
+    }
+
+    @Override
+    public void setAffectionDecayDate(UUID playerUUID, String date) {
+        interactions.setAffectionDecayDate(playerUUID, date);
+    }
+
+    @Override
     public String getCatBehaviorMode(UUID playerUUID) {
         return presence.getCatBehaviorMode(playerUUID);
     }
@@ -770,6 +810,26 @@ public abstract class AbstractCatStore implements CatStore {
     @Override
     public void setCatVariant(UUID playerUUID, String variant) {
         presence.setCatVariant(playerUUID, variant);
+    }
+
+    @Override
+    public String getCatEquipment(UUID playerUUID) {
+        return presence.getCatEquipment(playerUUID);
+    }
+
+    @Override
+    public void setCatEquipment(UUID playerUUID, String equipment) {
+        presence.setCatEquipment(playerUUID, equipment);
+    }
+
+    @Override
+    public String getCatEquipmentBonus(UUID playerUUID) {
+        return presence.getCatEquipmentBonus(playerUUID);
+    }
+
+    @Override
+    public void setCatEquipmentBonus(UUID playerUUID, String bonus) {
+        presence.setCatEquipmentBonus(playerUUID, bonus);
     }
 
     @Override

@@ -33,8 +33,12 @@ growth:
   level-curve-base: 100
 
 # 好感
+# 好感
+#
+# 抚摸好感：每次 +pet-base（每日上限 daily.pet-limit 次）。
+# 喂食好感已由 0.8.0 care 节接管（care.feed-hungry-affection /
+# care.feed-normal-affection），旧的 affection.feed-base 已废弃移除。
 affection:
-  feed-base: 15
   pet-base: 3
 
 # 喵力
@@ -44,6 +48,9 @@ meow:
   pet-chance: 25
   feed-chance: 12
   feed-chance-limit: 3
+  #触发时获得的喵力（0.8.0 数值修正：1→2，平衡刷新费用与被动收入）
+  feed-gain: 2
+  pet-gain: 2
   rank-curve-offset: 19
 
 # 饥饿
@@ -321,18 +328,49 @@ aura:
 # 每夜 chance 概率降临。
 # 降临后野外怪物：血量 ×health-multiplier、攻击 ×damage-multiplier、
 # 主手随机钻石/下界合金剑（不掉落）；监守者与 Boss 不受影响。
-# 被强化的怪物死亡 meowdan-drop-chance 概率掉落喵丹，
-# 品质权重：平凡 80 / 精良 16 / 独特 3 / 卓越 1 / 至极 0。
-# 经验丸掉落（0.7.4）：初阶 xp-pill-drop-chance，
-# 高阶 elite-xp-pill-drop-chance（两次独立掷骰，可同时掉落）。
+# 掉落相关配置（喵丹/经验丸/装备袋概率与开关）已迁至下方 drops 节。
 
 muma-night:
   chance: 0.2
   health-multiplier: 4.0
   damage-multiplier: 2.5
-  meowdan-drop-chance: 0.15
-  xp-pill-drop-chance: 0.03
-  elite-xp-pill-drop-chance: 0.01
+
+# ============================================================
+# 掉落（0.8.0）：NekoNYume 物品的怪物掉落
+# ============================================================
+#
+# 分为两套独立配置：
+#   general    平时（梦魔夜以外的时间）
+#   muma-night 梦魔夜（被强化的怪物）
+#
+# 每套含：
+#   enabled                    是否掉落（总开关）
+#   meowdan-chance             喵丹掉落概率（0~1，相对怪物死亡事件）
+#   meowdan-quality-weights    五品质权重（平凡→精良→独特→卓越→至极，
+#                              相对值，自动按总和归一；0 = 永不掉）
+#   xp-pill-chance             初阶经验丸掉落概率（0~1）
+#   elite-xp-pill-chance       高阶经验丸掉落概率（0~1）
+#   equip-bag-chance           猫猫装备袋掉落概率（0~1）
+#
+# 平时默认关闭；若开启，默认只掉前三种喵丹且概率低于梦魔夜，
+# 后两种喵丹与装备袋默认 0%。
+# 梦魔夜默认开启，概率与 0.7.x 旧版一致。
+
+drops:
+  general:
+    enabled: false
+    meowdan-chance: 0.05
+    meowdan-quality-weights: [80, 16, 3, 0, 0]
+    xp-pill-chance: 0.0
+    elite-xp-pill-chance: 0.0
+    equip-bag-chance: 0.0
+  muma-night:
+    enabled: true
+    meowdan-chance: 0.15
+    meowdan-quality-weights: [80, 16, 3, 1, 0]
+    xp-pill-chance: 0.03
+    elite-xp-pill-chance: 0.01
+    equip-bag-chance: 0.02
 
 # 经验丸（0.7.4）
 #
@@ -343,3 +381,61 @@ muma-night:
 xp-pill:
   normal-xp: 50
   elite-xp: 100
+
+# ============================================================
+# 羁绊纪元（0.8.0）：养护数值（好感/饥饿/心情/羁绊）
+# ============================================================
+#
+# 全部键缺失时使用默认值；非法值钳制/回退默认并告警，不会拒启。
+# 所有百分比钳制在 ±100% 内，所有门槛钳制在 0~100 内。
+# 门槛设为 -1 表示关闭对应机制。
+#
+# 战斗伤害倍率 = 1 + 心情加成 + 羁绊加成（最终钳制 0.5~3.0）
+# 经验倍率   = 1 + 心情加成 + 羁绊加成
+# 技能冷却系数 = 1 - 羁绊减免（下限 0.5）
+# 治疗量缩放   = 1 + 心情伤害加成的一半
+#
+care:
+  # 心情 → 战斗伤害加成（%）
+  mood-damage-percent:
+    ECSTATIC: 15
+    HAPPY: 8
+    CALM: 0
+    LOW: -10
+    SAD: -20
+  # 心情 → 经验加成（%）
+  mood-xp-percent:
+    ECSTATIC: 10
+    HAPPY: 5
+    CALM: 0
+    LOW: -10
+    SAD: -20
+  # 每日好感衰减（按服务器日历日结算一次；贪吃性格 +1，悠闲性格 -1）
+  affection-daily-decay: 2
+  # 饥饿时（低于 hungry-feed-threshold）喂食的好感
+  feed-hungry-affection: 8
+  # 非饥饿时喂食的好感
+  feed-normal-affection: 2
+  # 饥饿低于此值无法使用主动技能（-1 = 关闭）
+  hungry-skill-threshold: 20
+  # 饥饿低于此值拒绝索敌（-1 = 关闭）
+  starving-fight-threshold: 0
+  # “饥饿”判定门槛（用于雪中送炭好感）
+  hungry-feed-threshold: 20
+  # 羁绊档位阈值（严格递增，好感达到阈值即进入对应档位）
+  bond-tier-thresholds: [20, 40, 60, 80, 100]
+  # 羁绊档位 → 经验加成（%），长度 = 档位数（6）
+  bond-xp-percent: [0, 0, 5, 10, 10, 10]
+  # 羁绊档位 → 技能冷却减免（%）
+  bond-cooldown-percent: [0, 0, 0, 5, 5, 5]
+  # 羁绊档位 → 战斗伤害加成（%）
+  bond-damage-percent: [0, 0, 0, 0, 0, 10]
+  # 战败扣减逻辑健康值（0 = 关闭）
+  defeat-health-loss: 10
+  # 喂食恢复逻辑健康值
+  feed-health-restore: 5
+  # 饥饿好感衰减节流间隔（分钟，0 = 关闭；默认 180）
+  # 旧版与饥饿 tick 同频（5 分钟一次），日喂两次仍会好感净亏损；
+  # 0.8.0 好感承载战力后必须与喂食节奏对齐：
+  # 180 分钟下日喂两次维持高好感、弃养约 2~3 天归零。
+  hunger-affection-loss-minutes: 180

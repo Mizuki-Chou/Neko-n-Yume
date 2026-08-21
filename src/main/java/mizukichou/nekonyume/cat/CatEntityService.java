@@ -125,6 +125,32 @@ public class CatEntityService {
     }
 
     /*
+     * 0.8.0：装备变更后刷新战斗相关状态（最大生命）。
+     *
+     * 注意：updateCat 会用 name 刷新实体头顶名，
+     * 因此必须传逻辑猫的名字（而非玩家名）。
+     */
+    public void refreshEquipStats(
+            Player player,
+            Cat logicalCat,
+            org.bukkit.entity.Cat entity
+    ) {
+
+        if (player == null ||
+                logicalCat == null ||
+                entity == null) {
+
+            return;
+        }
+
+        binding.updateCat(
+                entity,
+                player,
+                logicalCat.getName()
+        );
+    }
+
+    /*
      * ============================================================
      * 恢复 / 召唤流水线（CatEntityRestorer）
      * ============================================================
@@ -193,16 +219,19 @@ public class CatEntityService {
     /*
      * 释放召唤标记（玩家退出时由 PlayerQuitListener 调用）。
      *
-     * 异步区块加载完成前玩家若已下线，
-     * 回调不会被执行，wrappedCallback 的 finally 也无法释放标记，
-     * 会导致该玩家下次登录后永远收到「生成中」提示。
-     * 因此退出时必须强制清理。
+     * 0.8.0 P0-2：同时递增代际，使所有在途异步回调失效——
+     * 退出后旧流水线即使回来也会直接丢弃结果，
+     * 不再与下一次登录的新召唤竞争。
      */
     public void clearSummoning(
             UUID playerUUID
     ) {
 
         if (playerUUID != null) {
+
+            restorer.invalidateSummons(
+                    playerUUID
+            );
 
             summoning.remove(
                     playerUUID
@@ -237,8 +266,20 @@ public class CatEntityService {
         }
 
         /*
+         * 0.8.0 P0-2：领取本次召唤的代际 token。
+         * 异步回调凭 token 判断自己是否仍然有效。
+         */
+        long summonToken =
+                restorer.beginSummon(
+                        playerUUID
+                );
+
+        /*
          * 包装回调：无论成功失败，只要回调被执行，
          * 就保证释放 summoning 标记。
+         *
+         * 仅当自身代际仍为当前代际时才释放——
+         * 旧流水线的迟到回调不得解除新召唤的标记。
          */
         Consumer<Boolean> wrappedCallback =
                 result -> {
@@ -249,7 +290,15 @@ public class CatEntityService {
 
                     } finally {
 
-                        summoning.remove(playerUUID);
+                        if (restorer.isCurrentSummon(
+                                playerUUID,
+                                summonToken
+                        )) {
+
+                            summoning.remove(
+                                    playerUUID
+                            );
+                        }
                     }
                 };
 
@@ -258,10 +307,15 @@ public class CatEntityService {
             restorer.findCat(
                     player,
                     name,
-                    wrappedCallback
+                    wrappedCallback,
+                    summonToken
             );
 
         } catch (Exception exception) {
+
+            restorer.invalidateSummons(
+                    playerUUID
+            );
 
             summoning.remove(playerUUID);
 

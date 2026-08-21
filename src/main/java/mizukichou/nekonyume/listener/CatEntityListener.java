@@ -3,7 +3,9 @@ package mizukichou.nekonyume.listener;
 import com.destroystokyo.paper.event.entity.EntityAddToWorldEvent;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEntityService;
+import mizukichou.nekonyume.cat.CatEquipItem;
 import mizukichou.nekonyume.cat.CatSkill;
+import mizukichou.nekonyume.cat.EquipBonusAttribute;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.lang.Lang;
@@ -413,6 +415,47 @@ public class CatEntityListener implements Listener {
 
                 reduction += 0.25;
             }
+
+            /*
+             * 装备（0.8.0）：项圈的受伤减免与技能相乘，
+             * 避免与铁壁/轻毛相加后溢出。
+             */
+            CatEquipItem equip =
+                    logicalCat.getEquippedItem();
+
+            if (equip != null &&
+                    equip.getDamageReductionPercent() > 0) {
+
+                double equipFactor =
+                        1.0
+                                - equip.getDamageReductionPercent()
+                                / 100.0;
+
+                reduction =
+                        1.0
+                                - (1.0 - reduction)
+                                * equipFactor;
+            }
+
+            /*
+             * 附加属性（0.8.0）：不朽的受伤减免同样相乘。
+             */
+            EquipBonusAttribute equipBonus =
+                    logicalCat.getEquippedBonus();
+
+            if (equipBonus != null &&
+                    equipBonus.getDamageReductionPercent() > 0) {
+
+                double bonusFactor =
+                        1.0
+                                - equipBonus.getDamageReductionPercent()
+                                / 100.0;
+
+                reduction =
+                        1.0
+                                - (1.0 - reduction)
+                                * bonusFactor;
+            }
         }
 
         if (reduction > 0.0) {
@@ -588,6 +631,30 @@ public class CatEntityListener implements Listener {
         if (hasNineLives) {
 
             recoveryMillis = 20_000L;
+        }
+
+        /*
+         * 羁绊纪元（0.8.0）：战败扣逻辑健康（重生分支不扣）。
+         * 健康下跌经既有心情规则（health <= 30 → -30）联动战力。
+         */
+        if (logicalCat != null) {
+
+            int defeatHealthLoss =
+                    configManager.snapshot()
+                            .getCare()
+                            .getDefeatHealthLoss();
+
+            if (defeatHealthLoss > 0) {
+
+                logicalCat.removeHealth(
+                        defeatHealthLoss
+                );
+
+                store.setCatHealth(
+                        logicalCat.getOwnerUuid(),
+                        logicalCat.getHealth()
+                );
+            }
         }
 
         battleState.markRecovering(

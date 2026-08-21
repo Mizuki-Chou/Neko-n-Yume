@@ -789,6 +789,9 @@ public class AchievementService {
                                     achievement.getCounterKey()
                             )
                     );
+
+            case AFFECTION ->
+                    cat.getAffection();
         };
     }
 

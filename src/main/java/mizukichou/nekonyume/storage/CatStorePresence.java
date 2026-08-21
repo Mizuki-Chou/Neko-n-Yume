@@ -73,6 +73,71 @@ final class CatStorePresence {
         store.setRaw(playerUUID, AbstractCatStore.FIELD_VARIANT, variant);
     }
 
+    /*
+     * 装备（0.8.0，唯一装备位）。
+     *
+     * 空串 / null = 未装备。
+     * 与花色不同：允许写入空串以表示卸下。
+     */
+    String getCatEquipment(UUID playerUUID) {
+
+        return store.getString(
+                playerUUID,
+                AbstractCatStore.FIELD_EQUIPMENT,
+                ""
+        );
+    }
+
+    void setCatEquipment(
+            UUID playerUUID,
+            String equipment
+    ) {
+
+        if (playerUUID == null ||
+                !store.hasCat(playerUUID)) {
+
+            return;
+        }
+
+        store.setRaw(
+                playerUUID,
+                AbstractCatStore.FIELD_EQUIPMENT,
+                equipment == null ? "" : equipment
+        );
+    }
+
+    /*
+     * 装备附加属性（0.8.0，与装备位绑定）。
+     *
+     * 空串 / null = 无附加属性。
+     */
+    String getCatEquipmentBonus(UUID playerUUID) {
+
+        return store.getString(
+                playerUUID,
+                AbstractCatStore.FIELD_EQUIPMENT_BONUS,
+                ""
+        );
+    }
+
+    void setCatEquipmentBonus(
+            UUID playerUUID,
+            String bonus
+    ) {
+
+        if (playerUUID == null ||
+                !store.hasCat(playerUUID)) {
+
+            return;
+        }
+
+        store.setRaw(
+                playerUUID,
+                AbstractCatStore.FIELD_EQUIPMENT_BONUS,
+                bonus == null ? "" : bonus
+        );
+    }
+
     UUID getCatEntityUUID(UUID playerUUID) {
 
         if (playerUUID == null ||

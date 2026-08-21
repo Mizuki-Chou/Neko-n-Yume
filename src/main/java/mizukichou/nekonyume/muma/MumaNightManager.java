@@ -1,18 +1,21 @@
 package mizukichou.nekonyume.muma;
 
 import mizukichou.nekonyume.cat.CatFoodManager;
+import mizukichou.nekonyume.cat.EquipBagOdds;
 import mizukichou.nekonyume.cat.MeowDanQuality;
 import mizukichou.nekonyume.cat.XpPillTier;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.lang.Lang;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Boss;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Warden;
@@ -673,24 +676,29 @@ public class MumaNightManager {
     }
 
     public void maybeDropMeowDan(
-            Monster monster
+            Monster monster,
+            ConfigSnapshot.Drops.DropSet set
     ) {
 
-        if (monster == null) {
+        if (monster == null ||
+                set == null) {
+
             return;
         }
 
-        double chance =
-                configManager.snapshot()
-                        .getMumaNight()
-                        .getMeowdanDropChance();
+        if (!EquipBagOdds.rollsChance(
+                random,
+                set.getMeowdanChance()
+        )) {
 
-        if (random.nextDouble() >= chance) {
             return;
         }
 
         MeowDanQuality quality =
-                rollQuality();
+                EquipBagOdds.pickQualityByWeights(
+                        random,
+                        set.getMeowdanQualityWeights()
+                );
 
         if (quality == null) {
             return;
@@ -708,7 +716,7 @@ public class MumaNightManager {
     }
 
     /*
-     * 0.7.4：经验丸掉落。
+     * 0.7.4：经验丸掉落（概率配置化）。
      *
      * 初阶 / 高阶两次独立掷骰（可同时掉落，极低概率），
      * 概率取配置钳制后的 [0,1] 值。
@@ -719,19 +727,18 @@ public class MumaNightManager {
      * 仅 null 检查即可（与喵丹掉落口径一致）。
      */
     public void maybeDropXpPills(
-            Monster monster
+            Monster monster,
+            ConfigSnapshot.Drops.DropSet set
     ) {
 
-        if (monster == null) {
+        if (monster == null ||
+                set == null) {
+
             return;
         }
 
-        ConfigSnapshot.MumaNight mumaConfig =
-                configManager.snapshot()
-                        .getMumaNight();
-
         if (random.nextDouble()
-                < mumaConfig.getXpPillDropChance()) {
+                < set.getXpPillChance()) {
 
             monster.getWorld()
                     .dropItemNaturally(
@@ -745,7 +752,7 @@ public class MumaNightManager {
         }
 
         if (random.nextDouble()
-                < mumaConfig.getEliteXpPillDropChance()) {
+                < set.getEliteXpPillChance()) {
 
             monster.getWorld()
                     .dropItemNaturally(
@@ -760,83 +767,90 @@ public class MumaNightManager {
     }
 
     /*
-     * 品质权重（按品质升序）：
-     * 平凡 80 / 精良 16 / 独特 3 / 卓越 1 / 至极 0。
+     * 0.8.0：猫猫装备袋掉落（概率配置化：
+     * drops.muma-night.equip-bag-chance，默认 0.02；
+     * 平时由 drops.general.equip-bag-chance 控制，默认 0）。
+     *
+     * 注意：本方法在 EntityDeathEvent（MONITOR）中调用，
+     * 此时实体 isDead() 已为 true，
+     * 因此绝不能以 isDead() 作为守卫；仅 null 检查即可。
      */
-    private int qualityWeight(
-            int index
+    public void maybeDropEquipBag(
+            Monster monster,
+            ConfigSnapshot.Drops.DropSet set
     ) {
 
-        return switch (index) {
+        if (monster == null ||
+                set == null) {
 
-            case 0 -> 80;
-            case 1 -> 16;
-            case 2 -> 3;
-            case 3 -> 1;
-            default -> 0;
-        };
+            return;
+        }
+
+        if (!EquipBagOdds.rollsChance(
+                random,
+                set.getEquipBagChance()
+        )) {
+
+            return;
+        }
+
+        monster.getWorld()
+                .dropItemNaturally(
+                        monster.getLocation(),
+                        foodManager.createEquipBag(
+                                1,
+                                null
+                        )
+                );
     }
 
-    private MeowDanQuality rollQuality() {
+    /*
+     * 0.8.0：按当前状态解析掉落集合。
+     *
+     * 梦魔夜激活且怪物已被强化 → drops.muma-night；
+     * 梦魔夜未激活（平时）→ drops.general；
+     * 其余情况（梦魔夜激活但怪物未被强化）→ null（不掉）。
+     */
+    public ConfigSnapshot.Drops.DropSet resolveDropSet(
+            Monster monster
+    ) {
 
-        MeowDanQuality[] values =
-                MeowDanQuality.values();
-
-        if (values.length == 0) {
+        if (monster == null) {
             return null;
         }
 
-        int totalWeight = 0;
+        ConfigSnapshot snapshot =
+                configManager.snapshot();
 
-        for (int i = 0;
-             i < values.length;
-             i++) {
+        if (snapshot == null ||
+                snapshot.getDrops() == null) {
 
-            totalWeight += qualityWeight(
-                    i
-            );
-        }
-
-        if (totalWeight <= 0) {
             return null;
         }
 
-        int roll =
-                random.nextInt(
-                        totalWeight
+        boolean active =
+                isActive(
+                        monster.getWorld()
                 );
 
-        MeowDanQuality fallback =
-                null;
+        if (active &&
+                isBuffed(
+                        monster
+                )) {
 
-        for (int i = 0;
-             i < values.length;
-             i++) {
-
-            int weight =
-                    qualityWeight(
-                            i
-                    );
-
-            if (weight <= 0) {
-                continue;
-            }
-
-            if (fallback == null) {
-
-                fallback =
-                        values[i];
-            }
-
-            roll -= weight;
-
-            if (roll < 0) {
-
-                return values[i];
-            }
+            return snapshot
+                    .getDrops()
+                    .getMumaNight();
         }
 
-        return fallback;
+        if (!active) {
+
+            return snapshot
+                    .getDrops()
+                    .getGeneral();
+        }
+
+        return null;
     }
 
     private void activate(
@@ -955,6 +969,101 @@ public class MumaNightManager {
                 );
             }
         }
+    }
+
+    /*
+     * ============================================================
+     * 残留强化清理（0.8.0 P1-5 / P1-6）
+     * ============================================================
+     */
+
+    /*
+     * 区块加载时清理残留强化（P1-5）：
+     * 服务器重启后，未加载区块中的怪物可能仍带着
+     * 上一场梦魔夜的强化 PDC。区块重新加载且当前
+     * 梦魔夜未激活时，立即还原该区块内的强化怪物。
+     */
+    public void stripMarkedInChunk(
+            Chunk chunk
+    ) {
+
+        if (chunk == null ||
+                !chunk.isLoaded()) {
+
+            return;
+        }
+
+        World world =
+                chunk.getWorld();
+
+        if (world == null ||
+                isActive(world)) {
+
+            /*
+             * 梦魔夜激活中：强化是合法状态，保留。
+             */
+            return;
+        }
+
+        for (Entity entity :
+                chunk.getEntities()) {
+
+            if (!(entity instanceof Monster monster) ||
+                    !isBuffed(monster)) {
+
+                continue;
+            }
+
+            try {
+
+                stripMonster(
+                        monster
+                );
+
+            } catch (Exception e) {
+
+                logger.warning(
+                        "Failed to strip stale Muma's Night buff on chunk load: "
+                                + monster.getUniqueId()
+                                + " ("
+                                + monster.getType()
+                                + ") - "
+                                + e.getMessage()
+                );
+            }
+        }
+    }
+
+    /*
+     * 关服/重载时全局还原（P1-6）：
+     * 插件禁用后若残留强化怪物，玩家会永久面对
+     * 四倍血的夜魔怪物；停服瞬间同步还原所有已加载怪物，
+     * 并清空内存中的夜状态。
+     */
+    public void stripAllMarked() {
+
+        for (World world :
+                Bukkit.getWorlds()) {
+
+            try {
+
+                stripMarked(
+                        world
+                );
+
+            } catch (Exception e) {
+
+                logger.warning(
+                        "Failed to strip Muma's Night buffs for world "
+                                + world.getName()
+                                + " during shutdown: "
+                                + e.getMessage()
+                );
+            }
+        }
+
+        activeWorlds.clear();
+        rolledThisNight.clear();
     }
 
     private void broadcast(

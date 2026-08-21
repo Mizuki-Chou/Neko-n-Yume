@@ -263,10 +263,33 @@ public final class LangMessages {
             );
         }
 
-        Component parsed =
-                mm.deserialize(
-                        template
-                );
+        Component parsed;
+
+        try {
+
+            parsed =
+                    mm.deserialize(
+                            template
+                    );
+
+        } catch (Exception e) {
+
+            /*
+             * 自定义语言覆盖文件可能含非法 MiniMessage（如未闭合标签）：
+             * 解析失败降级为纯文本，绝不让一条坏模板击穿全部消息路径。
+             */
+            logger.warning(
+                    "Invalid MiniMessage in language key "
+                            + key
+                            + ": "
+                            + e.getMessage()
+            );
+
+            parsed =
+                    Component.text(
+                            template
+                    );
+        }
 
         if (args.length == 0) {
             return parsed;

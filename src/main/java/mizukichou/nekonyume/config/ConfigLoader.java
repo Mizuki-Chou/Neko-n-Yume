@@ -25,6 +25,7 @@ import java.util.logging.Logger;
  *   <li>{@link GiftConfigParser}：每日礼物档位；</li>
  *   <li>{@link AchievementConfigParser}：成就奖励表；</li>
  *   <li>{@link SkillConfigParser}：技能数值与刷新花费；</li>
+   *   <li>{@link CareConfigParser}：羁绊纪元 care 节（0.8.0）；</li>
  *   <li>{@link ConfigParseSupport}：钳制 / 安全材质解析等纯工具。</li>
  * </ul>
  *
@@ -101,14 +102,6 @@ public final class ConfigLoader {
                 new ConfigSnapshot.Affection(
                         ConfigParseSupport.clamp(
                                 config.getInt(
-                                        "affection.feed-base",
-                                        15
-                                ),
-                                0,
-                                100
-                        ),
-                        ConfigParseSupport.clamp(
-                                config.getInt(
                                         "affection.pet-base",
                                         3
                                 ),
@@ -122,7 +115,7 @@ public final class ConfigLoader {
                         ConfigParseSupport.clamp(
                                 config.getInt(
                                         "meow.pet-chance",
-                                        18
+                                        25
                                 ),
                                 0,
                                 100
@@ -130,7 +123,7 @@ public final class ConfigLoader {
                         ConfigParseSupport.clamp(
                                 config.getInt(
                                         "meow.feed-chance",
-                                        8
+                                        12
                                 ),
                                 0,
                                 100
@@ -148,6 +141,22 @@ public final class ConfigLoader {
                                         19
                                 ),
                                 1
+                        ),
+                        ConfigParseSupport.clamp(
+                                config.getInt(
+                                        "meow.feed-gain",
+                                        2
+                                ),
+                                1,
+                                100
+                        ),
+                        ConfigParseSupport.clamp(
+                                config.getInt(
+                                        "meow.pet-gain",
+                                        2
+                                ),
+                                1,
+                                100
                         )
                 );
 
@@ -403,24 +412,6 @@ public final class ConfigLoader {
                         config.getDouble(
                                 "muma-night.damage-multiplier",
                                 2.5
-                        ),
-                        ConfigParseSupport.unit(
-                                config.getDouble(
-                                        "muma-night.meowdan-drop-chance",
-                                        0.15
-                                )
-                        ),
-                        ConfigParseSupport.unit(
-                                config.getDouble(
-                                        "muma-night.xp-pill-drop-chance",
-                                        0.03
-                                )
-                        ),
-                        ConfigParseSupport.unit(
-                                config.getDouble(
-                                        "muma-night.elite-xp-pill-drop-chance",
-                                        0.01
-                                )
                         )
                 );
 
@@ -442,6 +433,21 @@ public final class ConfigLoader {
                         )
                 );
 
+        ConfigSnapshot.Care care =
+                CareConfigParser.load(
+                        config,
+                        logger
+                );
+
+        /*
+         * 掉落配置（0.8.0）：平时与梦魔夜两套独立开关与概率。
+         */
+        ConfigSnapshot.Drops drops =
+                DropsConfigParser.load(
+                        config,
+                        logger
+                );
+
         return new ConfigSnapshot(
                 language,
                 storage,
@@ -459,7 +465,9 @@ public final class ConfigLoader {
                 aura,
                 joinMessage,
                 mumaNight,
-                xpPill
+                xpPill,
+                care,
+                drops
         );
     }
 }

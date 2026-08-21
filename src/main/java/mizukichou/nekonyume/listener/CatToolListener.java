@@ -234,7 +234,7 @@ public class CatToolListener implements Listener {
      *
      * 文字面向玩家：活泼、口语化、零技术词汇。
      * 背包放不下时自动掉落在脚边。
-     * 页面内容来自 lang/zh_cn.yml 的 book.page.1 ~ 8。
+     * 页面内容来自 lang/zh_cn.yml 的 book.page-1 ~ 8。
      */
 
     private void giveTutorialBook(
@@ -275,7 +275,7 @@ public class CatToolListener implements Listener {
 
             pages.add(
                     lang.forPlayer(player).text(
-                            "book.page." + page
+                            "book.page-" + page
                     )
             );
         }

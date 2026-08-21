@@ -257,4 +257,41 @@ final class CatStoreInteractions {
                 LocalDate.now().toString()
         );
     }
+
+    /*
+     * 好感日常衰减结算锚点（0.8.0）。
+     */
+
+    String getAffectionDecayDate(UUID playerUUID) {
+
+        if (playerUUID == null ||
+                !store.hasCat(playerUUID)) {
+
+            return "";
+        }
+
+        return store.getString(
+                playerUUID,
+                AbstractCatStore.FIELD_AFFECTION_DECAY_DATE,
+                ""
+        );
+    }
+
+    void setAffectionDecayDate(
+            UUID playerUUID,
+            String date
+    ) {
+
+        if (playerUUID == null ||
+                !store.hasCat(playerUUID)) {
+
+            return;
+        }
+
+        store.setRaw(
+                playerUUID,
+                AbstractCatStore.FIELD_AFFECTION_DECAY_DATE,
+                date
+        );
+    }
 }

@@ -9,6 +9,12 @@ repositories {
 }
 
 dependencies {
+    /*
+     * Paper API：跟随当前构建线（26.2 稳定线）。
+     * 注意：26.2.build.112 等具体编号不在公共仓库发布，
+     * 固定具体 build 会导致依赖无法解析；如需精确复现，
+     * 发布时从 Gradle 缓存锁定实际解析到的版本号。
+     */
     compileOnly("io.papermc.paper:paper-api:26.2.build.+")
 
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
@@ -29,7 +35,7 @@ dependencies {
 }
 
 group = "mizukichou"
-version = "0.7.4-alpha"
+version = "0.8.0-alpha"
 
 base {
     archivesName.set("NekoNYume")

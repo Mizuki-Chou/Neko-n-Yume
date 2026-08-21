@@ -50,6 +50,13 @@ public class CatBattleState {
             new HashSet<>();
 
     /*
+     * 羁绊纪元（0.8.0）：已提示过“饥饿拒绝战斗”的实体 UUID。
+     * 状态翻转只提示一次；饥饿解除后清除，可再次提示。
+     */
+    private final Set<UUID> starvingAlerted =
+            new HashSet<>();
+
+    /*
      * 实体 UUID → 上次扑击时间（毫秒）。
      */
     private final Map<UUID, Long> lastPounceTimes =
@@ -250,6 +257,35 @@ public class CatBattleState {
         assistTargets.remove(
                 ownerUuid
         );
+    }
+
+    /*
+     * 羁绊纪元（0.8.0）：
+     * 标记饥饿拒战提示；返回 true 表示首次标记（应发消息）。
+     */
+
+    public boolean markStarvingAlerted(
+            UUID entityUuid
+    ) {
+
+        if (entityUuid == null) {
+            return false;
+        }
+
+        return starvingAlerted.add(
+                entityUuid
+        );
+    }
+
+    public void clearStarvingAlerted(
+            UUID entityUuid
+    ) {
+
+        if (entityUuid != null) {
+            starvingAlerted.remove(
+                    entityUuid
+            );
+        }
     }
 
     /*
@@ -640,6 +676,8 @@ public class CatBattleState {
                 .retainAll(entities);
 
         chasing.retainAll(entities);
+
+        starvingAlerted.retainAll(entities);
 
         assistTargets.keySet()
                 .retainAll(owners);

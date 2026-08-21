@@ -31,14 +31,18 @@ import mizukichou.nekonyume.craft.CraftingRecipes;
 import mizukichou.nekonyume.data.PlayerDataManager;
 import mizukichou.nekonyume.gift.GiftManager;
 import mizukichou.nekonyume.gui.CatGuiManager;
+import mizukichou.nekonyume.gui.AdminGiveGuiManager;
+import mizukichou.nekonyume.gui.EquipGuiManager;
 import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.listener.AchievementListener;
+import mizukichou.nekonyume.listener.AdminGiveGuiListener;
 import mizukichou.nekonyume.listener.CatBattleLootListener;
 import mizukichou.nekonyume.listener.CatEntityListener;
 import mizukichou.nekonyume.listener.CatFoodListener;
 import mizukichou.nekonyume.listener.CatGuiListener;
 import mizukichou.nekonyume.listener.CatInteractionListener;
 import mizukichou.nekonyume.listener.CatToolListener;
+import mizukichou.nekonyume.listener.EquipBagListener;
 import mizukichou.nekonyume.listener.MeowDanCraftListener;
 import mizukichou.nekonyume.listener.MumaNightListener;
 import mizukichou.nekonyume.listener.PlayerJoinListener;
@@ -138,6 +142,8 @@ public final class NekoNYume extends JavaPlugin {
     private CatManager catManager;
     private CatFoodManager catFoodManager;
     private CatGuiManager catGuiManager;
+    private AdminGiveGuiManager adminGiveGuiManager;
+    private EquipGuiManager equipGuiManager;
     private GiftManager giftManager;
     private PlayerJoinListener playerJoinListener;
     private CatSkillManager catSkillManager;
@@ -453,6 +459,7 @@ public final class NekoNYume extends JavaPlugin {
                         catCache,
                         configManager,
                         catProgressionService,
+                        catEntityService,
                         lang
                 );
 
@@ -570,6 +577,18 @@ public final class NekoNYume extends JavaPlugin {
                 );
 
         /*
+         * 装备界面（0.8.0）：展示当前装备与卸下。
+         */
+        equipGuiManager =
+                new EquipGuiManager(
+                        catStore,
+                        catCache,
+                        catFoodManager,
+                        catEntityService,
+                        lang
+                );
+
+        /*
          * ========================================================
          * 命令
          * ========================================================
@@ -601,6 +620,19 @@ public final class NekoNYume extends JavaPlugin {
             return;
         }
 
+        /*
+         * ========================================================
+         * 管理发放面板（0.8.0）
+         * ========================================================
+         */
+
+        adminGiveGuiManager =
+                new AdminGiveGuiManager(
+                        catFoodManager,
+                        toolKey,
+                        lang
+                );
+
         if (!registerCommand(
                 "nekoyumeadmin",
                 new NekoYumeAdminCommand(
@@ -611,6 +643,7 @@ public final class NekoNYume extends JavaPlugin {
                         catProgressionService,
                         catFoodManager,
                         mumaNightManager,
+                        adminGiveGuiManager,
                         lang
                 )
         )) {
@@ -658,6 +691,13 @@ public final class NekoNYume extends JavaPlugin {
                         ownerKey,
                         lang
                 ),
+                new EquipBagListener(
+                        catFoodManager,
+                        lang
+                ),
+                new AdminGiveGuiListener(
+                        adminGiveGuiManager
+                ),
                 new CatBattleLootListener(
                         configManager,
                         catCache,
@@ -692,6 +732,8 @@ public final class NekoNYume extends JavaPlugin {
                         catEntityService,
                         catGuiManager,
                         skillGuiManager,
+                        equipGuiManager,
+                        achievementGuiManager,
                         catCache,
                         catProgressionService,
                         catSkillManager,
@@ -804,7 +846,8 @@ public final class NekoNYume extends JavaPlugin {
                                         configManager,
                                         catCache,
                                         battleState,
-                                        catEntityService
+                                        catEntityService,
+                                        lang
                                 ),
                                 10L,
                                 10L
@@ -930,6 +973,29 @@ public final class NekoNYume extends JavaPlugin {
 
         if (mumaNightTask != null) {
             mumaNightTask.cancel();
+        }
+
+        /*
+         * 0.8.0 P1-6：停服/重载时主动还原梦魔夜强化。
+         *
+         * 任务已取消，不会再有黎明清理；若不在此处还原，
+         * 禁用插件后世界里的怪物将永久保持四倍血等夜间强化
+         * （重启后的启动清理只能覆盖已加载区块）。
+         */
+        try {
+
+            if (mumaNightManager != null) {
+
+                mumaNightManager.stripAllMarked();
+            }
+
+        } catch (Exception exception) {
+
+            getLogger().log(
+                    Level.WARNING,
+                    "Failed to strip Muma's Night buffs during shutdown.",
+                    exception
+            );
         }
 
         if (autosaveTask != null) {

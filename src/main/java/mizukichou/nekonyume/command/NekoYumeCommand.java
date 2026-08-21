@@ -5,7 +5,9 @@ import mizukichou.nekonyume.achievement.AchievementService;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
 import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CareMath;
 import mizukichou.nekonyume.cat.CatEntityService;
+import mizukichou.nekonyume.cat.EquipBonusAttribute;
 import mizukichou.nekonyume.cat.GrowthMath;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
@@ -346,6 +348,85 @@ public class NekoYumeCommand
                                                     java.util.Locale.ROOT
                                             )
                             )
+                    )
+            );
+
+            /*
+             * 羁绊纪元（0.8.0）：羁绊等级与战斗加成。
+             */
+            player.sendMessage(
+                    lang.forSender(sender).message(
+                            "command.cat.bond",
+                            lang.forSender(sender).text(
+                                    CareMath.bondFor(
+                                            cat,
+                                            config.getCare()
+                                    ).langKey()
+                            ),
+                            String.valueOf(
+                                    cat.getAffection()
+                            )
+                    )
+            );
+
+            player.sendMessage(
+                    lang.forSender(sender).message(
+                            "command.cat.combat-bonus",
+                            String.valueOf(
+                                    (int) Math.round(
+                                            (CareMath.battleDamageMultiplier(
+                                                    cat.getMood(),
+                                                    CareMath.bondFor(
+                                                            cat,
+                                                            config.getCare()
+                                                    ),
+                                                    config.getCare()
+                                            ) - 1.0) * 100.0
+                                    )
+                            )
+                    )
+            );
+
+            /*
+             * 装备（0.8.0）。
+             */
+            String equipmentText;
+
+            if (cat.getEquippedItem() == null) {
+
+                equipmentText =
+                        lang.forSender(sender).text(
+                                "equip-none"
+                        );
+
+            } else {
+
+                equipmentText =
+                        lang.forSender(sender).text(
+                                cat.getEquippedItem()
+                                        .getLangKey()
+                        );
+
+                /*
+                 * 附加属性（0.8.0）：装备名后追加觉醒属性名。
+                 */
+                EquipBonusAttribute equipBonus =
+                        cat.getEquippedBonus();
+
+                if (equipBonus != null) {
+
+                    equipmentText +=
+                            " ✦ "
+                                    + lang.forSender(sender).text(
+                                    equipBonus.getLangKey()
+                            );
+                }
+            }
+
+            player.sendMessage(
+                    lang.forSender(sender).message(
+                            "command.cat.equipment",
+                            equipmentText
                     )
             );
 

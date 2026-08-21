@@ -1,14 +1,20 @@
 package mizukichou.nekonyume.listener;
 
 import mizukichou.nekonyume.cat.CatFoodManager;
+import mizukichou.nekonyume.cat.CatEquipItem;
 import mizukichou.nekonyume.lang.Lang;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
@@ -145,6 +151,41 @@ public class CatFoodListener implements Listener {
              * 不取消事件，
              * 保留原版「空手右键切换坐姿」。
              */
+            return;
+        }
+
+        /*
+         * ============================================================
+         * 4b. 装备穿戴判定（0.8.0）
+         * ============================================================
+         *
+         * 装备走独立逻辑：唯一装备位，替换时旧装备归还。
+         */
+
+        if (foodManager.isEquipment(item)) {
+
+            event.setCancelled(true);
+
+            CatEquipItem equip =
+                    foodManager.getEquipment(
+                            item
+                    );
+
+            if (foodManager.equipCat(
+                    player,
+                    cat,
+                    equip
+            )) {
+
+                player.getWorld()
+                        .playSound(
+                                cat.getLocation(),
+                                Sound.ENTITY_CAT_PURR,
+                                1.0f,
+                                1.2f
+                        );
+            }
+
             return;
         }
 
@@ -290,5 +331,145 @@ public class CatFoodListener implements Listener {
                             1.0f
                     );
         }
+    }
+
+    /*
+     * ============================================================
+     * 装备守卫（0.8.0）：装备物品禁止原版交互
+     * ============================================================
+     *
+     * 五类装备的材质都携带原版交互：
+     * - 项圈（拴绳）：可拴栅栏/生物；
+     * - 铃铛：可直接放置；
+     * - 围巾（羊毛）：可直接放置；
+     * - 名牌：可右键命名生物（消耗）；
+     * - 毛线球（线）：可在两棵绊线钩间拉线。
+     *
+     * 一旦被原版行为消耗，物品的 PDC 身份与属性（含至极觉醒
+     * 附加属性）即永久丢失。因此统一拦截：放置、右键方块、
+     * 右键实体三类事件，保证装备只能通过“右键自己的猫”穿戴。
+     */
+
+    /*
+     * 方块放置（铃铛/围巾等）。
+     * LOWEST 优先取消，阻止方块进入世界。
+     */
+    @EventHandler(
+            priority = EventPriority.LOWEST,
+            ignoreCancelled = true
+    )
+    public void onEquipPlaceBlock(
+            BlockPlaceEvent event
+    ) {
+
+        if (!foodManager.isEquipment(
+                event.getItemInHand()
+        )) {
+
+            return;
+        }
+
+        event.setCancelled(true);
+
+        event.getPlayer()
+                .sendMessage(
+                        lang.forPlayer(
+                                        event.getPlayer()
+                                )
+                                .message(
+                                        "equip.no-place"
+                                )
+                );
+    }
+
+    /*
+     * 右键方块（拴绳拴栅栏、毛线球拉绊线等）。
+     */
+    @EventHandler(
+            priority = EventPriority.LOWEST,
+            ignoreCancelled = true
+    )
+    public void onEquipUseBlock(
+            PlayerInteractEvent event
+    ) {
+
+        if (event.getAction()
+                != Action.RIGHT_CLICK_BLOCK) {
+
+            return;
+        }
+
+        if (event.getHand()
+                != EquipmentSlot.HAND) {
+
+            return;
+        }
+
+        ItemStack item =
+                event.getItem();
+
+        if (!foodManager.isEquipment(
+                item
+        )) {
+
+            return;
+        }
+
+        event.setCancelled(true);
+
+        event.getPlayer()
+                .sendMessage(
+                        lang.forPlayer(
+                                        event.getPlayer()
+                                )
+                                .message(
+                                        "equip.no-place"
+                                )
+                );
+    }
+
+    /*
+     * 右键实体（名牌命名、拴绳拴生物等）。
+     * 只拦截主手；对自己猫的穿戴流程不受影响——
+     * 穿戴走 PlayerInteractAtEntityEvent，成功即取消事件，
+     * 本处理器不会二次触发；失败时取消原版命名/拴绳。
+     */
+    @EventHandler(
+            priority = EventPriority.LOWEST,
+            ignoreCancelled = true
+    )
+    public void onEquipUseEntity(
+            PlayerInteractEntityEvent event
+    ) {
+
+        if (event.getHand()
+                != EquipmentSlot.HAND) {
+
+            return;
+        }
+
+        ItemStack item =
+                event.getPlayer()
+                        .getInventory()
+                        .getItemInMainHand();
+
+        if (!foodManager.isEquipment(
+                item
+        )) {
+
+            return;
+        }
+
+        event.setCancelled(true);
+
+        event.getPlayer()
+                .sendMessage(
+                        lang.forPlayer(
+                                        event.getPlayer()
+                                )
+                                .message(
+                                        "equip.no-place"
+                                )
+                );
     }
 }

@@ -3,6 +3,8 @@ package mizukichou.nekonyume.gui;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
 import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CareMath;
+import mizukichou.nekonyume.cat.EquipBonusAttribute;
 import mizukichou.nekonyume.cat.GrowthMath;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
@@ -22,7 +24,8 @@ import java.util.UUID;
  * 猫咪状态面板。
  *
  * <p>
- * 9×3 只读面板 + 三个行为模式按钮 + 关闭按钮。
+ * 9×6 面板：第二行属性、第三行行为模式、第五行功能入口、
+ * 末行中间关闭按钮。
  * </p>
  *
  * <p>
@@ -33,10 +36,15 @@ import java.util.UUID;
  */
 public class CatGuiManager {
 
-    private static final int INVENTORY_SIZE = 27;
+    private static final int INVENTORY_SIZE = 54;
 
     /*
      * 槽位布局
+     *
+     * 第二行（9~17）：属性区（等级/喵阶/性格/猫头/饥饿/好感/健康）
+     * 第三行（21~23）：行为模式（跟随/坐下/自由）
+     * 第五行（39~41）：功能入口（技能/装备/成就）
+     * 第六行（49）：关闭
      */
     private static final int SLOT_CAT_HEAD = 13;
     private static final int SLOT_LEVEL = 10;
@@ -45,10 +53,14 @@ public class CatGuiManager {
     private static final int SLOT_HUNGER = 14;
     private static final int SLOT_AFFECTION = 15;
     private static final int SLOT_HEALTH = 16;
-    private static final int SLOT_MODE_FOLLOW = 18;
-    private static final int SLOT_MODE_SIT = 19;
-    private static final int SLOT_MODE_FREE = 20;
-    private static final int SLOT_CLOSE = 26;
+    private static final int SLOT_MODE_FOLLOW = 21;
+    private static final int SLOT_MODE_SIT = 22;
+    private static final int SLOT_MODE_FREE = 23;
+
+    private static final int SLOT_SKILL_ENTRY = 39;
+    private static final int SLOT_EQUIP_ENTRY = 40;
+    private static final int SLOT_ACHIEVEMENT_ENTRY = 41;
+    private static final int SLOT_CLOSE = 49;
 
     private final CatStore store;
     private final CatCache cache;
@@ -159,6 +171,40 @@ public class CatGuiManager {
                                         cat.getCompanionDays(
                                                 System.currentTimeMillis()
                                         )
+                                )
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.head-bond",
+                                lang.forPlayer(player).text(
+                                        CareMath.bondFor(
+                                                cat,
+                                                config.getCare()
+                                        ).langKey()
+                                ),
+                                String.valueOf(
+                                        cat.getAffection()
+                                )
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.head-combat-bonus",
+                                String.valueOf(
+                                        (int) Math.round(
+                                                (CareMath.battleDamageMultiplier(
+                                                        cat.getMood(),
+                                                        CareMath.bondFor(
+                                                                cat,
+                                                                config.getCare()
+                                                        ),
+                                                        config.getCare()
+                                                ) - 1.0) * 100.0
+                                        )
+                                )
+                        ),
+                        lang.forPlayer(player).text(
+                                "gui.head-equipment",
+                                headEquipmentText(
+                                        player,
+                                        cat
                                 )
                         ),
                         lang.forPlayer(player).text(
@@ -367,6 +413,39 @@ public class CatGuiManager {
         );
 
         /*
+         * 功能入口（0.8.0 面板扩展）。
+         */
+        inventory.setItem(
+                SLOT_SKILL_ENTRY,
+                item(
+                        Material.ENCHANTED_BOOK,
+                        lang.forPlayer(player).text(
+                                "gui.entry-skill"
+                        )
+                )
+        );
+
+        inventory.setItem(
+                SLOT_EQUIP_ENTRY,
+                item(
+                        Material.SHIELD,
+                        lang.forPlayer(player).text(
+                                "gui.entry-equipment"
+                        )
+                )
+        );
+
+        inventory.setItem(
+                SLOT_ACHIEVEMENT_ENTRY,
+                item(
+                        Material.NETHER_STAR,
+                        lang.forPlayer(player).text(
+                                "gui.entry-achievements"
+                        )
+                )
+        );
+
+        /*
          * 关闭。
          */
         inventory.setItem(
@@ -452,5 +531,42 @@ public class CatGuiManager {
         }
 
         return item;
+    }
+
+    /*
+     * 头部装备行文案：未装备 → equip-none；
+     * 已装备 → 装备名，觉醒附加属性时追加「✦ 属性名」。
+     */
+    private String headEquipmentText(
+            Player player,
+            Cat cat
+    ) {
+
+        if (cat.getEquippedItem() == null) {
+
+            return lang.forPlayer(player).text(
+                    "equip-none"
+            );
+        }
+
+        String text =
+                lang.forPlayer(player).text(
+                        cat.getEquippedItem()
+                                .getLangKey()
+                );
+
+        EquipBonusAttribute bonus =
+                cat.getEquippedBonus();
+
+        if (bonus != null) {
+
+            text +=
+                    " ✦ "
+                            + lang.forPlayer(player).text(
+                            bonus.getLangKey()
+                    );
+        }
+
+        return text;
     }
 }

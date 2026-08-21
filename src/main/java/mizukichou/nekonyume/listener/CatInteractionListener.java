@@ -1,7 +1,9 @@
 package mizukichou.nekonyume.listener;
 
 import mizukichou.nekonyume.cat.CatCache;
+import mizukichou.nekonyume.cat.CatEquipItem;
 import mizukichou.nekonyume.cat.CatProgressionService;
+import mizukichou.nekonyume.cat.EquipBonusAttribute;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.event.CatPettedEvent;
@@ -363,15 +365,44 @@ public class CatInteractionListener implements Listener {
                         + logicalCat.getPersonality()
                         .getPetMeowChanceBonus();
 
+        /*
+         * 装备（0.8.0）：铃铛的喵力概率加成。
+         */
+        CatEquipItem equip =
+                logicalCat.getEquippedItem();
+
+        if (equip != null) {
+
+            chance +=
+                    equip.getMeowBonus();
+        }
+
+        /*
+         * 附加属性（0.8.0）：共鸣的喵力概率加成。
+         */
+        EquipBonusAttribute equipBonus =
+                logicalCat.getEquippedBonus();
+
+        if (equipBonus != null) {
+
+            chance +=
+                    equipBonus.getMeowBonus();
+        }
+
         if (chance > 0 &&
                 random.nextInt(100) < chance) {
 
-            meowGain = 1;
+            /*
+             * 0.8.0 数值修正：触发量由配置决定（meow.pet-gain，默认2）。
+             */
+            meowGain =
+                    config.getMeow()
+                            .getPetGain();
 
             progression.grantMeowPower(
                     player,
                     logicalCat,
-                    1
+                    meowGain
             );
         }
 

@@ -486,6 +486,21 @@ public class CatCache {
         );
 
         /*
+         * 装备（0.8.0）。
+         */
+        logicalCat.setEquippedItem(
+                CatEquipItem.fromCode(
+                        store.getCatEquipment(ownerUUID)
+                )
+        );
+
+        logicalCat.setEquippedBonus(
+                EquipBonusAttribute.fromCode(
+                        store.getCatEquipmentBonus(ownerUUID)
+                )
+        );
+
+        /*
          * Entity UUID。
          */
         logicalCat.setEntityUuid(
@@ -709,6 +724,42 @@ public class CatCache {
             store.setCatVariant(
                     ownerUUID,
                     cat.getVariant()
+            );
+        }
+
+        /*
+         * 装备（0.8.0）：对称写——支持卸下（空串）。
+         */
+        if (!java.util.Objects.equals(
+                store.getCatEquipment(ownerUUID),
+                cat.getEquippedItem() == null
+                        ? ""
+                        : cat.getEquippedItem().getCode()
+        )) {
+
+            store.setCatEquipment(
+                    ownerUUID,
+                    cat.getEquippedItem() == null
+                            ? ""
+                            : cat.getEquippedItem().getCode()
+            );
+        }
+
+        /*
+         * 装备附加属性（0.8.0）：对称写——与装备位绑定。
+         */
+        if (!java.util.Objects.equals(
+                store.getCatEquipmentBonus(ownerUUID),
+                cat.getEquippedBonus() == null
+                        ? ""
+                        : cat.getEquippedBonus().getCode()
+        )) {
+
+            store.setCatEquipmentBonus(
+                    ownerUUID,
+                    cat.getEquippedBonus() == null
+                            ? ""
+                            : cat.getEquippedBonus().getCode()
             );
         }
 

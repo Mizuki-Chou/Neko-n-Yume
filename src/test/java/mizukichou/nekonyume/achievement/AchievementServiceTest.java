@@ -118,6 +118,21 @@ class AchievementServiceTest {
                         CatAchievement.MEOW_RANK_30
                 )
         );
+
+        /*
+         * 羁绊纪元（0.8.0）：好感 80 → 亲密无间已达标，灵魂羁绊未达标。
+         */
+        assertTrue(
+                newly.contains(
+                        CatAchievement.AFFECTION_60
+                )
+        );
+
+        assertFalse(
+                newly.contains(
+                        CatAchievement.AFFECTION_100
+                )
+        );
     }
 
     @Test
@@ -291,6 +306,19 @@ class AchievementServiceTest {
                         cat,
                         now,
                         key -> 42
+                )
+        );
+
+        /*
+         * 羁绊纪元（0.8.0）：好感度直接从 Cat 状态读取。
+         */
+        assertEquals(
+                80,
+                AchievementService.valueOf(
+                        CatAchievement.AFFECTION_60,
+                        cat,
+                        now,
+                        key -> 0
                 )
         );
     }
