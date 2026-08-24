@@ -1,6 +1,6 @@
 package mizukichou.nekonyume.command;
 
-import mizukichou.nekonyume.achievement.AchievementGuiManager;
+import mizukichou.nekonyume.gui.AchievementGuiManager;
 import mizukichou.nekonyume.achievement.AchievementService;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
@@ -13,10 +13,9 @@ import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.gui.CatGuiManager;
 import mizukichou.nekonyume.lang.Lang;
-import mizukichou.nekonyume.skill.SkillGuiManager;
+import mizukichou.nekonyume.gui.SkillGuiManager;
 import mizukichou.nekonyume.storage.CatStore;
 import mizukichou.nekonyume.util.CatToolItem;
-import net.kyori.adventure.text.Component;
 import org.bukkit.NamespacedKey;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;

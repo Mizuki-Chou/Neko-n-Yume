@@ -14,7 +14,7 @@ Sora 2026-今 - 不懂事的猫咪，只能笼养呜呜
 向自然致敬。
  */
 
-import mizukichou.nekonyume.achievement.AchievementGuiManager;
+import mizukichou.nekonyume.gui.AchievementGuiManager;
 import mizukichou.nekonyume.achievement.AchievementService;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEntityBinding;
@@ -51,7 +51,7 @@ import mizukichou.nekonyume.muma.MumaNightManager;
 import mizukichou.nekonyume.muma.MumaNightTask;
 import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.skill.CatSkillManager;
-import mizukichou.nekonyume.skill.SkillGuiManager;
+import mizukichou.nekonyume.gui.SkillGuiManager;
 import mizukichou.nekonyume.storage.CatStore;
 import mizukichou.nekonyume.storage.PluginCatStoreEnv;
 import mizukichou.nekonyume.storage.YamlCatStore;

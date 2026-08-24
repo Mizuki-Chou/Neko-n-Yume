@@ -1,6 +1,7 @@
 package mizukichou.nekonyume.skill;
 
 import mizukichou.nekonyume.cat.CatTier;
+import mizukichou.nekonyume.gui.SkillGuiManager;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

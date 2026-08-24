@@ -111,8 +111,9 @@ public class CatGuiManager {
         ConfigSnapshot config =
                 configManager.snapshot();
 
-        CatGuiHolder holder =
-                new CatGuiHolder(
+        GuiHolder holder =
+                new GuiHolder(
+                        Page.CAT,
                         playerUUID
                 );
 

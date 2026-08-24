@@ -1,8 +1,9 @@
 package mizukichou.nekonyume.listener;
 
 import mizukichou.nekonyume.gui.AdminGiveGuiManager;
-import mizukichou.nekonyume.gui.AdminGiveHolder;
 
+import mizukichou.nekonyume.gui.GuiHolder;
+import mizukichou.nekonyume.gui.Page;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -32,7 +33,8 @@ public class AdminGiveGuiListener implements Listener {
 
         if (!(event.getView()
                 .getTopInventory()
-                .getHolder() instanceof AdminGiveHolder holder)) {
+                .getHolder() instanceof GuiHolder holder
+                && holder.getPage() == Page.ADMIN)) {
 
             return;
         }
@@ -71,7 +73,8 @@ public class AdminGiveGuiListener implements Listener {
 
         if (!(event.getView()
                 .getTopInventory()
-                .getHolder() instanceof AdminGiveHolder)) {
+                .getHolder() instanceof GuiHolder holder
+                && holder.getPage() == Page.ADMIN)) {
 
             return;
         }
