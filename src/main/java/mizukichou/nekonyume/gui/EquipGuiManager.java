@@ -99,7 +99,7 @@ public final class EquipGuiManager {
 
         Inventory inventory =
                 Bukkit.createInventory(
-                        new EquipGuiHolder(playerUUID),
+                        new GuiHolder(Page.EQUIP, playerUUID),
                         INVENTORY_SIZE,
                         lang.forPlayer(player).text(
                                 "equip-gui.title"

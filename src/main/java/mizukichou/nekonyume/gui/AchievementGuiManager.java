@@ -1,5 +1,7 @@
-package mizukichou.nekonyume.achievement;
+package mizukichou.nekonyume.gui;
 
+import mizukichou.nekonyume.achievement.AchievementService;
+import mizukichou.nekonyume.achievement.CatAchievement;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.lang.Lang;
@@ -76,8 +78,9 @@ public class AchievementGuiManager {
             return;
         }
 
-        AchievementGuiHolder holder =
-                new AchievementGuiHolder(
+        GuiHolder holder =
+                new GuiHolder(
+                        Page.ACHIEVEMENT,
                         playerUuid
                 );
 

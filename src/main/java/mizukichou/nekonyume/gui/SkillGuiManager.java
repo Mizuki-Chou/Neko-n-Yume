@@ -1,4 +1,4 @@
-package mizukichou.nekonyume.skill;
+package mizukichou.nekonyume.gui;
 
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatCache;
@@ -6,6 +6,7 @@ import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.CatTier;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.lang.Lang;
+import mizukichou.nekonyume.skill.CatSkillManager;
 import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -90,8 +91,9 @@ public class SkillGuiManager {
             return;
         }
 
-        SkillGuiHolder holder =
-                new SkillGuiHolder(
+        GuiHolder holder =
+                new GuiHolder(
+                        Page.SKILL,
                         playerUUID
                 );
 

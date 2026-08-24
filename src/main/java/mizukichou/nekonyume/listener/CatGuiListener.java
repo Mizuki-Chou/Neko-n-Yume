@@ -1,21 +1,19 @@
 package mizukichou.nekonyume.listener;
 
-import mizukichou.nekonyume.achievement.AchievementGuiHolder;
-import mizukichou.nekonyume.achievement.AchievementGuiManager;
+import mizukichou.nekonyume.gui.AchievementGuiManager;
+import mizukichou.nekonyume.gui.CatGuiManager;
+import mizukichou.nekonyume.gui.EquipGuiManager;
+import mizukichou.nekonyume.gui.GuiHolder;
+import mizukichou.nekonyume.gui.Page;
+import mizukichou.nekonyume.gui.SkillGuiManager;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.CatProgressionService;
 import mizukichou.nekonyume.cat.CatSkill;
-import mizukichou.nekonyume.gui.CatGuiHolder;
-import mizukichou.nekonyume.gui.CatGuiManager;
-import mizukichou.nekonyume.gui.EquipGuiHolder;
-import mizukichou.nekonyume.gui.EquipGuiManager;
 import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.skill.CatSkillManager;
-import mizukichou.nekonyume.skill.SkillGuiHolder;
-import mizukichou.nekonyume.skill.SkillGuiManager;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -81,27 +79,22 @@ public class CatGuiListener implements Listener {
             InventoryClickEvent event
     ) {
 
+        if (!(event.getInventory().getHolder() instanceof GuiHolder holder)) {
+            return;
+        }
+
         /*
          * 技能面板。
          */
-        if (event.getInventory()
-                .getHolder()
-                instanceof SkillGuiHolder skillHolder) {
-
-            handleSkillGuiClick(
-                    event,
-                    skillHolder
-            );
-
+        if (holder.getPage() == Page.SKILL) {
+            handleSkillGuiClick(event, holder);
             return;
         }
 
         /*
          * 成就殿堂面板（只读，仅关闭按钮可用）。
          */
-        if (event.getInventory()
-                .getHolder()
-                instanceof AchievementGuiHolder achievementHolder) {
+        if (holder.getPage() == Page.ACHIEVEMENT) {
 
             event.setCancelled(
                     true
@@ -109,7 +102,7 @@ public class CatGuiListener implements Listener {
 
             if (!event.getWhoClicked()
                     .getUniqueId()
-                    .equals(achievementHolder.getOwnerUuid())) {
+                    .equals(holder.getOwnerUuid())) {
 
                 return;
             }
@@ -126,9 +119,7 @@ public class CatGuiListener implements Listener {
         /*
          * 装备界面。
          */
-        if (event.getInventory()
-                .getHolder()
-                instanceof EquipGuiHolder equipHolder) {
+        if (holder.getPage() == Page.EQUIP) {
 
             event.setCancelled(
                     true
@@ -136,7 +127,7 @@ public class CatGuiListener implements Listener {
 
             if (!event.getWhoClicked()
                     .getUniqueId()
-                    .equals(equipHolder.getOwnerUuid())) {
+                    .equals(holder.getOwnerUuid())) {
 
                 return;
             }
@@ -222,13 +213,16 @@ public class CatGuiListener implements Listener {
         /*
          * 状态面板。
          */
-        if (!(event.getInventory()
-                .getHolder()
-                instanceof CatGuiHolder holder)) {
-
+        if (holder.getPage() == Page.CAT) {
+            handleCatGuiClick(event, holder);
             return;
         }
+    }
 
+    private void handleCatGuiClick(
+            InventoryClickEvent event,
+            GuiHolder holder
+    ){
         /*
          * 面板内所有点击一律取消，
          * 物品不可被取出 / 移动。
@@ -367,7 +361,7 @@ public class CatGuiListener implements Listener {
 
     private void handleSkillGuiClick(
             InventoryClickEvent event,
-            SkillGuiHolder holder
+            GuiHolder holder
     ) {
 
         event.setCancelled(true);
@@ -509,11 +503,9 @@ public class CatGuiListener implements Listener {
                 event.getView()
                         .getTopInventory()
                         .getHolder();
-
-        if (holder instanceof CatGuiHolder ||
-                holder instanceof SkillGuiHolder ||
-                holder instanceof EquipGuiHolder ||
-                holder instanceof AchievementGuiHolder) {
+        // 特判Admin:admin面板不在此处理
+        if (holder instanceof GuiHolder guiHolder
+                && guiHolder.getPage() != Page.ADMIN) {
 
             /*
              * 只拦涉及面板顶部的拖拽；

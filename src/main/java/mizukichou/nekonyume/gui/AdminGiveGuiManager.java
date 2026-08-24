@@ -71,7 +71,8 @@ public final class AdminGiveGuiManager {
 
         Inventory inventory =
                 Bukkit.createInventory(
-                        new AdminGiveHolder(
+                        new GuiHolder(
+                                Page.ADMIN,
                                 player.getUniqueId()
                         ),
                         54,
