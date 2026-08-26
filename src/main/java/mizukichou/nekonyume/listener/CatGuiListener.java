@@ -84,6 +84,26 @@ public class CatGuiListener implements Listener {
         }
 
         /*
+         * 0.8.0 修复：必须用视图顶部容器的 holder 判定面板。
+         *
+         * event.getInventory() 对"玩家背包区（底部）"的点击
+         * 返回的是玩家自己的背包（holder 是 Player），
+         * 会导致：
+         * 1. 装备界面的背包快捷穿戴永远触发不了；
+         * 2. 底部点击（含 Shift）漏拦截，槽位可被污染。
+         *
+         * 用 getView().getTopInventory().getHolder() 判定后，
+         * 顶部与底部的点击都统一按页分派，
+         * 与 AdminGiveGuiListener / 拖拽守卫口径一致。
+         */
+        if (!(event.getView()
+                .getTopInventory()
+                .getHolder() instanceof GuiHolder holder)) {
+
+            return;
+        }
+
+        /*
          * 技能面板。
          */
         if (holder.getPage() == Page.SKILL) {

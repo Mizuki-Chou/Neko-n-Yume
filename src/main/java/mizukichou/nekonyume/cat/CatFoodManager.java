@@ -2052,6 +2052,17 @@ public class CatFoodManager {
                 cat.getLastFedAt()
         );
 
+        /*
+         * 0.8.0 修复：扣减前捕获食物快照。
+         *
+         * 物品扣减后数量可能归零（ItemStack 变为 AIR），
+         * 若在扣减后再读取 getType()，"只剩1个食物"时
+         * 喂食消息会显示为 AIR。事件参数同样改用快照，
+         * 避免事后监听器拿到空气物品。
+         */
+        ItemStack fedSnapshot =
+                item.clone();
+
         if (player.getGameMode() != GameMode.CREATIVE) {
 
             if (item.getAmount() <= 1) {
@@ -2143,7 +2154,7 @@ public class CatFoodManager {
                         new CatFedEvent(
                                 player,
                                 cat,
-                                item,
+                                fedSnapshot,
                                 actualHungerGain,
                                 actualAffectionGain,
                                 xpGain,
@@ -2157,7 +2168,7 @@ public class CatFoodManager {
                         cat.getName(),
                         lang.forPlayer(player).text(
                                 "food-name."
-                                        + item.getType()
+                                        + fedSnapshot.getType()
                                         .name()
                                         .toLowerCase(
                                                 java.util.Locale.ROOT
