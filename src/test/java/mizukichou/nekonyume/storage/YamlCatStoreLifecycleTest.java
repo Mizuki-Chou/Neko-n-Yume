@@ -66,16 +66,31 @@ class YamlCatStoreLifecycleTest {
     }
 
     @Test
-    void newStoreCreatesFileAndDataVersion() throws IOException {
+    void newStoreCreatesShardedStorageAndMeta() throws IOException {
 
         newStore();
 
-        Path file = tempDir.resolve("players.yml");
-
-        assertTrue(Files.exists(file));
+        /*
+         * 0.8.3 v9：全新服务器直接建立分片目录 + meta.yml，
+         * 不再创建单文件 players.yml。
+         */
         assertTrue(
-                Files.readString(file)
-                        .contains("data-version: 8")
+                Files.isDirectory(
+                        tempDir.resolve("players")
+                )
+        );
+
+        assertFalse(
+                Files.exists(
+                        tempDir.resolve("players.yml")
+                ),
+                "全新服务器不应再创建单文件 players.yml"
+        );
+
+        assertTrue(
+                Files.readString(
+                        tempDir.resolve("meta.yml")
+                ).contains("data-version: 9")
         );
     }
 
@@ -426,11 +441,22 @@ class YamlCatStoreLifecycleTest {
 
         String written =
                 Files.readString(
-                        tempDir.resolve("players.yml")
+                        tempDir.resolve("players.yml.bak-v8")
                 );
 
         assertTrue(
                 written.contains("data-version: 8")
+        );
+
+        /*
+         * 0.8.3 v9：拆分后的分片文件独立存在。
+         */
+        assertTrue(
+                Files.exists(
+                        tempDir.resolve("players")
+                                .resolve(player + ".yml")
+                ),
+                "拆分后每个玩家一个分片文件"
         );
     }
 
@@ -506,7 +532,7 @@ class YamlCatStoreLifecycleTest {
 
         String written =
                 Files.readString(
-                        tempDir.resolve("players.yml")
+                        tempDir.resolve("players.yml.bak-v8")
                 );
 
         assertTrue(
@@ -589,7 +615,7 @@ class YamlCatStoreLifecycleTest {
 
         String written =
                 Files.readString(
-                        tempDir.resolve("players.yml")
+                        tempDir.resolve("players.yml.bak-v8")
                 );
 
         assertTrue(
@@ -663,7 +689,7 @@ class YamlCatStoreLifecycleTest {
 
         String written =
                 Files.readString(
-                        tempDir.resolve("players.yml")
+                        tempDir.resolve("players.yml.bak-v8")
                 );
 
         assertTrue(
@@ -742,7 +768,7 @@ class YamlCatStoreLifecycleTest {
 
         String written =
                 Files.readString(
-                        tempDir.resolve("players.yml")
+                        tempDir.resolve("players.yml.bak-v8")
                 );
 
         assertTrue(
@@ -763,7 +789,7 @@ class YamlCatStoreLifecycleTest {
     }
 
     @Test
-    void v8FileLoadsAsCurrentVersionWithoutMigration() throws IOException {
+    void v8FileSplitsToShardedWithoutFieldMigration() throws IOException {
 
         String yaml = """
                 data-version: 8
@@ -789,7 +815,7 @@ class YamlCatStoreLifecycleTest {
                 );
 
         /*
-         * v8 即当前版本：不触发迁移、不回写文件；
+         * v8 → v9 只做拆分，不做字段迁移：
          * 既有字段原样保留，equipment / equipment-bonus
          * 读侧缺省为空串（兼容中间开发版写入的 v8 文件）。
          */
@@ -808,20 +834,31 @@ class YamlCatStoreLifecycleTest {
                 store.getCatEquipmentBonus(player)
         );
 
+        /*
+         * 拆分后的迁移备份保留原 v8 单文件内容：
+         * 含 data-version 8，且不应出现装备字段。
+         */
         String written =
                 Files.readString(
-                        tempDir.resolve("players.yml")
+                        tempDir.resolve("players.yml.bak-v8")
                 );
 
         assertTrue(
                 written.contains("data-version: 8")
         );
 
-        /*
-         * 当前版本不触发迁移回写：文件中不应出现装备字段。
-         */
         assertFalse(
                 written.contains("equipment")
+        );
+
+        /*
+         * 分片文件存在且包含原数据。
+         */
+        assertTrue(
+                Files.readString(
+                        tempDir.resolve("players")
+                                .resolve(player + ".yml")
+                ).contains("name: OldCat")
         );
     }
 
@@ -997,18 +1034,21 @@ class YamlCatStoreLifecycleTest {
     void newerTempFileIsRecoveredOnStartup() throws IOException {
 
         UUID existingCat = UUID.randomUUID();
-
-        YamlCatStore first = newStore();
-
-        first.createCat(existingCat);
-        first.saveNow();
-        first.awaitPendingSave();
+        UUID recoveredCat = UUID.randomUUID();
 
         /*
-         * 模拟崩溃窗口：tmp 已 fsync（序列号更新）但未完成原子替换。
-         * 0.8.1 R4：启动时应当整体采用 tmp，而不是删除。
+         * 0.8.3 v9：legacy 崩溃窗口恢复只作用于单文件时代。
+         * 显式构造 legacy 环境：旧主文件 + 更新的 tmp。
          */
-        UUID recoveredCat = UUID.randomUUID();
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                "data-snapshot: 2\n"
+                        + "data-version: 8\n"
+                        + "players:\n"
+                        + "  " + existingCat + ":\n"
+                        + "    cat:\n"
+                        + "      name: OldMain\n"
+        );
 
         Files.writeString(
                 tempDir.resolve("players.yml.tmp"),
@@ -1040,17 +1080,18 @@ class YamlCatStoreLifecycleTest {
 
         UUID cat = UUID.randomUUID();
 
-        YamlCatStore first = newStore();
-
-        first.createCat(cat);
-        first.saveNow();
-        first.awaitPendingSave();
-
         /*
-         * 主文件序列号至少为 1，再提交一次保存使主文件更新。
+         * 0.8.3 v9：legacy 环境——主文件序列号 2，tmp 序列号 1。
          */
-        first.saveNow();
-        first.awaitPendingSave();
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                "data-snapshot: 2\n"
+                        + "data-version: 8\n"
+                        + "players:\n"
+                        + "  " + cat + ":\n"
+                        + "    cat:\n"
+                        + "      name: MainCat\n"
+        );
 
         Files.writeString(
                 tempDir.resolve("players.yml.tmp"),
@@ -1117,6 +1158,600 @@ class YamlCatStoreLifecycleTest {
         assertDoesNotThrow(
                 store::shutdownAndAwait
         );
+    }
+
+    /*
+     * ============================================================
+     * 0.8.3 v9：分片存储专项测试
+     * ============================================================
+     */
+
+    @Test
+    void shardedRestartPreservesAllPlayers() {
+
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+
+        YamlCatStore store = newStore();
+
+        store.createCat(first);
+        store.createCat(second);
+
+        store.setCatName(first, "Alpha");
+        store.setCatName(second, "Beta");
+
+        flushAndAwait(store);
+
+        YamlCatStore reopened = newStore();
+
+        assertEquals(2, reopened.getCatPlayers().size());
+        assertEquals("Alpha", reopened.getCatName(first));
+        assertEquals("Beta", reopened.getCatName(second));
+
+        reopened.shutdownAndAwait();
+    }
+
+    @Test
+    void onlyDirtyShardsAreRewritten() throws IOException {
+
+        UUID clean = UUID.randomUUID();
+        UUID dirty = UUID.randomUUID();
+
+        YamlCatStore store = newStore();
+
+        store.createCat(clean);
+        store.createCat(dirty);
+
+        store.setCatName(clean, "CleanCat");
+        store.setCatName(dirty, "DirtyCat");
+
+        flushAndAwait(store);
+
+        Path cleanShard =
+                tempDir.resolve("players")
+                        .resolve(clean + ".yml");
+
+        Path dirtyShard =
+                tempDir.resolve("players")
+                        .resolve(dirty + ".yml");
+
+        byte[] cleanBefore =
+                Files.readAllBytes(cleanShard);
+
+        /*
+         * 只修改 dirty 玩家并落盘：clean 分片必须原样不动。
+         */
+        store.setCatName(dirty, "DirtyCat2");
+
+        flushAndAwait(store);
+
+        assertEquals(
+                "CleanCat",
+                Files.readString(cleanShard).contains("CleanCat")
+                        ? "CleanCat"
+                        : "MISSING",
+                "clean 分片必须保留 CleanCat"
+        );
+
+        /*
+         * 逐字节断言 clean 分片未被重写。
+         */
+        byte[] cleanAfter =
+                Files.readAllBytes(cleanShard);
+
+        assertEquals(
+                cleanBefore.length,
+                cleanAfter.length,
+                "clean 分片长度不应变化"
+        );
+
+        for (int i = 0; i < cleanBefore.length; i++) {
+
+            assertEquals(
+                    cleanBefore[i],
+                    cleanAfter[i],
+                    "clean 分片第 " + i + " 字节不应变化"
+            );
+        }
+
+        assertTrue(
+                Files.readString(dirtyShard)
+                        .contains("DirtyCat2"),
+                "dirty 分片必须被重写"
+        );
+
+        store.shutdownAndAwait();
+    }
+
+    @Test
+    void shardedTmpFileIsAdoptedWhenTargetMissing() throws IOException {
+
+        UUID player = UUID.randomUUID();
+
+        YamlCatStore first = newStore();
+
+        first.createCat(player);
+        first.setCatName(player, "Original");
+
+        flushAndAwait(first);
+
+        Path shardFile =
+                tempDir.resolve("players")
+                        .resolve(player + ".yml");
+
+        Files.delete(shardFile);
+
+        /*
+         * 模拟崩溃窗口：分片目标缺失、tmp 完整。
+         */
+        Files.writeString(
+                tempDir.resolve("players")
+                        .resolve(player + ".yml.tmp"),
+                "id: 22222222-2222-2222-2222-222222222222\n"
+                        + "name: RecoveredShard\n"
+                        + "level: 5\n"
+        );
+
+        YamlCatStore reopened = newStore();
+
+        assertTrue(reopened.hasCat(player));
+        assertEquals("RecoveredShard", reopened.getCatName(player));
+        assertEquals(5, reopened.getCatLevel(player));
+        assertFalse(
+                Files.exists(
+                        tempDir.resolve("players")
+                                .resolve(player + ".yml.tmp")
+                ),
+                "恢复后的 tmp 不应残留"
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+    @Test
+    void corruptShardFailsFast() throws IOException {
+
+        UUID player = UUID.randomUUID();
+
+        Files.createDirectories(
+                tempDir.resolve("players")
+        );
+
+        Files.writeString(
+                tempDir.resolve("players")
+                        .resolve(player + ".yml"),
+                "this is not valid player data"
+        );
+
+        IllegalStateException exception =
+                assertThrows(
+                        IllegalStateException.class,
+                        this::newStore
+                );
+
+        assertTrue(
+                exception.getMessage()
+                        .contains(player.toString())
+        );
+    }
+
+    @Test
+    void futureShardedVersionFailsFast() throws IOException {
+
+        Files.createDirectories(
+                tempDir.resolve("players")
+        );
+
+        Files.writeString(
+                tempDir.resolve("meta.yml"),
+                "data-version: 99\n"
+        );
+
+        IllegalStateException exception =
+                assertThrows(
+                        IllegalStateException.class,
+                        this::newStore
+                );
+
+        assertTrue(
+                exception.getMessage()
+                        .contains("99")
+        );
+    }
+
+    @Test
+    void deleteRemovesShardFileAndPendingWrites() throws IOException {
+
+        UUID player = UUID.randomUUID();
+
+        YamlCatStore store = newStore();
+
+        store.createCat(player);
+
+        flushAndAwait(store);
+
+        Path shardFile =
+                tempDir.resolve("players")
+                        .resolve(player + ".yml");
+
+        assertTrue(Files.exists(shardFile));
+
+        assertTrue(store.removeCat(player));
+
+        assertFalse(
+                Files.exists(shardFile),
+                "删除后分片文件必须消失"
+        );
+
+        store.shutdownAndAwait();
+
+        YamlCatStore reopened = newStore();
+
+        assertFalse(reopened.hasCat(player));
+        assertTrue(reopened.getCatPlayers().isEmpty());
+
+        reopened.shutdownAndAwait();
+    }
+
+    @Test
+    void deleteWhileWriteIsInFlightDoesNotResurrect() throws IOException {
+
+        UUID player = UUID.randomUUID();
+
+        YamlCatStore store = newStore();
+
+        store.createCat(player);
+
+        /*
+         * 制造“待写/在飞写入”窗口：
+         * 入队后不等待，立即删除。
+         * 无论保存线程是否已取走字节，
+         * 删除都必须最终生效，绝不被晚到的写入复活。
+         */
+        store.setCatName(player, "Doomed");
+        store.saveNow();
+
+        assertTrue(store.removeCat(player));
+
+        store.awaitPendingSave();
+
+        Path shardFile =
+                tempDir.resolve("players")
+                        .resolve(player + ".yml");
+
+        assertFalse(
+                Files.exists(shardFile),
+                "在飞写入不得复活已删除的分片文件"
+        );
+
+        store.shutdownAndAwait();
+
+        YamlCatStore reopened = newStore();
+
+        assertFalse(reopened.hasCat(player));
+
+        reopened.shutdownAndAwait();
+    }
+
+    /*
+     * ============================================================
+     * 0.8.3 升级安全：拆分事务协议
+     * ============================================================
+     */
+
+    @Test
+    void incompleteSplitRollsBackAndResplitsFromLegacy() throws IOException {
+
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+
+        /*
+         * 单文件时代数据（两只猫）。
+         */
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                "data-version: 8\n"
+                        + "players:\n"
+                        + "  " + first + ":\n"
+                        + "    cat:\n"
+                        + "      name: CatOne\n"
+                        + "      level: 3\n"
+                        + "  " + second + ":\n"
+                        + "    cat:\n"
+                        + "      name: CatTwo\n"
+                        + "      level: 5\n"
+        );
+
+        /*
+         * 模拟“拆分写了一半后崩溃”的现场：
+         * 拆分子目录存在、拆分标记存在、
+         * 只有第一只猫的分片写入了。
+         */
+        Path shardDir =
+                tempDir.resolve("players");
+
+        Files.createDirectories(shardDir);
+
+        Files.writeString(
+                shardDir.resolve(".splitting"),
+                ""
+        );
+
+        Files.writeString(
+                shardDir.resolve(first + ".yml"),
+                "name: CatOne\nlevel: 3\n"
+        );
+
+        YamlCatStore reopened = newStore();
+
+        /*
+         * 回退 + 重新拆分后，两只猫都必须完整存在，
+         * 绝不能让“半套分片”吞掉第二只猫。
+         */
+        assertTrue(reopened.hasCat(first));
+        assertTrue(reopened.hasCat(second));
+        assertEquals("CatOne", reopened.getCatName(first));
+        assertEquals("CatTwo", reopened.getCatName(second));
+        assertEquals(5, reopened.getCatLevel(second));
+
+        assertFalse(
+                Files.exists(
+                        shardDir.resolve(".splitting")
+                ),
+                "回退重拆后标记不应残留"
+        );
+
+        assertTrue(
+                Files.exists(
+                        tempDir.resolve("players.yml.bak-v8")
+                ),
+                "迁移备份必须存在"
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+    @Test
+    void emptyShardDirDoesNotSwallowLegacyFile() throws IOException {
+
+        UUID player = UUID.randomUUID();
+
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                "data-version: 8\n"
+                        + "players:\n"
+                        + "  " + player + ":\n"
+                        + "    cat:\n"
+                        + "      name: LegacyCat\n"
+                        + "      level: 9\n"
+        );
+
+        /*
+         * 空的拆分子目录（外部误创建/残留）不得吞掉旧单文件。
+         */
+        Files.createDirectories(
+                tempDir.resolve("players")
+        );
+
+        YamlCatStore store = newStore();
+
+        assertTrue(store.hasCat(player));
+        assertEquals("LegacyCat", store.getCatName(player));
+        assertEquals(9, store.getCatLevel(player));
+
+        store.shutdownAndAwait();
+    }
+
+    @Test
+    void leftoverPlayersYmlIsKeptAsBackupInShardedMode() throws IOException {
+
+        UUID player = UUID.randomUUID();
+
+        /*
+         * 已成功拆分的服务器 + 残留 players.yml
+         * （拆分后重命名失败的场景）：
+         * 分片是权威数据；残留文件转存为迁移备份。
+         */
+        Files.createDirectories(
+                tempDir.resolve("players")
+        );
+
+        Files.writeString(
+                tempDir.resolve("meta.yml"),
+                "data-version: 9\n"
+        );
+
+        Files.writeString(
+                tempDir.resolve("players")
+                        .resolve(player + ".yml"),
+                "name: ShardCat\nlevel: 4\n"
+        );
+
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                "data-version: 8\n"
+                        + "players: {}\n"
+        );
+
+        YamlCatStore store = newStore();
+
+        assertEquals("ShardCat", store.getCatName(player));
+        assertFalse(
+                Files.exists(
+                        tempDir.resolve("players.yml")
+                ),
+                "残留单文件应被转存"
+        );
+
+        assertTrue(
+                Files.exists(
+                        tempDir.resolve("players.yml.bak-v8")
+                )
+        );
+
+        store.shutdownAndAwait();
+    }
+
+    @Test
+    void v8UpgradePreservesEveryField() throws IOException {
+
+        UUID player = UUID.randomUUID();
+        UUID catId = UUID.randomUUID();
+        UUID entityId = UUID.randomUUID();
+        UUID worldId = UUID.randomUUID();
+
+        /*
+         * 完全模拟 0.8.1 时代玩家文件（v8 + data-snapshot）。
+         */
+        String yaml = String.format("""
+                data-snapshot: 7
+                data-version: 8
+                players:
+                  %s:
+                   cat:
+                    id: %s
+                    name: UpgradeCat
+                    level: 12
+                    experience: 6600
+                    meow-power: 340
+                    meow-rank: 5
+                    affection: 91
+                    health: 64
+                    hunger: 42
+                    hunger-last-update: 1000
+                    created-at: 800
+                    last-fed-at: 850
+                    last-interaction-at: 900
+                    pet-count: 3
+                    pet-date: '2099-01-01'
+                    feed-count: 2
+                    feed-date: '2099-01-01'
+                    affection-decay-date: 2099-01-01
+                    behavior-mode: SIT
+                    tier: UNIQUE
+                    skills:
+                     - NEKO_PUNCH
+                     - SHADOW_STEP
+                    variant: minecraft:black
+                    equipment: collar-epic
+                    equipment-bonus: starlight
+                    entity-uuid: %s
+                    world-uuid: %s
+                    x: 12.5
+                    y: 64.0
+                    z: -3.25
+                    achievements-unlocked:
+                     - FIRST_CLAIM
+                    achievements-progress:
+                     - feed-total=42
+                    achievements-pending:
+                     - SECOND_TIER
+                    achievements-rewarded:
+                     - FIRST_CLAIM
+                """, player, catId, entityId, worldId);
+
+        Files.writeString(
+                tempDir.resolve("players.yml"),
+                yaml
+        );
+
+        YamlCatStore store = newStore();
+
+        assertEquals(catId, store.getCatUUID(player));
+        assertEquals("UpgradeCat", store.getCatName(player));
+        assertEquals(12, store.getCatLevel(player));
+        assertEquals(6600, store.getCatExperience(player));
+        assertEquals(340, store.getCatMeowPower(player));
+        assertEquals(5, store.getCatMeowRank(player));
+        assertEquals(91, store.getCatAffection(player));
+        assertEquals(64, store.getCatHealth(player));
+        assertEquals(42, store.getCatHunger(player));
+        assertEquals(1000L, store.getCatHungerLastUpdate(player));
+        assertEquals(800L, store.getCatCreatedAt(player));
+        assertEquals(850L, store.getCatLastFedAt(player));
+        assertEquals(900L, store.getCatLastInteractionAt(player));
+        assertEquals("SIT", store.getCatBehaviorMode(player));
+        assertEquals("UNIQUE", store.getCatTier(player));
+        assertEquals(
+                List.of("NEKO_PUNCH", "SHADOW_STEP"),
+                store.getCatSkills(player)
+        );
+        assertEquals("minecraft:black", store.getCatVariant(player));
+        assertEquals("collar-epic", store.getCatEquipment(player));
+        assertEquals("starlight", store.getCatEquipmentBonus(player));
+        assertEquals(entityId, store.getCatEntityUUID(player));
+        assertEquals(worldId, store.getCatWorldUUID(player));
+        assertEquals(12.5, store.getCatX(player), 0.0001);
+        assertEquals(64.0, store.getCatY(player), 0.0001);
+        assertEquals(-3.25, store.getCatZ(player), 0.0001);
+        assertEquals(
+                List.of("FIRST_CLAIM"),
+                store.getAchievementsUnlockedList(player)
+        );
+        assertEquals(
+                42,
+                store.getAchievementProgress(player, "feed-total")
+        );
+        assertEquals(
+                List.of("SECOND_TIER"),
+                store.getAchievementsPendingList(player)
+        );
+        assertEquals(
+                List.of("FIRST_CLAIM"),
+                store.getAchievementsRewardedList(player)
+        );
+
+        /*
+         * 重启往返：分片模式再次完整保留全部字段。
+         */
+        flushAndAwait(store);
+
+        YamlCatStore reopened = newStore();
+
+        assertEquals("UpgradeCat", reopened.getCatName(player));
+        assertEquals(12, reopened.getCatLevel(player));
+        assertEquals(6600, reopened.getCatExperience(player));
+        assertEquals(340, reopened.getCatMeowPower(player));
+        assertEquals(5, reopened.getCatMeowRank(player));
+        assertEquals(91, reopened.getCatAffection(player));
+        assertEquals(64, reopened.getCatHealth(player));
+        assertEquals(42, reopened.getCatHunger(player));
+        assertEquals(1000L, reopened.getCatHungerLastUpdate(player));
+        assertEquals(800L, reopened.getCatCreatedAt(player));
+        assertEquals(850L, reopened.getCatLastFedAt(player));
+        assertEquals(900L, reopened.getCatLastInteractionAt(player));
+        assertEquals("SIT", reopened.getCatBehaviorMode(player));
+        assertEquals("UNIQUE", reopened.getCatTier(player));
+        assertEquals(
+                List.of("NEKO_PUNCH", "SHADOW_STEP"),
+                reopened.getCatSkills(player)
+        );
+        assertEquals("minecraft:black", reopened.getCatVariant(player));
+        assertEquals("collar-epic", reopened.getCatEquipment(player));
+        assertEquals("starlight", reopened.getCatEquipmentBonus(player));
+        assertEquals(entityId, reopened.getCatEntityUUID(player));
+        assertEquals(worldId, reopened.getCatWorldUUID(player));
+        assertEquals(12.5, reopened.getCatX(player), 0.0001);
+        assertEquals(64.0, reopened.getCatY(player), 0.0001);
+        assertEquals(-3.25, reopened.getCatZ(player), 0.0001);
+        assertEquals(
+                List.of("FIRST_CLAIM"),
+                reopened.getAchievementsUnlockedList(player)
+        );
+        assertEquals(
+                42,
+                reopened.getAchievementProgress(player, "feed-total")
+        );
+        assertEquals(
+                List.of("SECOND_TIER"),
+                reopened.getAchievementsPendingList(player)
+        );
+        assertEquals(
+                List.of("FIRST_CLAIM"),
+                reopened.getAchievementsRewardedList(player)
+        );
+
+        reopened.shutdownAndAwait();
     }
 
     private static class FakeCatStoreEnv implements CatStoreEnv {

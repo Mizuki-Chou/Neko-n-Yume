@@ -1,0 +1,34 @@
+name: NekoNYume
+version: '${version}'
+
+main: mizukichou.nekonyume.NekoNYume
+api-version: '26.2'
+load: POSTWORLD
+
+# 0.8.1 修复（R3，社区上报）：
+# 技能刷新费用类型支持 PlayerPoints（反射软依赖），
+# 声明 softdepend 保证加载顺序：PlayerPoints 先于本插件
+# enable，提供者选择时它必定已就绪。
+softdepend:
+  - PlayerPoints
+
+commands:
+  nekoyume:
+    description: Neko n' Yume main command
+    usage: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|achievements>
+    aliases:
+      - ny
+
+  nekoyumeadmin:
+    description: Neko n' Yume admin commands
+    usage: /nekoyumeadmin <meowdan|cat|skill|reload>
+    aliases:
+      - nyadmin
+      - nya
+    permission: nekoyume.admin
+
+
+permissions:
+  nekoyume.admin:
+    description: Neko n' Yume administrator permission
+    default: op

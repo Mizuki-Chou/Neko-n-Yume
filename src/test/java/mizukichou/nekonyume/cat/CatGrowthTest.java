@@ -477,4 +477,153 @@ class CatGrowthTest {
         );
     }
 
+    /*
+     * 0.8.1 R8（效率）：
+     * 二分版 levelFromExperience / meowRankFromPower 与旧线性实现
+     * 在广泛取值与边界上逐值等价（测试内保留线性参照实现）。
+     */
+    @Test
+    void binarySearchMatchesLegacyLinearScan() {
+
+        int[] bases = {1, 2, 3, 7, 100, 999};
+
+        int[] offsets = {1, 2, 19, 100};
+
+        for (int base : bases) {
+
+            int[] experienceSamples = {
+                    0,
+                    1,
+                    base - 1,
+                    base,
+                    base + 1,
+                    base * 10,
+                    base * 100,
+                    base * 1000,
+                    base * 10000,
+                    base * 500000,
+                    Integer.MAX_VALUE
+            };
+
+            for (int e : experienceSamples) {
+
+                assertEquals(
+                        legacyLevelFromExperience(
+                                e,
+                                base
+                        ),
+                        GrowthMath.levelFromExperience(
+                                e,
+                                base
+                        ),
+                        "level mismatch for exp="
+                                + e
+                                + " base="
+                                + base
+                );
+            }
+        }
+
+        for (int offset : offsets) {
+
+            int[] powerSamples = {
+                    0,
+                    1,
+                    offset,
+                    offset + 1,
+                    offset * 10,
+                    offset * 100,
+                    offset * 1000,
+                    offset * 10000,
+                    offset * 500000,
+                    Integer.MAX_VALUE
+            };
+
+            for (int p : powerSamples) {
+
+                assertEquals(
+                        legacyMeowRankFromPower(
+                                p,
+                                offset
+                        ),
+                        GrowthMath.meowRankFromPower(
+                                p,
+                                offset
+                        ),
+                        "rank mismatch for power="
+                                + p
+                                + " offset="
+                                + offset
+                );
+            }
+        }
+    }
+
+    private int legacyLevelFromExperience(
+            int totalExperience,
+            int curveBase
+    ) {
+
+        int base =
+                GrowthMath.normalizeXpCurveBase(
+                        curveBase
+                );
+
+        int level = 1;
+
+        int safety = 0;
+
+        while (level < 10000 &&
+                safety < 10000) {
+
+            long nextLevelRequired =
+                    (long) base
+                            * (level + 1L)
+                            * level
+                            / 2;
+
+            if (totalExperience < nextLevelRequired) {
+                break;
+            }
+
+            level++;
+            safety++;
+        }
+
+        return level;
+    }
+
+    private int legacyMeowRankFromPower(
+            int totalMeowPower,
+            int curveOffset
+    ) {
+
+        int offset =
+                GrowthMath.normalizeMeowCurveOffset(
+                        curveOffset
+                );
+
+        int rank = 0;
+
+        int safety = 0;
+
+        while (rank < 10000 &&
+                safety < 10000) {
+
+            long nextRankRequired =
+                    (long) (rank + 1)
+                            * (rank + 1 + offset)
+                            / 2;
+
+            if (totalMeowPower < nextRankRequired) {
+                break;
+            }
+
+            rank++;
+            safety++;
+        }
+
+        return rank;
+    }
+
 }
