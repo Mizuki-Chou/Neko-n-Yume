@@ -2,6 +2,13 @@
   <img src="assets/banner.png" alt="猫と夢 · Neko-n-Yume">
 </p>
 
+<p align="center">
+  <a href="README.md">简体中文</a> ·
+  <a href="README/README.zh-TW.md">繁體中文</a> ·
+  <a href="README/README.en.md">English</a> ·
+  <a href="README/README.ja.md">日本語</a>
+</p>
+
 > 愿你与它，共度一场方块世界中的温柔。
 
 ---
@@ -98,11 +105,11 @@
 
 这个小小的世界，没有惊天动地的故事。
 
-只有一只猫，一个你，和许多许多个温柔的日子。
+只有一只猫，一个你，和许许多多个平和的日子。
 
 欢迎体验 Minecraft 插件 **猫と夢 · Neko n' Yume**。
 
-> 本项目谨以此纪念 **Mizuki Chou 家中的小猫**。
-> 也谨此致敬独立游戏 **Yume Nikki** 与 **Muma Rope**——感谢它们曾带来的梦境、想象与温柔。
+> 本项目因 **Mizuki Chou 家中的小猫** 而生。
+> 也谨此致敬独立游戏 **Yume Nikki** 与 **Muma Rope**。
 
 愿你与它，共度一场方块世界中的温柔。
