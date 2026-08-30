@@ -11,6 +11,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.UUID;
+import java.util.logging.Logger;
 
 public class CatPositionTask implements Runnable {
 
@@ -42,15 +43,19 @@ public class CatPositionTask implements Runnable {
 
     private final NamespacedKey ownerKey;
 
+    private final Logger logger;
+
     public CatPositionTask(
             CatCache cache,
             CatEntityService entityService,
-            NamespacedKey ownerKey
+            NamespacedKey ownerKey,
+            Logger logger
     ) {
 
         this.cache = cache;
         this.entityService = entityService;
         this.ownerKey = ownerKey;
+        this.logger = logger;
     }
 
     @Override
@@ -73,134 +78,159 @@ public class CatPositionTask implements Runnable {
                 cache.getCats()) {
 
             /*
-             * 获取当前 Bukkit Entity UUID。
+             * 0.8.1 修复（P2）：单猫异常隔离，
+             * 与 CatBattleTask 口径一致。
              */
-            UUID entityUUID =
-                    logicalCat.getEntityUuid();
+            try {
 
-            if (entityUUID == null) {
-                continue;
+                syncPosition(
+                        logicalCat
+                );
+
+            } catch (Exception exception) {
+
+                logger.warning(
+                        "Position sync failed for cat "
+                                + logicalCat.getId()
+                                + ": "
+                                + exception.getMessage()
+                );
             }
-
-            /*
-             * 根据 UUID 获取 Minecraft 实体。
-             */
-            Entity entity =
-                    Bukkit.getEntity(
-                            entityUUID
-                    );
-
-            /*
-             * 找不到实体直接跳过。
-             *
-             * 注意：
-             * 这里绝对不会自动生成新猫。
-             *
-             * 实体恢复属于 CatEntityService 的职责。
-             */
-            if (!(entity instanceof Cat cat)) {
-                continue;
-            }
-
-            /*
-             * 实体已经死亡。
-             */
-            if (cat.isDead() ||
-                    !cat.isValid()) {
-
-                continue;
-            }
-
-            /*
-             * ====================================================
-             * 安全验证主人
-             * ====================================================
-             *
-             * 防止逻辑 Cat 和 Bukkit Entity 错绑。
-             */
-
-            String ownerUUID =
-                    cat.getPersistentDataContainer()
-                            .get(
-                                    ownerKey,
-                                    PersistentDataType.STRING
-                            );
-
-            if (ownerUUID == null) {
-                continue;
-            }
-
-            if (!logicalCat.getOwnerUuid()
-                    .toString()
-                    .equals(ownerUUID)) {
-
-                continue;
-            }
-
-            /*
-             * ====================================================
-             * 获取实际位置
-             * ====================================================
-             */
-
-            Location location =
-                    cat.getLocation();
-
-            World world =
-                    location.getWorld();
-
-            if (world == null) {
-                continue;
-            }
-
-            /*
-             * ====================================================
-             * 更新运行时 Cat
-             * ====================================================
-             */
-
-            logicalCat.setWorldName(
-                    world.getName()
-            );
-
-            logicalCat.setX(
-                    location.getX()
-            );
-
-            logicalCat.setY(
-                    location.getY()
-            );
-
-            logicalCat.setZ(
-                    location.getZ()
-            );
-
-            logicalCat.setYaw(
-                    location.getYaw()
-            );
-
-            logicalCat.setPitch(
-                    location.getPitch()
-            );
-
-            /*
-             * 确保 Entity UUID 仍然对应当前实体。
-             */
-            logicalCat.setEntityUuid(
-                    cat.getUniqueId()
-            );
-
-            /*
-             * ====================================================
-             * 刷新头顶名称
-             * ====================================================
-             *
-             * 每 30 秒顺带刷新一次心情符号。
-             */
-            entityService.refreshCustomName(
-                    cat,
-                    logicalCat
-            );
         }
+    }
+
+    private void syncPosition(
+            mizukichou.nekonyume.cat.Cat logicalCat
+    ) {
+
+        /*
+         * 获取当前 Bukkit Entity UUID。
+         */
+        UUID entityUUID =
+                logicalCat.getEntityUuid();
+
+        if (entityUUID == null) {
+            return;
+        }
+
+        /*
+         * 根据 UUID 获取 Minecraft 实体。
+         */
+        Entity entity =
+                Bukkit.getEntity(
+                        entityUUID
+                );
+
+        /*
+         * 找不到实体直接跳过。
+         *
+         * 注意：
+         * 这里绝对不会自动生成新猫。
+         *
+         * 实体恢复属于 CatEntityService 的职责。
+         */
+        if (!(entity instanceof Cat cat)) {
+            return;
+        }
+
+        /*
+         * 实体已经死亡。
+         */
+        if (cat.isDead() ||
+                !cat.isValid()) {
+
+            return;
+        }
+
+        /*
+         * ====================================================
+         * 安全验证主人
+         * ====================================================
+         *
+         * 防止逻辑 Cat 和 Bukkit Entity 错绑。
+         */
+
+        String ownerUUID =
+                cat.getPersistentDataContainer()
+                        .get(
+                                ownerKey,
+                                PersistentDataType.STRING
+                        );
+
+        if (ownerUUID == null) {
+            return;
+        }
+
+        if (!logicalCat.getOwnerUuid()
+                .toString()
+                .equals(ownerUUID)) {
+
+            return;
+        }
+
+        /*
+         * ====================================================
+         * 获取实际位置
+         * ====================================================
+         */
+
+        Location location =
+                cat.getLocation();
+
+        World world =
+                location.getWorld();
+
+        if (world == null) {
+            return;
+        }
+
+        /*
+         * ====================================================
+         * 更新运行时 Cat
+         * ====================================================
+         */
+
+        logicalCat.setWorldName(
+                world.getName()
+        );
+
+        logicalCat.setX(
+                location.getX()
+        );
+
+        logicalCat.setY(
+                location.getY()
+        );
+
+        logicalCat.setZ(
+                location.getZ()
+        );
+
+        logicalCat.setYaw(
+                location.getYaw()
+        );
+
+        logicalCat.setPitch(
+                location.getPitch()
+        );
+
+        /*
+         * 确保 Entity UUID 仍然对应当前实体。
+         */
+        logicalCat.setEntityUuid(
+                cat.getUniqueId()
+        );
+
+        /*
+         * ====================================================
+         * 刷新头顶名称
+         * ====================================================
+         *
+         * 每 30 秒顺带刷新一次心情符号。
+         */
+        entityService.refreshCustomName(
+                cat,
+                logicalCat
+        );
     }
 }

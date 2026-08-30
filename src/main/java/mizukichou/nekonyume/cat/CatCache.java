@@ -274,14 +274,27 @@ public class CatCache {
      * ============================================================
      *
      * 由 CatManager.saveAllCats() 在每次自动保存后调用。
-     * 被驱逐的猫都已先完成回写，不会丢失任何状态。
+     * 0.8.1 修复（R3，社区上报 P1）：只驱逐本轮
+     * “已成功回写”的猫——保存失败的猫保留在内存中
+     * 下一轮重试，绝不把未落盘的更新状态扔掉。
      */
 
-    public void evictOffline(long now) {
+    public void evictOffline(
+            long now,
+            java.util.Collection<Cat> candidates
+    ) {
 
-        List<Cat> toEvict = new ArrayList<>();
+        if (candidates == null ||
+                candidates.isEmpty()) {
 
-        for (Cat cat : cats.values()) {
+            return;
+        }
+
+        for (Cat cat : candidates) {
+
+            if (cat == null) {
+                continue;
+            }
 
             Player owner =
                     Bukkit.getPlayer(cat.getOwnerUuid());
@@ -290,25 +303,22 @@ public class CatCache {
                     now - cat.getLastInteractionAt()
                             > EVICT_OFFLINE_MS) {
 
-                toEvict.add(cat);
-            }
-        }
-
-        for (Cat cat : toEvict) {
-
-            cats.remove(cat.getId());
-
-            ownerToCatId.remove(
-                    cat.getOwnerUuid(),
-                    cat.getId()
-            );
-
-            if (cat.getEntityUuid() != null) {
-
-                entityToCatId.remove(
-                        cat.getEntityUuid(),
+                cats.remove(
                         cat.getId()
                 );
+
+                ownerToCatId.remove(
+                        cat.getOwnerUuid(),
+                        cat.getId()
+                );
+
+                if (cat.getEntityUuid() != null) {
+
+                    entityToCatId.remove(
+                            cat.getEntityUuid(),
+                            cat.getId()
+                    );
+                }
             }
         }
     }

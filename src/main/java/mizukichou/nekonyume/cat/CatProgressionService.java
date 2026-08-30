@@ -626,9 +626,12 @@ public class CatProgressionService {
     }
 
     /*
-     * 猫最大生命随等级成长：10 + 等级/4。
+     * 猫最大生命随等级成长：10 + 等级/4 + 装备加成。
      * 升级且实体在线时刷新；
      * 离线时由 CatEntityService.updateCat 在绑定/恢复时补刷。
+     *
+     * 0.8.1 修复（P1）：统一走 Cat#entityMaxHealth，
+     * 此前此处未计入装备生命加成，升级会静默丢失装备加成。
      */
     private void applyLevelMaxHealth(
             Player player,
@@ -663,7 +666,7 @@ public class CatProgressionService {
         }
 
         double scaled =
-                10.0 + cat.getLevel() / 4.0;
+                cat.entityMaxHealth();
 
         if (Math.abs(
                 attribute.getBaseValue()

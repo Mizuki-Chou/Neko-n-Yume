@@ -25,7 +25,7 @@ import java.util.UUID;
  * <p>
  * 布局：
  * 顶部信息行（底蕴 / 成长 / 槽位进度 / 操作说明 / 猫头 / 关闭）
- * 槽位区（第 18 格起，最多 10 个槽）
+ * 槽位区（第 18 格起，最多 18 个槽，0.8.1 扩展）
  * </p>
  *
  * <p>
@@ -46,7 +46,13 @@ public class SkillGuiManager {
 
     private static final int SLOT_FIRST_SKILL = 18;
 
-    private static final int MAX_SKILL_SLOTS = 10;
+    /*
+     * 0.8.1（P2 修复）：槽位区扩到 18 格（第 18~35 格）。
+     *
+     * 管理命令授予的超槽技能（skill give 无视槽位上限）
+     * 不再被错误显示为“锁定”，最多可展示 18 个。
+     */
+    private static final int MAX_SKILL_SLOTS = 18;
 
     private final CatStore store;
     private final CatCache cache;
@@ -169,12 +175,24 @@ public class SkillGuiManager {
 
         /*
          * 槽位区。
+         *
+         * 显示范围取 max(槽位数, 已拥有技能数)：
+         * 管理授予的超槽技能不会被错误显示为“锁定”。
          */
         int slotCount =
                 cat.getSkillSlotCount();
 
         List<CatSkill> skills =
                 cat.getSkills();
+
+        int visibleSlots =
+                Math.max(
+                        slotCount,
+                        Math.min(
+                                skills.size(),
+                                MAX_SKILL_SLOTS
+                        )
+                );
 
         for (int i = 0;
              i < MAX_SKILL_SLOTS;
@@ -183,7 +201,7 @@ public class SkillGuiManager {
             int slot =
                     SLOT_FIRST_SKILL + i;
 
-            if (i < slotCount) {
+            if (i < visibleSlots) {
 
                 inventory.setItem(
                         slot,

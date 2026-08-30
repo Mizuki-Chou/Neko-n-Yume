@@ -113,6 +113,7 @@ feed:
   meowdan-lore-use: "Right-click your cat to use"
   meowdan-lore-values: "Meow Power +{0} · Affection +{1} · EXP +{2}"
   tier-upgrade: "<gradient:#c4b5fd:#a78bfa>🌟 Heritage Ascended!</gradient> {0}'s heritage advanced to {1}"
+  tier-upgrade-invalid: "<yellow>⚠ With the cat's current heritage, {0} can no longer elevate it.</yellow>"
   tier-upgrade-fail: "<gray>The meow dan's power swirled inside, but the heritage did not change…</gray>"
   not-your-cat: "<red>🐱 This isn't your cat.</red>"
   meowdan-expired: "<red>🐱 This meow dan has expired and can no longer be used.</red>"
@@ -185,6 +186,7 @@ battle:
 
 entity:
   summoning: "<yellow>🐱 Looking for your cat, please wait a moment!</yellow>"
+  summon-failed: "<red>❌ Summoning failed, please try again later.</red>"
   summon-error: "<red>🐱 Something went wrong while summoning your cat. Please check the server log.</red>"
   teleport-fail: "<red>🐱 Your cat can't teleport right now. Please try again later.</red>"
   chunk-fail: "<red>🐱 Failed to load your cat's destination chunk. Please try again later.</red>"

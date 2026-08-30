@@ -21,6 +21,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.entity.Tameable;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -151,6 +152,14 @@ public class CatEntityListener implements Listener {
                             }
 
                             if (!store.hasCat(playerUUID)) {
+
+                                /*
+                                 * 0.8.1 修复（R3）：主人数据已被删除的
+                                 * 残留猫实体（如从已卸载区块重新加载）
+                                 * 一律移除，杜绝“幽灵猫”重新被绑定。
+                                 */
+                                cat.remove();
+
                                 return;
                             }
 
@@ -239,13 +248,40 @@ public class CatEntityListener implements Listener {
                 event.getDamager() instanceof Player player &&
                 !living.isDead() &&
                 living.isValid() &&
-                !isOurCat(living)) {
+                !isOurCat(living) &&
+                !isOwnTamedPet(
+                        player,
+                        living
+                )) {
 
             registerAssistTarget(
                     player,
                     living
             );
         }
+    }
+
+    /*
+     * 0.8.1 修复（R2）：主人攻击自己驯养的宠物（狼/鹦鹉/驴等）时
+     * 不登记协助目标——猫绝不能协助攻击并杀死主人的宠物。
+     * 与溅射“只伤敌对生物，避免误伤你养的动物”的保护口径一致。
+     */
+    private boolean isOwnTamedPet(
+            Player player,
+            LivingEntity living
+    ) {
+
+        if (!(living instanceof Tameable tameable)) {
+            return false;
+        }
+
+        UUID ownerId =
+                tameable.getOwnerUniqueId();
+
+        return ownerId != null &&
+                ownerId.equals(
+                        player.getUniqueId()
+                );
     }
 
     private Entity unwrapProjectile(

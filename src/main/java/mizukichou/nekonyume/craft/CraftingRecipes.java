@@ -47,6 +47,14 @@ public class CraftingRecipes {
     private final List<NamespacedKey> registeredKeys =
             new ArrayList<>();
 
+    /*
+     * 仅喵丹升级配方的键（0.8.1 R5，社区上报）：
+     * 供 MeowDanCraftListener 严格判定“命中的配方是否是本插件的”，
+     * 不再用“结果是金粒”这类宽泛启发式误伤其他插件的 9×金粒配方。
+     */
+    private final List<NamespacedKey> meowDanKeys =
+            new ArrayList<>();
+
     public CraftingRecipes(
             JavaPlugin plugin,
             CatFoodManager foodManager,
@@ -127,6 +135,10 @@ public class CraftingRecipes {
                         key
                 );
 
+                meowDanKeys.add(
+                        key
+                );
+
             } else {
 
                 plugin.getLogger().warning(
@@ -196,5 +208,21 @@ public class CraftingRecipes {
         }
 
         registeredKeys.clear();
+
+        meowDanKeys.clear();
+    }
+
+    /**
+     * 0.8.1 R5（社区上报）：
+     * 严格判定某个配方键是否属于本插件的喵丹升级配方。
+     */
+    public boolean isMeowDanUpgradeKey(
+            NamespacedKey key
+    ) {
+
+        return key != null &&
+                meowDanKeys.contains(
+                        key
+                );
     }
 }

@@ -13,6 +13,7 @@ import org.bukkit.entity.Player;
 
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.logging.Logger;
 
 public class CatBehaviorTask implements Runnable {
 
@@ -46,13 +47,17 @@ public class CatBehaviorTask implements Runnable {
 
     private final CatBattleState battleState;
 
+    private final Logger logger;
+
     public CatBehaviorTask(
             CatCache cache,
-            CatBattleState battleState
+            CatBattleState battleState,
+            Logger logger
     ) {
 
         this.cache = cache;
         this.battleState = battleState;
+        this.logger = logger;
     }
 
     @Override
@@ -62,59 +67,84 @@ public class CatBehaviorTask implements Runnable {
                 cache.getCats()) {
 
             /*
-             * 只处理在线主人的猫。
+             * 0.8.1 修复（P2）：单猫异常隔离，
+             * 与 CatBattleTask 口径一致。
              */
-            Player owner =
-                    Bukkit.getPlayer(
-                            logicalCat.getOwnerUuid()
+            try {
+
+                processCat(
+                        logicalCat
+                );
+
+            } catch (Exception exception) {
+
+                logger.warning(
+                        "Behavior tick failed for cat "
+                                + logicalCat.getId()
+                                + ": "
+                                + exception.getMessage()
+                );
+            }
+        }
+    }
+
+    private void processCat(
+            Cat logicalCat
+    ) {
+
+        /*
+         * 只处理在线主人的猫。
+         */
+        Player owner =
+                Bukkit.getPlayer(
+                        logicalCat.getOwnerUuid()
+                );
+
+        if (owner == null ||
+                !owner.isOnline()) {
+
+            return;
+        }
+
+        UUID entityUuid =
+                logicalCat.getEntityUuid();
+
+        if (entityUuid == null) {
+            return;
+        }
+
+        Entity entity =
+                Bukkit.getEntity(
+                        entityUuid
+                );
+
+        if (!(entity instanceof org.bukkit.entity.Cat cat) ||
+                cat.isDead() ||
+                !cat.isValid()) {
+
+            return;
+        }
+
+        switch (logicalCat.getBehaviorMode()) {
+
+            case SIT ->
+                    cat.setSitting(
+                            true
                     );
 
-            if (owner == null ||
-                    !owner.isOnline()) {
-
-                continue;
+            case FREE -> {
+                /*
+                 * 自由模式不干预，
+                 * 玩家可空手右键切换坐姿。
+                 */
             }
 
-            UUID entityUuid =
-                    logicalCat.getEntityUuid();
-
-            if (entityUuid == null) {
-                continue;
-            }
-
-            Entity entity =
-                    Bukkit.getEntity(
-                            entityUuid
+            case FOLLOW ->
+                    handleFollow(
+                            logicalCat,
+                            cat,
+                            owner
                     );
-
-            if (!(entity instanceof org.bukkit.entity.Cat cat) ||
-                    cat.isDead() ||
-                    !cat.isValid()) {
-
-                continue;
-            }
-
-            switch (logicalCat.getBehaviorMode()) {
-
-                case SIT ->
-                        cat.setSitting(
-                                true
-                        );
-
-                case FREE -> {
-                    /*
-                     * 自由模式不干预，
-                     * 玩家可空手右键切换坐姿。
-                     */
-                }
-
-                case FOLLOW ->
-                        handleFollow(
-                                logicalCat,
-                                cat,
-                                owner
-                        );
-            }
         }
     }
 

@@ -2,6 +2,7 @@ package mizukichou.nekonyume.lang;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
@@ -273,6 +274,59 @@ class LangMessagesTest {
         );
     }
 
+    @Test
+    void placeholderInChildKeepsParentText() {
+
+        /*
+         * 0.8.1 回归（P0）：
+         * 占位符位于嵌套子标签内、父节点带前缀文本时，
+         * 替换后父节点文本绝不能丢失。
+         *
+         * 与 zh_cn.yml 的 command.cat.level 同构：
+         *   <white>等级: <yellow>{0}</yellow></white>
+         */
+        LangMessages messages =
+                messages(
+                        "level: \"<white>等级: <yellow>{0}</yellow></white>\""
+                );
+
+        Component result =
+                messages.message(
+                        "level",
+                        "3"
+                );
+
+        assertEquals(
+                "等级: 3",
+                plain(result)
+        );
+    }
+
+    @Test
+    void placeholderInChildKeepsTrailingSiblingText() {
+
+        /*
+         * 0.8.1 回归（P0）：
+         * 子标签之后的兄弟文本（如 equip.done 的「已装备!」）
+         * 同样必须保留。
+         */
+        LangMessages messages =
+                messages(
+                        "done: \"✨ <white>{0}</white>已装备!\""
+                );
+
+        Component result =
+                messages.message(
+                        "done",
+                        "至极项圈"
+                );
+
+        assertEquals(
+                "✨ 至极项圈已装备!",
+                plain(result)
+        );
+    }
+
     /*
      * ============================================================
      * 工具
@@ -459,6 +513,71 @@ class LangMessagesTest {
                         .color()
                         .toString()
                         : null
+        );
+    }
+
+    /*
+     * 0.8.1 R5（社区上报）：
+     * 服务器端覆盖文件是局部覆盖——深度合并后，
+     * 未提及的键保留内建值，提及的键被覆盖。
+     */
+    @Test
+    void deepMergeKeepsUnmentionedBuiltinKeys()
+            throws InvalidConfigurationException {
+
+        YamlConfiguration builtin =
+                new YamlConfiguration();
+
+        builtin.loadFromString(
+                "command:\n"
+                        + "  no-cat: builtin-no-cat\n"
+                        + "  nested:\n"
+                        + "    deep-key: builtin-deep\n"
+                        + "gui:\n"
+                        + "  title: Builtin Title\n"
+        );
+
+        YamlConfiguration override =
+                new YamlConfiguration();
+
+        override.loadFromString(
+                "command:\n"
+                        + "  no-cat: overridden-no-cat\n"
+                        + "  nested:\n"
+                        + "    extra-key: override-extra\n"
+        );
+
+        LangMessages.mergeDeep(
+                builtin,
+                override
+        );
+
+        assertEquals(
+                "overridden-no-cat",
+                builtin.getString(
+                        "command.no-cat"
+                )
+        );
+
+        assertEquals(
+                "builtin-deep",
+                builtin.getString(
+                        "command.nested.deep-key"
+                )
+        );
+
+        assertEquals(
+                "override-extra",
+                builtin.getString(
+                        "command.nested.extra-key"
+                )
+        );
+
+        assertEquals(
+                "Builtin Title",
+                builtin.getString(
+                        "gui.title"
+                )
         );
     }
 }

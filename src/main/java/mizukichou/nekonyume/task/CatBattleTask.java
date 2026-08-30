@@ -22,6 +22,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Tameable;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -630,10 +631,41 @@ public class CatBattleTask implements Runnable {
             }
         }
 
+        /*
+         * 0.8.1 修复（R3，社区上报：按“意图伤害”治疗）：
+         * 吸血/汲取/星屑必须按“实际造成的伤害”结算。
+         * Paper 的 damage() 返回 void，这里用伤害前后血量差
+         * 计算实际伤害：
+         * - 事件被其他插件取消 → 差为 0，不治疗；
+         * - 护盾/护甲减免 → 按减免后结算；
+         * - 目标残血不足（溢出）→ 只按剩余血量计。
+         */
+        double targetHealthBefore =
+                target.getHealth();
+
         target.damage(
                 damage,
                 cat
         );
+
+        double targetHealthAfter =
+                target.isDead() ||
+                        !target.isValid()
+                        ? 0.0
+                        : target.getHealth();
+
+        /*
+         * 0.8.1 修复（R4，社区上报）：
+         * 不再对实际伤害做整数截断——
+         * 0.8 点实际伤害截断成 0 会吞掉吸血/汲取/星屑的小数部分。
+         * 只有最终需要整数经济奖励的地方才 round。
+         */
+        double effectiveDamage =
+                Math.max(
+                        0.0,
+                        targetHealthBefore
+                                - targetHealthAfter
+                );
 
         /*
          * 装备（0.8.0）：至极项圈吸血自愈（治疗猫自身）；
@@ -654,11 +686,12 @@ public class CatBattleTask implements Runnable {
                         : bonus.getLifestealPercent());
 
         if (lifestealPercent > 0 &&
+                effectiveDamage > 0 &&
                 cat.isValid() &&
                 !cat.isDead()) {
 
             double lifesteal =
-                    damage
+                    effectiveDamage
                             * lifestealPercent
                             / 100.0;
 
@@ -685,15 +718,16 @@ public class CatBattleTask implements Runnable {
         }
 
         /*
-         * 汲取：伤害 20% 治疗主人。
+         * 汲取：实际伤害 20% 治疗主人。
          */
         if (logicalCat.hasSkill(
                 CatSkill.DRAIN
-        )) {
+        ) &&
+                effectiveDamage > 0) {
 
             healOwner(
                     owner,
-                    damage * 0.2
+                    effectiveDamage * 0.2
             );
         }
 
@@ -703,12 +737,13 @@ public class CatBattleTask implements Runnable {
         if (logicalCat.hasSkill(
                 CatSkill.STAR_DUST
         ) &&
+                effectiveDamage > 0 &&
                 random.nextDouble() < 0.2) {
 
             applySplash(
                     cat,
                     target,
-                    damage
+                    effectiveDamage
             );
         }
     }
@@ -808,7 +843,9 @@ public class CatBattleTask implements Runnable {
              * 距离计算前必须先确认协助目标与猫同世界。
              *
              * 协助目标可以是任意活物（主人主动攻击的
-             * 和平生物也算），但排除玩家自身。
+             * 和平生物也算），但排除玩家自身，以及
+             * 主人自己驯养的宠物（0.8.1 R2：猫绝不
+             * 攻击并杀死主人的狼/鹦鹉等）。
              */
             if (assistEntity instanceof LivingEntity living &&
                     !(living instanceof Player) &&
@@ -818,7 +855,11 @@ public class CatBattleTask implements Runnable {
                     living.getWorld()
                             .equals(
                                     cat.getWorld()
-                            )) {
+                            ) &&
+                    !isOwnerTamedPet(
+                            ownerUuid,
+                            living
+                    )) {
 
                 double assistRadius =
                         aggroRadius
@@ -853,6 +894,28 @@ public class CatBattleTask implements Runnable {
                 cat.getLocation(),
                 aggroRadius
         );
+    }
+
+    /*
+     * 0.8.1 修复（R2）：纵深防御——协助目标若是主人自己驯养的
+     * 宠物（Tameable 且主人一致），一律视为无效目标并惰性清除。
+     */
+    private boolean isOwnerTamedPet(
+            UUID ownerUuid,
+            LivingEntity living
+    ) {
+
+        if (!(living instanceof Tameable tameable)) {
+            return false;
+        }
+
+        UUID tameOwner =
+                tameable.getOwnerUniqueId();
+
+        return tameOwner != null &&
+                tameOwner.equals(
+                        ownerUuid
+                );
     }
 
     /*
@@ -1111,6 +1174,22 @@ public class CatBattleTask implements Runnable {
             UUID entityUuid
     ) {
 
+        /*
+         * 0.8.1 修复（R2）：跨世界守卫。
+         * Location.distanceSquared 不校验世界，
+         * 目标在异步窗口内换世界时绝不能跨世界攻击。
+         */
+        if (target.getLocation()
+                .getWorld() == null ||
+                !target.getLocation()
+                        .getWorld()
+                        .equals(
+                                cat.getWorld()
+                        )) {
+
+            return;
+        }
+
         if (cat.getLocation()
                 .distanceSquared(
                         target.getLocation()
@@ -1153,6 +1232,12 @@ public class CatBattleTask implements Runnable {
                         ) * 0.8)
                 );
 
+        /*
+         * 0.8.1 修复（R3）：与实际伤害结算（同近战口径）。
+         */
+        double targetHealthBefore =
+                target.getHealth();
+
         target.damage(
                 damage,
                 cat
@@ -1168,16 +1253,33 @@ public class CatBattleTask implements Runnable {
                         .add(0, 1, 0)
         );
 
+        double targetHealthAfter =
+                target.isDead() ||
+                        !target.isValid()
+                        ? 0.0
+                        : target.getHealth();
+
+        /*
+         * 0.8.1 修复（R4）：同近战口径，保留小数伤害。
+         */
+        double effectiveDamage =
+                Math.max(
+                        0.0,
+                        targetHealthBefore
+                                - targetHealthAfter
+                );
+
         /*
          * 汲取（远程同样生效）。
          */
         if (logicalCat.hasSkill(
                 CatSkill.DRAIN
-        )) {
+        ) &&
+                effectiveDamage > 0) {
 
             healOwner(
                     owner,
-                    damage * 0.2
+                    effectiveDamage * 0.2
             );
         }
 
@@ -1200,11 +1302,12 @@ public class CatBattleTask implements Runnable {
                         : bonus.getLifestealPercent());
 
         if (lifestealPercent > 0 &&
+                effectiveDamage > 0 &&
                 cat.isValid() &&
                 !cat.isDead()) {
 
             double lifesteal =
-                    damage
+                    effectiveDamage
                             * lifestealPercent
                             / 100.0;
 
@@ -1251,11 +1354,11 @@ public class CatBattleTask implements Runnable {
     private void applySplash(
             org.bukkit.entity.Cat cat,
             LivingEntity target,
-            int damage
+            double damage
     ) {
 
-        int splashDamage =
-                (int) (damage * 0.5);
+        double splashDamage =
+                damage * 0.5;
 
         for (Entity entity :
                 target.getLocation()

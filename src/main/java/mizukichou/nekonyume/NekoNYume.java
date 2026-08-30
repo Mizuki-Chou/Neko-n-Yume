@@ -678,7 +678,8 @@ public final class NekoNYume extends JavaPlugin {
                         catCache,
                         catStore,
                         catEntityService,
-                        catSkillManager
+                        catSkillManager,
+                        lang
                 ),
                 new AchievementListener(
                         achievementService,
@@ -751,7 +752,8 @@ public final class NekoNYume extends JavaPlugin {
                         mumaNightManager
                 ),
                 new MeowDanCraftListener(
-                        catFoodManager
+                        catFoodManager,
+                        craftingRecipes
                 )
         );
 
@@ -771,7 +773,8 @@ public final class NekoNYume extends JavaPlugin {
                                 new CatHungerTask(
                                         configManager,
                                         catStore,
-                                        catCache
+                                        catCache,
+                                        getLogger()
                                 ),
                                 /*
                                  * 性能优化（0.7.4）：
@@ -801,7 +804,8 @@ public final class NekoNYume extends JavaPlugin {
                                 new CatPositionTask(
                                         catCache,
                                         catEntityService,
-                                        ownerKey
+                                        ownerKey,
+                                        getLogger()
                                 ),
                                 20L * 30L,
                                 20L * 30L
@@ -822,7 +826,8 @@ public final class NekoNYume extends JavaPlugin {
                                 this,
                                 new CatBehaviorTask(
                                         catCache,
-                                        battleState
+                                        battleState,
+                                        getLogger()
                                 ),
                                 20L,
                                 20L
@@ -869,7 +874,8 @@ public final class NekoNYume extends JavaPlugin {
                                 new CatAuraTask(
                                         configManager,
                                         catCache,
-                                        battleState
+                                        battleState,
+                                        getLogger()
                                 ),
                                 40L,
                                 40L

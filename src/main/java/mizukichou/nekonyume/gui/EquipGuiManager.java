@@ -302,15 +302,19 @@ public final class EquipGuiManager {
 
         /*
          * 实体在场时重算最大生命。
+         *
+         * 0.8.1 修复（P2）：存档 entity-uuid 损坏指向非猫实体时，
+         * 旧实现直接强转会抛 ClassCastException；改用 instanceof 守卫，
+         * 异常数据只跳过刷新，不击穿卸下流程。
          */
         if (cat.getEntityUuid() != null) {
 
-            org.bukkit.entity.Cat entity =
-                    (org.bukkit.entity.Cat) Bukkit.getEntity(
+            org.bukkit.entity.Entity found =
+                    Bukkit.getEntity(
                             cat.getEntityUuid()
                     );
 
-            if (entity != null &&
+            if (found instanceof org.bukkit.entity.Cat entity &&
                     entity.isValid()) {
 
                 entityService.refreshEquipStats(
@@ -399,15 +403,18 @@ public final class EquipGuiManager {
 
         /*
          * 实体在场时重算最大生命。
+         *
+         * 0.8.1 修复（P2）：同 unequip，instanceof 守卫，
+         * 异常存档不击穿快捷穿戴流程。
          */
         if (cat.getEntityUuid() != null) {
 
-            org.bukkit.entity.Cat entity =
-                    (org.bukkit.entity.Cat) Bukkit.getEntity(
+            org.bukkit.entity.Entity found =
+                    Bukkit.getEntity(
                             cat.getEntityUuid()
                     );
 
-            if (entity != null &&
+            if (found instanceof org.bukkit.entity.Cat entity &&
                     entity.isValid()) {
 
                 entityService.refreshEquipStats(

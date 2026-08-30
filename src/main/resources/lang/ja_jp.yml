@@ -113,6 +113,7 @@ feed:
   meowdan-lore-use: "猫を右クリックして使う"
   meowdan-lore-values: "ニャン力 +{0} · 好感度 +{1} · 経験値 +{2}"
   tier-upgrade: "<gradient:#c4b5fd:#a78bfa>🌟 素質昇華！</gradient> {0}の素質が{1}に上がりました"
+  tier-upgrade-invalid: "<yellow>⚠ この猫の今の素質では、{0}でこれ以上昇華できません。</yellow>"
   tier-upgrade-fail: "<gray>ニャンダンの力が体内を巡りましたが、素質は変わりませんでした…</gray>"
   not-your-cat: "<red>🐱 これはあなたの猫ではありません。</red>"
   meowdan-expired: "<red>🐱 このニャンダンは期限切れで、もう使えません。</red>"
@@ -185,6 +186,7 @@ battle:
 
 entity:
   summoning: "<yellow>🐱 猫を探しています。少しお待ちください！</yellow>"
+  summon-failed: "<red>❌ 召喚に失敗しました。しばらくしてからお試しください。</red>"
   summon-error: "<red>🐱 猫の召喚中にエラーが発生しました。サーバーログを確認してください。</red>"
   teleport-fail: "<red>🐱 猫は今テレポートできません。しばらくしてからもう一度お試しください。</red>"
   chunk-fail: "<red>🐱 目的地のチャンクを読み込めませんでした。しばらくしてからもう一度お試しください。</red>"

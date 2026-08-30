@@ -289,6 +289,80 @@ class CatGrowthTest {
     private static final long TEST_DAY =
             24L * 60 * 60 * 1000;
 
+    /*
+     * ============================================================
+     * 实体最大生命（0.8.1 统一公式）
+     * ============================================================
+     */
+
+    @Test
+    void entityMaxHealthBaseFormula() {
+
+        Cat cat = newCat();
+
+        /*
+         * 等级 1、无装备：10 + 1/4 = 10.25。
+         */
+        assertEquals(
+                10.25,
+                cat.entityMaxHealth(),
+                0.0001
+        );
+    }
+
+    @Test
+    void entityMaxHealthIncludesLevelGrowth() {
+
+        Cat cat = newCat();
+
+        cat.setLevel(41);
+
+        /*
+         * 10 + 41/4 = 20.25。
+         */
+        assertEquals(
+                20.25,
+                cat.entityMaxHealth(),
+                0.0001
+        );
+    }
+
+    @Test
+    void entityMaxHealthIncludesEquipBonus() {
+
+        /*
+         * 0.8.1 回归（P1）：装备生命加成必须计入。
+         * 至极项圈：生命 +30。
+         */
+        Cat cat = newCat();
+
+        cat.setEquippedItem(
+                CatEquipItem.COLLAR_LEGENDARY
+        );
+
+        assertEquals(
+                10.25 + 30.0,
+                cat.entityMaxHealth(),
+                0.0001
+        );
+    }
+
+    @Test
+    void entityMaxHealthIgnoresNullEquip() {
+
+        Cat cat = newCat();
+
+        cat.setEquippedItem(
+                null
+        );
+
+        assertEquals(
+                10.25,
+                cat.entityMaxHealth(),
+                0.0001
+        );
+    }
+
     @Test
     void companionDaysCountsFromCreationInclusive() {
 

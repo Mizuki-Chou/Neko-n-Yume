@@ -82,7 +82,7 @@ class ConfigLoaderTest {
         );
 
         assertEquals(
-                120,
+                90,
                 config.getBattle().getRecoverySeconds()
         );
 
@@ -825,6 +825,63 @@ class ConfigLoaderTest {
                         10
                 ),
                 care.getBondXpPercent()
+        );
+    }
+
+    /*
+     * 0.8.1 修复（R3，社区上报）：
+     * NaN / Infinity 倍率绝不能流入 Bukkit 属性 API，
+     * 必须回退内置默认。
+     */
+
+    @Test
+    void mumaNightRejectsNonFiniteMultipliers() {
+
+        ConfigSnapshot config =
+                load("""
+                        muma-night:
+                          chance: 0.5
+                          health-multiplier: .NaN
+                          damage-multiplier: .inf
+                        """);
+
+        assertEquals(
+                4.0,
+                config.getMumaNight()
+                        .getHealthMultiplier(),
+                0.0001
+        );
+
+        assertEquals(
+                2.5,
+                config.getMumaNight()
+                        .getDamageMultiplier(),
+                0.0001
+        );
+    }
+
+    @Test
+    void mumaNightPreservesValidLowMultiplier() {
+
+        ConfigSnapshot config =
+                load("""
+                        muma-night:
+                          health-multiplier: 0.5
+                          damage-multiplier: 1.5
+                        """);
+
+        assertEquals(
+                0.5,
+                config.getMumaNight()
+                        .getHealthMultiplier(),
+                0.0001
+        );
+
+        assertEquals(
+                1.5,
+                config.getMumaNight()
+                        .getDamageMultiplier(),
+                0.0001
         );
     }
 }

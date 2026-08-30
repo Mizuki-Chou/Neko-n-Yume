@@ -109,6 +109,14 @@ public class CatManager {
      */
     public void saveAllCats() {
 
+        /*
+         * 0.8.1 修复（R3，社区上报 P1）：
+         * 只驱逐本轮成功回写的猫；保存失败的猫保留在内存中
+         * 下一轮重试，绝不把未落盘的更新状态扔掉。
+         */
+        java.util.List<Cat> savedCats =
+                new java.util.ArrayList<>();
+
         for (Cat cat : catCache.getCats()) {
 
             try {
@@ -116,6 +124,8 @@ public class CatManager {
                 catEntityService.captureEntityState(cat);
 
                 catCache.saveCat(cat);
+
+                savedCats.add(cat);
 
             } catch (Exception exception) {
 
@@ -129,7 +139,8 @@ public class CatManager {
         }
 
         catCache.evictOffline(
-                System.currentTimeMillis()
+                System.currentTimeMillis(),
+                savedCats
         );
     }
 
@@ -235,7 +246,7 @@ public class CatManager {
     public void spawnCat(
             Player player,
             String name,
-            Consumer<Boolean> callback
+            Consumer<SummonResult> callback
     ) {
 
         catEntityService.spawnCat(

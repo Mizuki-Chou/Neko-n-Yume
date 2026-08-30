@@ -174,7 +174,16 @@ public class CatEntityService {
      * ============================================================
      *
      * 仅在 /nekoyumeadmin cat remove confirm 确认后调用。
-     * 顺序：实体 → 运行时缓存 → 待恢复队列 → 持久化数据。
+     *
+     * 0.8.1 修复（R3，社区上报：删除后复活）：
+     * 顺序：
+     * 1. 递增召唤代际 + 释放重入标记——所有在途异步召唤
+     *    回调回到主线程后全部失效，旧流水线无法再建猫；
+     * 2. 清除待恢复队列；
+     * 3. 删除全部已加载世界中属于该玩家的所有猫实体
+     *    （含游离重复实体）；
+     * 4. 清除运行时缓存；
+     * 5. 删除持久化数据。
      */
 
     public boolean removePlayerCat(UUID playerUUID) {
@@ -184,36 +193,43 @@ public class CatEntityService {
         }
 
         /*
-         * 1. 移除实体。
+         * 1. 使所有在途异步召唤失效（防删除后复活）。
          */
-        UUID entityUuid =
-                store.getCatEntityUUID(playerUUID);
+        restorer.invalidateSummons(
+                playerUUID
+        );
 
-        if (entityUuid != null) {
-
-            Entity entity =
-                    Bukkit.getEntity(entityUuid);
-
-            if (entity != null && entity.isValid()) {
-
-                entity.remove();
-            }
-        }
+        summoning.remove(
+                playerUUID
+        );
 
         /*
-         * 2. 清除运行时缓存。
+         * 2. 清除待恢复队列。
          */
-        cache.removeByOwner(playerUUID);
+        restorer.clearPendingRestore(
+                playerUUID
+        );
 
         /*
-         * 3. 清除待恢复队列。
+         * 3. 删除全部已加载世界中的所有猫实体。
          */
-        restorer.clearPendingRestore(playerUUID);
+        restorer.cleanupAllOwnedEntities(
+                playerUUID
+        );
 
         /*
-         * 4. 删除持久化数据。
+         * 4. 清除运行时缓存。
          */
-        return store.removeCat(playerUUID);
+        cache.removeByOwner(
+                playerUUID
+        );
+
+        /*
+         * 5. 删除持久化数据。
+         */
+        return store.removeCat(
+                playerUUID
+        );
     }
 
     /*
@@ -248,7 +264,7 @@ public class CatEntityService {
     public void spawnCat(
             Player player,
             String name,
-            Consumer<Boolean> callback
+            Consumer<SummonResult> callback
     ) {
 
         UUID playerUUID =
@@ -281,7 +297,7 @@ public class CatEntityService {
          * 仅当自身代际仍为当前代际时才释放——
          * 旧流水线的迟到回调不得解除新召唤的标记。
          */
-        Consumer<Boolean> wrappedCallback =
+        Consumer<SummonResult> wrappedCallback =
                 result -> {
 
                     try {

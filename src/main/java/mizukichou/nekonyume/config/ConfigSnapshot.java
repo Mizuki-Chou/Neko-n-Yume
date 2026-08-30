@@ -7,6 +7,7 @@ import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.MeowDanQuality;
 import org.bukkit.Material;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -363,7 +364,37 @@ public final class ConfigSnapshot {
             this.baseChance = baseChance;
             this.chancePerRank = chancePerRank;
             this.maxChance = maxChance;
-            this.tiers = tiers;
+
+            /*
+             * 0.8.1 修复（R3，社区上报：深不可变加固）：
+             * 外层与内层列表全部包装为不可变，
+             * 外部 API 使用者无法篡改运行时配置。
+             */
+            Map<Integer, List<GiftItemEntry>> wrapped =
+                    new java.util.HashMap<>();
+
+            if (tiers != null) {
+
+                for (Map.Entry<Integer, List<GiftItemEntry>> entry :
+                        tiers.entrySet()) {
+
+                    wrapped.put(
+                            entry.getKey(),
+                            entry.getValue() == null
+                                    ? List.of()
+                                    : Collections.unmodifiableList(
+                                    new ArrayList<>(
+                                            entry.getValue()
+                                    )
+                            )
+                    );
+                }
+            }
+
+            this.tiers =
+                    Collections.unmodifiableMap(
+                            wrapped
+                    );
             this.maxTier = maxTier;
         }
 
@@ -508,7 +539,18 @@ public final class ConfigSnapshot {
             this.refreshCostType = refreshCostType;
             this.refreshCost = refreshCost;
             this.dreamSlotCostMultiplier = dreamSlotCostMultiplier;
-            this.values = values;
+
+            /*
+             * 0.8.1 修复（R3，社区上报：深不可变加固）：
+             * 外层 values 表也包装为不可变（内层 map 已由
+             * parser 用 unmodifiableMap 包装），
+             * 外部 API 使用者无法篡改运行时配置。
+             */
+            this.values = values == null
+                    ? java.util.Collections.emptyMap()
+                    : java.util.Collections.unmodifiableMap(
+                            values
+                    );
         }
 
         public double value(
@@ -533,10 +575,20 @@ public final class ConfigSnapshot {
                 return defaultValue;
             }
 
-            return entry.getOrDefault(
-                    key,
-                    defaultValue
-            );
+            double raw =
+                    entry.getOrDefault(
+                            key,
+                            defaultValue
+                    );
+
+            /*
+             * 0.8.1 修复（R3）：读取层纵深防御——
+             * 即使解析层漏过非有限值（未来改动/外部构建），
+             * 消费端也绝不把 NaN/Infinity 送进伤害与属性计算。
+             */
+            return Double.isFinite(raw)
+                    ? raw
+                    : defaultValue;
         }
 
         public int valueInt(

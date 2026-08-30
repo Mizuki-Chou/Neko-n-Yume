@@ -79,22 +79,20 @@ public class CatGuiListener implements Listener {
             InventoryClickEvent event
     ) {
 
-        if (!(event.getInventory().getHolder() instanceof GuiHolder holder)) {
-            return;
-        }
-
         /*
-         * 0.8.0 修复：必须用视图顶部容器的 holder 判定面板。
+         * 0.8.1 修复（P0）：删除冗余的
+         * event.getInventory().getHolder() 判定。
          *
-         * event.getInventory() 对"玩家背包区（底部）"的点击
-         * 返回的是玩家自己的背包（holder 是 Player），
-         * 会导致：
-         * 1. 装备界面的背包快捷穿戴永远触发不了；
-         * 2. 底部点击（含 Shift）漏拦截，槽位可被污染。
+         * 1. 它与下方的 holder 模式变量同名，导致编译错误
+         *    （JLS 6.3.2.4：取反 instanceof 的模式变量
+         *    作用域延伸至 if 之后）；
+         * 2. 更关键的是，底部（玩家背包区）点击时
+         *    event.getInventory() 返回玩家背包（holder 非 GuiHolder），
+         *    旧判断会提前 return，令 0.8.0 注释声明的
+         *    “底部点击统一按页分派”（装备快捷穿戴）永远不生效。
          *
-         * 用 getView().getTopInventory().getHolder() 判定后，
-         * 顶部与底部的点击都统一按页分派，
-         * 与 AdminGiveGuiListener / 拖拽守卫口径一致。
+         * 统一改用下方 getView().getTopInventory().getHolder()
+         * 作为唯一判定。
          */
         if (!(event.getView()
                 .getTopInventory()
@@ -415,10 +413,10 @@ public class CatGuiListener implements Listener {
         }
 
         /*
-         * 槽位区：18 ~ 27。
+         * 槽位区：18 ~ 35（0.8.1 扩展到 18 槽）。
          */
         if (slot < 18 ||
-                slot > 27) {
+                slot > 35) {
 
             return;
         }

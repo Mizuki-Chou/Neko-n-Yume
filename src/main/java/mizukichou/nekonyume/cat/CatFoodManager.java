@@ -1759,6 +1759,20 @@ public class CatFoodManager {
 
                     newTier = CatTier.UNIQUE;
                     chance = 50;
+
+                } else if (isEpic) {
+
+                    /*
+                     * 0.8.1 修复（R2）：
+                     * “稀有：卓越无效”此前静默无反馈，
+                     * 玩家会误以为吞了喵丹。现在明确提示。
+                     */
+                    notifyTierUpgradeInvalid(
+                            player,
+                            quality
+                    );
+
+                    return;
                 }
             }
 
@@ -1768,6 +1782,15 @@ public class CatFoodManager {
 
                     newTier = CatTier.DREAM;
                     chance = 20;
+
+                } else if (isEpic) {
+
+                    notifyTierUpgradeInvalid(
+                            player,
+                            quality
+                    );
+
+                    return;
                 }
             }
 
@@ -1872,6 +1895,28 @@ public class CatFoodManager {
                                 newTier
                         )
                 );
+    }
+
+    /*
+     * 0.8.1 修复（R2）：卓越喵丹对当前底蕴无效的明确提示。
+     */
+    private void notifyTierUpgradeInvalid(
+            Player player,
+            MeowDanQuality quality
+    ) {
+
+        player.sendMessage(
+                lang.forPlayer(player).message(
+                        "feed.tier-upgrade-invalid",
+                        lang.forPlayer(player).text(
+                                "meowdan-name."
+                                        + quality.name()
+                                        .toLowerCase(
+                                                java.util.Locale.ROOT
+                                        )
+                        )
+                )
+        );
     }
 
     /*

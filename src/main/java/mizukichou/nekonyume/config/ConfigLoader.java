@@ -310,7 +310,7 @@ public final class ConfigLoader {
                         ConfigParseSupport.positive(
                                 config.getInt(
                                         "battle.recovery-seconds",
-                                        120
+                                        90
                                 ),
                                 1
                         ),
@@ -405,12 +405,22 @@ public final class ConfigLoader {
                                         0.2
                                 )
                         ),
-                        config.getDouble(
-                                "muma-night.health-multiplier",
+                        /*
+                         * 0.8.1 修复（R3）：NaN/Infinity 倍率守卫，
+                         * 非有限值回退内置默认，绝不流入属性 API。
+                         */
+                        ConfigParseSupport.positiveDouble(
+                                config.getDouble(
+                                        "muma-night.health-multiplier",
+                                        4.0
+                                ),
                                 4.0
                         ),
-                        config.getDouble(
-                                "muma-night.damage-multiplier",
+                        ConfigParseSupport.positiveDouble(
+                                config.getDouble(
+                                        "muma-night.damage-multiplier",
+                                        2.5
+                                ),
                                 2.5
                         )
                 );

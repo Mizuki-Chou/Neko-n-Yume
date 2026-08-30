@@ -993,6 +993,132 @@ class YamlCatStoreLifecycleTest {
         );
     }
 
+    @Test
+    void newerTempFileIsRecoveredOnStartup() throws IOException {
+
+        UUID existingCat = UUID.randomUUID();
+
+        YamlCatStore first = newStore();
+
+        first.createCat(existingCat);
+        first.saveNow();
+        first.awaitPendingSave();
+
+        /*
+         * 模拟崩溃窗口：tmp 已 fsync（序列号更新）但未完成原子替换。
+         * 0.8.1 R4：启动时应当整体采用 tmp，而不是删除。
+         */
+        UUID recoveredCat = UUID.randomUUID();
+
+        Files.writeString(
+                tempDir.resolve("players.yml.tmp"),
+                "data-snapshot: 999\n"
+                        + "data-version: 8\n"
+                        + "players:\n"
+                        + "  " + recoveredCat + ":\n"
+                        + "    cat:\n"
+                        + "      name: RecoveryCat\n"
+        );
+
+        YamlCatStore reopened = newStore();
+
+        assertTrue(
+                reopened.hasCat(recoveredCat),
+                "tmp 中的更新快照必须被恢复"
+        );
+
+        assertFalse(
+                reopened.hasCat(existingCat),
+                "旧主文件中的猫只存在于被取代的快照里"
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+    @Test
+    void olderTempFileIsDiscardedOnStartup() throws IOException {
+
+        UUID cat = UUID.randomUUID();
+
+        YamlCatStore first = newStore();
+
+        first.createCat(cat);
+        first.saveNow();
+        first.awaitPendingSave();
+
+        /*
+         * 主文件序列号至少为 1，再提交一次保存使主文件更新。
+         */
+        first.saveNow();
+        first.awaitPendingSave();
+
+        Files.writeString(
+                tempDir.resolve("players.yml.tmp"),
+                "data-snapshot: 1\n"
+                        + "data-version: 8\n"
+                        + "players: {}\n"
+        );
+
+        YamlCatStore reopened = newStore();
+
+        assertFalse(
+                Files.exists(
+                        tempDir.resolve("players.yml.tmp")
+                ),
+                "不新于主文件的 tmp 必须被删除"
+        );
+
+        assertTrue(
+                reopened.hasCat(cat),
+                "主文件数据必须保留"
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+    @Test
+    void tempFileIsAdoptedWhenMainFileMissing() throws IOException {
+
+        /*
+         * 0.8.1 R4：主文件缺失/为空时，tmp 是唯一完整数据，
+         * 即使没有 data-snapshot 序列号（旧格式快照）也必须采用，
+         * 绝不能因序列比较失败而删除。
+         */
+        UUID recoveredCat = UUID.randomUUID();
+
+        Files.writeString(
+                tempDir.resolve("players.yml.tmp"),
+                "data-version: 8\n"
+                        + "players:\n"
+                        + "  " + recoveredCat + ":\n"
+                        + "    cat:\n"
+                        + "      name: RecoveryCat\n"
+        );
+
+        YamlCatStore reopened = newStore();
+
+        assertTrue(
+                reopened.hasCat(recoveredCat),
+                "主文件缺失时 tmp 必须被采用"
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+    @Test
+    void shutdownAndAwaitIsIdempotent() {
+
+        YamlCatStore store = newStore();
+
+        store.createCat(UUID.randomUUID());
+
+        store.shutdownAndAwait();
+
+        assertDoesNotThrow(
+                store::shutdownAndAwait
+        );
+    }
+
     private static class FakeCatStoreEnv implements CatStoreEnv {
 
         private final Path dataFolder;

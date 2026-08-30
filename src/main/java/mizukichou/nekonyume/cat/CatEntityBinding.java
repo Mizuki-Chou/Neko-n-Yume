@@ -169,16 +169,26 @@ public class CatEntityBinding {
         UUID ownerUUID =
                 player.getUniqueId();
 
+        /*
+         * 0.8.1 修复（R3，社区上报：删除后复活）：
+         * 绑定前必须已有玩家数据。
+         *
+         * 旧实现在这里调用 store.ensureCat 兜底建档——
+         * 一旦管理员删除猫咪后仍有旧异步召唤回调回到主线程，
+         * 本方法会重新创建已被删除的数据，猫直接“复活”。
+         *
+         * 现在：无数据即返回 null，由调用方中止流水线；
+         * 建档只走 AbstractCatStore.createCat（领取路径）这一唯一入口，
+         * 与 P0“创建唯一入口”不变量重新对齐。
+         */
+        if (!store.hasCat(ownerUUID)) {
+            return null;
+        }
+
         Cat logicalCat =
                 cache.getCat(ownerUUID);
 
         if (logicalCat == null) {
-
-            /*
-             * 显式绑定路径允许建档
-             * （领取 / 召唤时玩家必定已有数据，这是兜底）。
-             */
-            store.ensureCat(ownerUUID);
 
             logicalCat =
                     cache.loadCat(player);
@@ -266,21 +276,11 @@ public class CatEntityBinding {
         if (logical != null) {
 
             /*
-             * 装备（0.8.0）：装备生命加成计入最大生命。
+             * 0.8.1：最大生命统一走 Cat#entityMaxHealth，
+             * 等级与装备加成永不漂移。
              */
-            CatEquipItem equip =
-                    logical.getEquippedItem();
-
-            double equipHealthBonus =
-                    equip == null
-                            ? 0.0
-                            : equip.getCatHealthBonus();
-
             double scaled =
-                    10.0
-                            + logical.getLevel()
-                            / 4.0
-                            + equipHealthBonus;
+                    logical.entityMaxHealth();
 
             org.bukkit.attribute.AttributeInstance attribute =
                     cat.getAttribute(

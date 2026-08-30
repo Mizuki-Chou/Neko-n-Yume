@@ -27,7 +27,9 @@ import java.util.logging.Logger;
  * 0.7.1：按玩家客户端语言自动选择（Player.locale()）：
  * zh_cn / zh_tw（含 zh_hk、zh_mo）→ zh_tw，其余 zh_* → zh_cn；
  * en_* → en_us、ja_* → ja_jp；
- * 不匹配任何支持语言（或 locale 为空）时回退 en_us（0.7.2 语义）。
+ * 其余不支持的语言统一回退 en_us（0.7.2 语义）；
+ * locale 为空 / 读取异常等“检测不到”的情况同样回退 en_us
+ * （0.8.1 统一口径）。
  * 玩家可用 /nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp&gt;
  * 设置个人覆盖（仅内存，重启后回到 auto）。
  * </p>
@@ -170,6 +172,20 @@ public final class Lang {
  "auto" );
  }
 
+ /*
+  * 0.8.1 修复（P2）：玩家退出时清除个人语言覆盖，
+  * 防止长期运营服务器上 overrides 表单调增长。
+  */
+ public void clearOverride(
+ UUID playerUuid ) {
+
+ if (playerUuid != null) {
+
+ overrides.remove(
+ playerUuid );
+ }
+ }
+
  public Component message(
  String key,
  String... rawArgs ) {
@@ -273,11 +289,15 @@ public final class Lang {
         } catch (Exception ignored) {
 
             /*
-             * locale 读取异常时静默回退默认。
+             * locale 读取异常时同样回退英语（与不支持的语言同口径）。
              */
         }
 
-        return defaultCode;
+        /*
+         * 0.8.1：locale 为空 / 异常等“检测不到”的情况
+         * 统一回退 en_us（与不支持的语言同口径）。
+         */
+        return "en_us";
     }
 
     private LangMessages messagesFor(

@@ -52,10 +52,21 @@ final class SkillConfigParser {
                 for (String valueKey :
                         skillSection.getKeys(false)) {
 
-                    entry.put(
-                            valueKey,
+                    /*
+                     * 0.8.1 修复（R3）：
+                     * NaN / Infinity 技能数值守卫，
+                     * 非有限值统一回退 0.0（等效于未配置）。
+                     */
+                    double rawValue =
                             skillSection.getDouble(
                                     valueKey
+                            );
+
+                    entry.put(
+                            valueKey,
+                            ConfigParseSupport.finite(
+                                    rawValue,
+                                    0.0
                             )
                     );
                 }
@@ -86,7 +97,7 @@ final class SkillConfigParser {
                 ConfigParseSupport.positive(
                         config.getInt(
                                 "skills.refresh.dream-slot-cost-multiplier",
-                                5
+                                3
                         ),
                         1
                 ),

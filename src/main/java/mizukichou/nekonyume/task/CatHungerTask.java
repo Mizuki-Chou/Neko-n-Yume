@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 /**
  * 饥饿结算任务。
@@ -63,6 +64,7 @@ public class CatHungerTask implements Runnable {
     private final ConfigManager configManager;
     private final CatStore store;
     private final CatCache cache;
+    private final Logger logger;
 
     /*
      * 羁绊纪元（0.8.0）：饥饿好感衰减节流表（玩家 UUID → 上次扣减时间）。
@@ -76,12 +78,14 @@ public class CatHungerTask implements Runnable {
     public CatHungerTask(
             ConfigManager configManager,
             CatStore store,
-            CatCache cache
+            CatCache cache,
+            Logger logger
     ) {
 
         this.configManager = configManager;
         this.store = store;
         this.cache = cache;
+        this.logger = logger;
     }
 
     @Override
@@ -141,21 +145,49 @@ public class CatHungerTask implements Runnable {
             if (owner != null &&
                     owner.isOnline()) {
 
-                handleOnline(
-                        playerUUID,
-                        now,
-                        baseInterval,
-                        lastUpdate
-                );
+                try {
+
+                    handleOnline(
+                            playerUUID,
+                            now,
+                            baseInterval,
+                            lastUpdate
+                    );
+
+                } catch (Exception exception) {
+
+                    /*
+                     * 0.8.1 修复（P2）：单玩家异常隔离。
+                     * 一只猫的数据异常绝不瘫痪整个饥饿/衰减任务。
+                     */
+                    logger.warning(
+                            "Hunger tick failed for player "
+                                    + playerUUID
+                                    + ": "
+                                    + exception.getMessage()
+                    );
+                }
 
             } else {
 
-                handleOffline(
-                        playerUUID,
-                        now,
-                        baseInterval,
-                        lastUpdate
-                );
+                try {
+
+                    handleOffline(
+                            playerUUID,
+                            now,
+                            baseInterval,
+                            lastUpdate
+                    );
+
+                } catch (Exception exception) {
+
+                    logger.warning(
+                            "Hunger tick failed for offline player "
+                                    + playerUUID
+                                    + ": "
+                                    + exception.getMessage()
+                    );
+                }
             }
         }
 

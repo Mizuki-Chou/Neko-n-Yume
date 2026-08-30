@@ -1087,6 +1087,35 @@ public class Cat {
 
     /*
      * ============================================================
+     * 实体最大生命（0.8.1 统一公式）
+     * ============================================================
+     *
+     * 10 + 等级/4 + 装备生命加成。
+     *
+     * CatEntityBinding.updateCat（绑定/恢复时补刷）与
+     * CatProgressionService.applyLevelMaxHealth（升级时刷新）
+     * 共用本方法，杜绝两处公式漂移——
+     * 此前升级路径未计入装备加成，升级后装备生命加成静默丢失。
+     */
+
+    public double entityMaxHealth() {
+
+        CatEquipItem equip =
+                getEquippedItem();
+
+        double equipHealthBonus =
+                equip == null
+                        ? 0.0
+                        : equip.getCatHealthBonus();
+
+        return 10.0
+                + getLevel()
+                / 4.0
+                + equipHealthBonus;
+    }
+
+    /*
+     * ============================================================
      * 工具
      * ============================================================
      */

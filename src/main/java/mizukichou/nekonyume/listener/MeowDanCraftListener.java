@@ -2,7 +2,8 @@ package mizukichou.nekonyume.listener;
 
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.MeowDanQuality;
-import org.bukkit.Material;
+import mizukichou.nekonyume.craft.CraftingRecipes;
+import org.bukkit.Keyed;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -27,12 +28,15 @@ import java.util.List;
 public class MeowDanCraftListener implements Listener {
 
     private final CatFoodManager foodManager;
+    private final CraftingRecipes craftingRecipes;
 
     public MeowDanCraftListener(
-            CatFoodManager foodManager
+            CatFoodManager foodManager,
+            CraftingRecipes craftingRecipes
     ) {
 
         this.foodManager = foodManager;
+        this.craftingRecipes = craftingRecipes;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -99,26 +103,18 @@ public class MeowDanCraftListener implements Listener {
 
         /*
          * 判断当前命中的配方是否"本插件相关"：
-         * 结果本身是喵丹，或结果是金粒（占位结果被剥离元数据时）。
+         * 0.8.1 R5（社区上报）——严格按注册键判定，
+         * 不再用"结果是金粒"这类宽泛启发式，
+         * 避免误伤其他插件的 9 ×金粒配方。
          */
         Recipe recipe =
                 event.getRecipe();
 
-        boolean ourRecipe = false;
-
-        if (recipe != null &&
-                recipe.getResult() != null) {
-
-            ItemStack result =
-                    recipe.getResult();
-
-            ourRecipe =
-                    foodManager.getMeowDanQuality(
-                            result
-                    ) != null ||
-                            result.getType()
-                                    == Material.GOLD_NUGGET;
-        }
+        boolean ourRecipe =
+                recipe instanceof Keyed keyed &&
+                        craftingRecipes.isMeowDanUpgradeKey(
+                                keyed.getKey()
+                        );
 
         /*
          * 无效组合：

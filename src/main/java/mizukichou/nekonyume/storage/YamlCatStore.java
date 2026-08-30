@@ -62,8 +62,10 @@ public class YamlCatStore extends AbstractCatStore {
 
     /*
      * 主线程读写的内存 YAML。
+     * 非 final：启动时若 players.yml.tmp 包含更新的已落盘快照，
+     * 会整体替换（见 recoverStaleTempFileIfNewer）。
      */
-    private final YamlConfiguration data;
+    private YamlConfiguration data;
 
     /*
      * 是否已通过主线程校验（文件损坏 / 迁移完成前
@@ -101,6 +103,18 @@ public class YamlCatStore extends AbstractCatStore {
      */
     private volatile boolean lastWriteFailed;
 
+    /*
+     * 快照序列号（单调递增，随文件持久化于根键 data-snapshot）。
+     * 启动时用于判定 players.yml 与 players.yml.tmp 谁更新，
+     * 崩溃恢复时绝不再丢弃"已 fsync 但未完成原子替换"的更新数据。
+     */
+    private long snapshotSequence;
+
+    /*
+     * 保存线程停机标志（shutdownAndAwait 置位）。
+     */
+    private volatile boolean stopping;
+
     public YamlCatStore(CatStoreEnv env) {
 
         this.env = env;
@@ -111,8 +125,6 @@ public class YamlCatStore extends AbstractCatStore {
                         .toFile();
 
         ensureFileExists();
-
-        cleanStaleTempFile();
 
         /*
          * 加载 + 损坏检测：
@@ -132,7 +144,8 @@ public class YamlCatStore extends AbstractCatStore {
 
                 throw new IllegalStateException(
                         "players.yml 无法解析，插件拒绝启动以保护数据。"
-                                + "请从 backup/ 目录恢复有效备份，或修复文件："
+                                + "请从 backup/ 目录恢复有效备份，"
+                                + "或检查 players.yml.tmp 中的崩溃快照，或修复文件："
                                 + file.getAbsolutePath(),
                         e
                 );
@@ -142,7 +155,8 @@ public class YamlCatStore extends AbstractCatStore {
 
                 throw new IllegalStateException(
                         "players.yml 已损坏（无有效数据），插件拒绝启动以保护数据。"
-                                + "请从 backup/ 目录恢复最近的有效备份；"
+                                + "请从 backup/ 目录恢复最近的有效备份，"
+                                + "或检查 players.yml.tmp 中的崩溃快照；"
                                 + "若确认无需旧数据，可删除该文件后重启。文件："
                                 + file.getAbsolutePath()
                 );
@@ -154,6 +168,18 @@ public class YamlCatStore extends AbstractCatStore {
 
             data = new YamlConfiguration();
         }
+
+        /*
+         * 读取快照序列号，随后尝试从崩溃残留的 tmp
+         * 恢复更新数据（R4，社区上报：不再直接删除 tmp）。
+         */
+        snapshotSequence =
+                data.getLong(
+                        "data-snapshot",
+                        0L
+                );
+
+        recoverStaleTempFileIfNewer();
 
         dirty = false;
         consecutiveSaveFailures = 0;
@@ -190,7 +216,7 @@ public class YamlCatStore extends AbstractCatStore {
 
     private void saverLoop() {
 
-        while (true) {
+        while (!stopping) {
 
             byte[] snapshot = null;
 
@@ -271,6 +297,16 @@ public class YamlCatStore extends AbstractCatStore {
                         "players.yml.tmp"
                 );
 
+        /*
+         * 0.8.1 修复（R5，社区上报）：
+         * 跟踪“tmp 已完整写入并 fsync”的节点——
+         * 若失败发生在原子替换阶段，失败处理绝不删除
+         * 这份已 durable 的完整快照，
+         * 留待下次启动由 recoverStaleTempFileIfNewer 拾取。
+         * 声明在 try 外：catch 分支需要读取。
+         */
+        boolean tempFullyWritten = false;
+
         try {
 
             if (temp.exists() && !temp.delete()) {
@@ -299,6 +335,8 @@ public class YamlCatStore extends AbstractCatStore {
 
                 channel.force(true);
             }
+
+            tempFullyWritten = true;
 
             try {
 
@@ -346,10 +384,28 @@ public class YamlCatStore extends AbstractCatStore {
                 );
             }
 
-            if (temp.exists() && !temp.delete()) {
+            /*
+             * 0.8.1 修复（R5，社区上报）：
+             * 只有 tmp 未完整写入（写入/fsync 阶段失败）时才删除——
+             * 那种 tmp 是半成品，无法作为恢复源；
+             * 若失败发生在原子替换（tmp 已完整且 durable），
+             * 保留 tmp 供下次启动恢复，绝不丢弃最后一次成功保存。
+             */
+            if (!tempFullyWritten) {
+
+                if (temp.exists() && !temp.delete()) {
+
+                    env.logger().warning(
+                            "Failed to clean up temp file players.yml.tmp"
+                    );
+                }
+
+            } else {
 
                 env.logger().warning(
-                        "Failed to clean up temp file players.yml.tmp"
+                        "players.yml.tmp contains a complete fsynced snapshot"
+                                + " that could not be moved into place;"
+                                + " it will be recovered on next startup."
                 );
             }
         }
@@ -394,8 +450,32 @@ public class YamlCatStore extends AbstractCatStore {
             return;
         }
 
+        /*
+         * 0.8.1 修复（P2）：值未变化时跳过写入与脏标记。
+         *
+         * 高频路径（喂食/抚摸）在数值不变（如好感已满、
+         * 饱食度已封顶）时仍会无条件写同值并置脏，
+         * 导致每 60 秒自动保存全量序列化 players.yml。
+         * 相等即跳过，序列化输出不变，语义安全。
+         */
+        String path =
+                catPath(playerUUID) + "." + field;
+
+        Object existing =
+                data.get(
+                        path
+                );
+
+        if (java.util.Objects.equals(
+                existing,
+                value
+        )) {
+
+            return;
+        }
+
         data.set(
-                catPath(playerUUID) + "." + field,
+                path,
                 value
         );
 
@@ -494,6 +574,17 @@ public class YamlCatStore extends AbstractCatStore {
             return true;
         }
 
+        /*
+         * 0.8.1 修复（R4）：快照序列号随快照持久化，
+         * 供崩溃恢复时判定 tmp 与主文件的新旧。
+         */
+        snapshotSequence++;
+
+        data.set(
+                "data-snapshot",
+                snapshotSequence
+        );
+
         byte[] snapshot =
                 data.saveToString()
                         .getBytes(
@@ -527,6 +618,17 @@ public class YamlCatStore extends AbstractCatStore {
      */
     public void saveNow() {
 
+        /*
+         * 0.8.1 修复（R4）：同 submitSnapshot——
+         * 无条件快照同样递增序列号。
+         */
+        snapshotSequence++;
+
+        data.set(
+                "data-snapshot",
+                snapshotSequence
+        );
+
         byte[] snapshot =
                 data.saveToString()
                         .getBytes(
@@ -545,7 +647,12 @@ public class YamlCatStore extends AbstractCatStore {
 
     /**
      * 关服时调用：
-     * 提交最后快照并等待保存线程完成在飞写入。
+     * 提交最后快照并等待保存线程完成在飞写入，
+     * 随后停机保存线程（0.8.1 R4：旧实现不中断、不 join，
+     * /reload 或 PlugMan 重载后旧线程泄漏并继续与新一代
+     * 保存线程竞争同一 players.yml.tmp 文件）。
+     *
+     * 幂等：重复调用只做等待，不再提交快照。
      */
     public void shutdownAndAwait() {
 
@@ -553,9 +660,49 @@ public class YamlCatStore extends AbstractCatStore {
             return;
         }
 
+        if (stopping) {
+
+            awaitPendingSave();
+
+            return;
+        }
+
         saveNow();
 
         awaitPendingSave();
+
+        stopping = true;
+
+        synchronized (saverMonitor) {
+
+            saverMonitor.notifyAll();
+        }
+
+        if (saverThread != null &&
+                saverThread.isAlive() &&
+                saverThread != Thread.currentThread()) {
+
+            saverThread.interrupt();
+
+            try {
+
+                saverThread.join(
+                        3000L
+                );
+
+            } catch (InterruptedException e) {
+
+                Thread.currentThread()
+                        .interrupt();
+            }
+
+            if (saverThread.isAlive()) {
+
+                env.logger().warning(
+                        "Save thread did not stop within 3 seconds after shutdown."
+                );
+            }
+        }
     }
 
     /**
@@ -669,7 +816,21 @@ public class YamlCatStore extends AbstractCatStore {
         }
     }
 
-    private void cleanStaleTempFile() {
+    /*
+     * 0.8.1 修复（R4，社区上报）：崩溃残留 tmp 的智能恢复。
+     *
+     * 旧实现直接删除 tmp——但若崩溃发生在
+     * "tmp 已 fsync、原子替换未完成"窗口内，
+     * tmp 就是比主文件更新、且已经 durable 的完整数据，
+     * 直接删除等于主动丢弃最后一次成功保存。
+     *
+     * 新规则：
+     * 1. tmp 解析失败 / 为空 → 残留半成品，删除；
+     * 2. tmp 的 data-snapshot 序列号比主文件新（或主文件缺失）
+     *    → 整体采用 tmp 作为内存数据，并提示管理员；
+     * 3. 主文件有效且不旧于 tmp → 保守删除 tmp（旧行为）。
+     */
+    private void recoverStaleTempFileIfNewer() {
 
         File temp =
                 new File(
@@ -677,12 +838,113 @@ public class YamlCatStore extends AbstractCatStore {
                         "players.yml.tmp"
                 );
 
-        if (temp.exists()) {
+        if (!temp.exists()) {
+            return;
+        }
+
+        YamlConfiguration tmpData;
+
+        try {
+
+            tmpData =
+                    YamlConfiguration.loadConfiguration(
+                            temp
+                    );
+
+        } catch (Exception e) {
+
+            tmpData = null;
+        }
+
+        if (tmpData == null ||
+                tmpData.getKeys(false).isEmpty()) {
 
             if (temp.delete()) {
 
                 env.logger().warning(
-                        "Removed stale temp file players.yml.tmp left by a previous crash."
+                        "Removed corrupt temp file players.yml.tmp left by a previous crash."
+                );
+
+            } else {
+
+                env.logger().warning(
+                        "Found corrupt temp file players.yml.tmp but failed to delete it."
+                );
+            }
+
+            return;
+        }
+
+        long tmpSequence =
+                tmpData.getLong(
+                        "data-snapshot",
+                        -1L
+                );
+
+        /*
+         * 主文件是否实际存在有效内容。
+         * （主文件若存在但损坏，构造器在此之前已 fail-fast，
+         * 走到这里说明主文件要么有效、要么缺失/为空。）
+         */
+        boolean mainUsable =
+                file.exists() &&
+                        file.length() > 0;
+
+        if (!mainUsable) {
+
+            /*
+             * 主文件缺失/为空：tmp 是唯一可用的完整数据，
+             * 无论其序列号为何（含旧格式无序列号的快照）一律采用。
+             */
+            data = tmpData;
+
+            snapshotSequence =
+                    Math.max(
+                            snapshotSequence,
+                            tmpSequence
+                    );
+
+            env.logger().warning(
+                    "players.yml is missing or empty; recovered data from players.yml.tmp"
+                            + " (snapshot "
+                            + tmpSequence
+                            + ")."
+            );
+
+            return;
+        }
+
+        long mainSequence =
+                snapshotSequence;
+
+        if (tmpSequence > mainSequence) {
+
+            data = tmpData;
+
+            snapshotSequence =
+                    tmpSequence;
+
+            env.logger().warning(
+                    "Recovered newer snapshot from players.yml.tmp"
+                            + " (snapshot "
+                            + tmpSequence
+                            + " > "
+                            + mainSequence
+                            + "), the last save was preserved."
+            );
+
+            /*
+             * 不删除 tmp：下一次 writeSnapshot 会自然覆盖；
+             * 若期间再次崩溃，重复恢复是幂等的。
+             */
+
+        } else {
+
+            if (temp.delete()) {
+
+                env.logger().warning(
+                        "Removed stale temp file players.yml.tmp"
+                                + " (not newer than the main file)."
                 );
 
             } else {

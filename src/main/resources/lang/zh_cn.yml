@@ -134,6 +134,7 @@ feed:
   meowdan-lore-use: "右键你的猫咪使用"
   meowdan-lore-values: "喵力 +{0} · 好感 +{1} · 经验 +{2}"
   tier-upgrade: "<gradient:#c4b5fd:#a78bfa>🌟 底蕴升华!</gradient> {0}的底蕴提升到了 {1}"
+  tier-upgrade-invalid: "<yellow>⚠ 以这只猫当前的底蕴，{0}无法再让它升华。</yellow>"
   tier-upgrade-fail: "<gray>喵丹的力量在体内流转，但底蕴没有变化…</gray>"
   not-your-cat: "<red>🐱 这不是你的猫咪。</red>"
   meowdan-expired: "<red>🐱 这颗喵丹已经过期，无法使用了。</red>"
@@ -224,6 +225,7 @@ battle:
 #
 entity:
   summoning: "<yellow>🐱 正在寻找你的猫咪，请稍等一下!</yellow>"
+  summon-failed: "<red>❌ 召唤失败，请稍后重试。</red>"
   summon-error: "<red>🐱 召唤猫咪时发生错误，请查看服务器日志。</red>"
   teleport-fail: "<red>🐱 猫咪暂时无法传送，请稍后再试。</red>"
   chunk-fail: "<red>🐱 猫咪目标区块加载失败，请稍后再试。</red>"

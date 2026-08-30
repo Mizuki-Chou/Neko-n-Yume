@@ -47,7 +47,15 @@ public class CatFoodListener implements Listener {
         this.lang = lang;
     }
 
-    @EventHandler
+    /*
+     * 0.8.1 R5（社区上报）：
+     * ignoreCancelled = true——区域保护/交互限制插件取消事件时，
+     * 本插件绝不再继续喂食/消耗物品，遵守跨插件事件契约。
+     */
+    @EventHandler(
+            priority = EventPriority.NORMAL,
+            ignoreCancelled = true
+    )
     public void onCatFeed(
             PlayerInteractAtEntityEvent event
     ) {
@@ -430,9 +438,14 @@ public class CatFoodListener implements Listener {
 
     /*
      * 右键实体（名牌命名、拴绳拴生物等）。
-     * 只拦截主手；对自己猫的穿戴流程不受影响——
-     * 穿戴走 PlayerInteractAtEntityEvent，成功即取消事件，
-     * 本处理器不会二次触发；失败时取消原版命名/拴绳。
+     * 只拦截主手；对自己猫的穿戴流程不受影响。
+     *
+     * 0.8.1 修复（P0）：
+     * PlayerInteractEntityEvent 先于 PlayerInteractAtEntityEvent 触发，
+     * 且取消前者会让 Paper 不再触发后者——若这里无差别取消，
+     * onCatFeed 中的装备穿戴流程（equipCat）将永远无法执行。
+     * 因此：目标是自己的猫时放行，交给 AtEntity 事件处理；
+     * 其余实体（原版命名/拴绳会消耗装备物品）继续拦截。
      */
     @EventHandler(
             priority = EventPriority.LOWEST,
@@ -446,6 +459,33 @@ public class CatFoodListener implements Listener {
                 != EquipmentSlot.HAND) {
 
             return;
+        }
+
+        /*
+         * 自己的猫：放行给 PlayerInteractAtEntityEvent 的穿戴流程。
+         */
+        if (event.getRightClicked()
+                instanceof Cat cat &&
+                cat.getPersistentDataContainer()
+                        .has(
+                                catKey,
+                                PersistentDataType.BYTE
+                        )) {
+
+            String ownerUUID =
+                    cat.getPersistentDataContainer()
+                            .get(
+                                    ownerKey,
+                                    PersistentDataType.STRING
+                            );
+
+            if (event.getPlayer()
+                    .getUniqueId()
+                    .toString()
+                    .equals(ownerUUID)) {
+
+                return;
+            }
         }
 
         ItemStack item =

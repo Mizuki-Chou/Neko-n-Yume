@@ -9,6 +9,7 @@ import mizukichou.nekonyume.cat.CareMath;
 import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.EquipBonusAttribute;
 import mizukichou.nekonyume.cat.GrowthMath;
+import mizukichou.nekonyume.cat.SummonResult;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.gui.CatGuiManager;
@@ -139,7 +140,9 @@ public class NekoYumeCommand
             /*
              * 获取猫咪名字
              *
-             * 新猫默认是 Mikan
+             * 名字由建档时从名字池随机抽取并持久化
+             * （Marisa/Eleven/Mikan/Sora 等），
+             * 详见 AbstractCatStore.uniquePoolName。
              */
             String name =
                     store.getCatName(
@@ -162,7 +165,7 @@ public class NekoYumeCommand
             entityService.spawnCat(
                     player,
                     name,
-                    summoned -> {
+                    result -> {
 
                         /*
                          * 玩家在生成完成前退出
@@ -171,32 +174,41 @@ public class NekoYumeCommand
                             return;
                         }
 
-                        /*
-                         * summoned == true：
-                         * 这次创建了新的实体。
-                         */
-                        if (summoned) {
+                        switch (result) {
 
-                            /*
-                             * 名字是玩家可控文本，
-                             * 经 Lang 占位符包装为纯文本，
-                             * 避免 MiniMessage 标签注入。
-                             */
-                            player.sendMessage(
-                                    lang.forSender(sender).message(
-                                            "command.claim.first-cat",
-                                            name
-                                    )
-                            );
+                            case SPAWNED -> {
 
-                        } else {
+                                /*
+                                 * 名字是玩家可控文本，
+                                 * 经 Lang 占位符包装为纯文本，
+                                 * 避免 MiniMessage 标签注入。
+                                 */
+                                player.sendMessage(
+                                        lang.forSender(sender).message(
+                                                "command.claim.first-cat",
+                                                name
+                                        )
+                                );
+                            }
 
-                            player.sendMessage(
-                                    lang.forSender(sender).message(
-                                            "command.claim.here",
-                                            name
-                                    )
-                            );
+                            case ALREADY_PRESENT -> {
+
+                                player.sendMessage(
+                                        lang.forSender(sender).message(
+                                                "command.claim.here",
+                                                name
+                                        )
+                                );
+                            }
+
+                            case FAILED -> {
+
+                                player.sendMessage(
+                                        lang.forSender(sender).message(
+                                                "entity.summon-failed"
+                                        )
+                                );
+                            }
                         }
                     }
             );
@@ -1004,7 +1016,7 @@ public class NekoYumeCommand
             entityService.spawnCat(
                     player,
                     name,
-                    summoned -> {
+                    result -> {
 
                         /*
                          * 玩家在召唤过程中退出
@@ -1013,23 +1025,36 @@ public class NekoYumeCommand
                             return;
                         }
 
-                        if (summoned) {
+                        switch (result) {
 
-                            player.sendMessage(
-                                    lang.forSender(sender).message(
-                                            "command.summon.spawned",
-                                            name
-                                    )
-                            );
+                            case SPAWNED -> {
 
-                        } else {
+                                player.sendMessage(
+                                        lang.forSender(sender).message(
+                                                "command.summon.spawned",
+                                                name
+                                        )
+                                );
+                            }
 
-                            player.sendMessage(
-                                    lang.forSender(sender).message(
-                                            "command.summon.here",
-                                            name
-                                    )
-                            );
+                            case ALREADY_PRESENT -> {
+
+                                player.sendMessage(
+                                        lang.forSender(sender).message(
+                                                "command.summon.here",
+                                                name
+                                        )
+                                );
+                            }
+
+                            case FAILED -> {
+
+                                player.sendMessage(
+                                        lang.forSender(sender).message(
+                                                "entity.summon-failed"
+                                        )
+                                );
+                            }
                         }
                     }
             );

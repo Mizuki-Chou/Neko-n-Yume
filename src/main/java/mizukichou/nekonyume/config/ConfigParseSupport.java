@@ -130,6 +130,43 @@ final class ConfigParseSupport {
     }
 
     /*
+     * 0.8.1 修复（R3，社区上报）：
+     * double 的有限性守卫——NaN / Infinity 配置值
+     * 在 Math.max 下会原样穿透（Math.max(1, NaN) == NaN），
+     * 最终流入 Bukkit Attribute API 直接腐蚀实体属性。
+     * 非有限值一律回退 fallback；有限值只钳制非负，
+     * 不强制最小值（避免破坏合法的低倍率配置）。
+     */
+    static double positiveDouble(
+            double value,
+            double fallback
+    ) {
+
+        if (!Double.isFinite(value)) {
+            return fallback;
+        }
+
+        return Math.max(
+                0.0,
+                value
+        );
+    }
+
+    /*
+     * 0.8.1 修复（R3）：
+     * 任意 double 配置值的有限性守卫，非有限回退 fallback。
+     */
+    static double finite(
+            double value,
+            double fallback
+    ) {
+
+        return Double.isFinite(value)
+                ? value
+                : fallback;
+    }
+
+    /*
      * 概率值钳制到 [0, 1]：
      * 配置写 150 或 -0.5 都收敛为合法概率，
      * 避免"必掉落 / 永不掉落"的意外行为。

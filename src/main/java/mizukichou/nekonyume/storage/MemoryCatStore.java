@@ -61,6 +61,18 @@ public class MemoryCatStore extends AbstractCatStore {
             return;
         }
 
+        /*
+         * 0.8.1 修复（P2）：与 YamlCatStore 同语义——
+         * 值未变化时跳过写入与脏标记。
+         */
+        if (java.util.Objects.equals(
+                data.get(field),
+                value
+        )) {
+
+            return;
+        }
+
         if (value == null) {
 
             data.remove(field);

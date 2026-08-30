@@ -2,6 +2,7 @@ package mizukichou.nekonyume.listener;
 
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEntityService;
+import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.skill.CatSkillManager;
 import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.event.EventHandler;
@@ -16,18 +17,21 @@ public class PlayerQuitListener implements Listener {
     private final CatStore store;
     private final CatEntityService entityService;
     private final CatSkillManager skillManager;
+    private final Lang lang;
 
     public PlayerQuitListener(
             CatCache cache,
             CatStore store,
             CatEntityService entityService,
-            CatSkillManager skillManager
+            CatSkillManager skillManager,
+            Lang lang
     ) {
 
         this.cache = cache;
         this.store = store;
         this.entityService = entityService;
         this.skillManager = skillManager;
+        this.lang = lang;
     }
 
     @EventHandler
@@ -38,6 +42,17 @@ public class PlayerQuitListener implements Listener {
         UUID playerUUID =
                 event.getPlayer()
                         .getUniqueId();
+
+        /*
+         * 0.8.1 修复（R3，社区上报）：
+         * 退出前先从实体捕获最新位置/花色/世界，
+         * 否则刚移动就退出会回写 30 秒前的旧位置。
+         */
+        entityService.captureEntityState(
+                cache.getCat(
+                        playerUUID
+                )
+        );
 
         /*
          * 保存这个玩家的运行时猫咪。
@@ -80,6 +95,14 @@ public class PlayerQuitListener implements Listener {
          * 防止长跑服务器上冷却 Map 累积离线玩家记录。
          */
         skillManager.clearCooldowns(
+                playerUUID
+        );
+
+        /*
+         * 0.8.1 修复（P2）：
+         * 清除个人语言覆盖，防止 overrides 表单调增长。
+         */
+        lang.clearOverride(
                 playerUUID
         );
 

@@ -148,6 +148,17 @@ public class CatEntityRestorer {
         }
 
         /*
+         * 0.8.1 修复（R5，社区上报）：
+         * 登录恢复同样领取生命周期令牌。
+         * 删除 →重新领取（generation++）后，在途异步回调
+         * 立即失效——旧逻辑猫对象 A 绝不污染新一代猫 B。
+         */
+        long restoreToken =
+                beginSummon(
+                        playerUUID
+                );
+
+        /*
          * 1. 根据 Entity UUID 找原实体。
          */
         UUID savedEntityUUID =
@@ -160,46 +171,40 @@ public class CatEntityRestorer {
 
             if (entity instanceof org.bukkit.entity.Cat cat &&
                     !cat.isDead() &&
-                    cat.isValid()) {
-
-                String owner =
-                        cat.getPersistentDataContainer()
-                                .get(
-                                        binding.getOwnerKey(),
-                                        PersistentDataType.STRING
-                                );
-
-                if (playerUUID.toString().equals(owner)) {
-
-                    binding.updateCat(
+                    cat.isValid() &&
+                    isOwnedCat(
                             cat,
-                            player,
-                            logicalCat.getName()
-                    );
+                            playerUUID
+                    )) {
 
-                    variantService.restoreVariant(
-                            playerUUID,
-                            cat,
-                            logicalCat
-                    );
+                binding.updateCat(
+                        cat,
+                        player,
+                        logicalCat.getName()
+                );
 
-                    binding.syncLogicalCatLocation(
-                            logicalCat,
-                            cat
-                    );
+                variantService.restoreVariant(
+                        playerUUID,
+                        cat,
+                        logicalCat
+                );
 
-                    store.setCatEntityUUID(
-                            playerUUID,
-                            cat.getUniqueId()
-                    );
+                binding.syncLogicalCatLocation(
+                        logicalCat,
+                        cat
+                );
 
-                    cleanupDuplicateCats(
-                            playerUUID,
-                            cat
-                    );
+                store.setCatEntityUUID(
+                        playerUUID,
+                        cat.getUniqueId()
+                );
 
-                    return;
-                }
+                cleanupDuplicateCats(
+                        playerUUID,
+                        cat
+                );
+
+                return;
             }
         }
 
@@ -270,6 +275,30 @@ public class CatEntityRestorer {
                                         try {
 
                                             if (!player.isOnline()) {
+                                                return;
+                                            }
+
+                                            /*
+                                             * 0.8.1 修复（R3）：
+                                             * 登录恢复的异步窗口内数据可能被删除——
+                                             * 无数据即中止，不重建实体。
+                                             */
+                                            if (!store.hasCat(
+                                                    playerUUID
+                                            )) {
+
+                                                return;
+                                            }
+
+                                            /*
+                                             * 0.8.1 修复（R5，社区上报）：
+                                             * 代际校验：删除 +重新领取后旧回调失效。
+                                             */
+                                            if (!isCurrentSummon(
+                                                    playerUUID,
+                                                    restoreToken
+                                            )) {
+
                                                 return;
                                             }
 
@@ -450,6 +479,18 @@ public class CatEntityRestorer {
 
                                         try {
 
+                                            if (!player.isOnline() ||
+                                                    !store.hasCat(
+                                                            playerUUID
+                                                    ) ||
+                                                    !isCurrentSummon(
+                                                            playerUUID,
+                                                            restoreToken
+                                                    )) {
+
+                                                return;
+                                            }
+
                                             logger.warning(
                                                     "Failed to restore cat "
                                                             + logicalCat.getId()
@@ -457,6 +498,21 @@ public class CatEntityRestorer {
                                                             + player.getName()
                                                             + ": "
                                                             + exception.getMessage()
+                                                            + " — falling back to player location."
+                                            );
+
+                                            /*
+                                             * 0.8.1 修复（P2）：
+                                             * 区块加载失败不能静默丢猫。
+                                             * 降级到“玩家位置兜底重建”，
+                                             * 与“无存档位置”的兜底语义一致，
+                                             * 保证登录恢复永远有结果。
+                                             * 重建路径自带清理重复猫逻辑，
+                                             * 不会产生双猫。
+                                             */
+                                            restoreCatEntityAtFallback(
+                                                    player,
+                                                    logicalCat
                                             );
 
                                         } catch (Exception ex) {
@@ -486,6 +542,19 @@ public class CatEntityRestorer {
             Cat logicalCat,
             World world
     ) {
+
+        /*
+         * 0.8.1 修复（R4，社区上报）：
+         * 恢复入口必须自证玩家数据仍存在——
+         * 管理员删除猫咪后，任何重建入口都立即中止，
+         * 不依赖调用方提前检查。
+         */
+        if (!store.hasCat(
+                player.getUniqueId()
+        )) {
+
+            return;
+        }
 
         Location location =
                 new Location(
@@ -552,6 +621,18 @@ public class CatEntityRestorer {
             Player player,
             Cat logicalCat
     ) {
+
+        /*
+         * 0.8.1 修复（R4，社区上报）：
+         * 与 restoreCatEntityAtSavedLocation 同口径——
+         * 数据已被删除时绝不重建实体。
+         */
+        if (!store.hasCat(
+                player.getUniqueId()
+        )) {
+
+            return;
+        }
 
         Location location =
                 player.getLocation().clone();
@@ -670,10 +751,40 @@ public class CatEntityRestorer {
      * ============================================================
      */
 
+    /*
+     * 0.8.1 修复（R4，社区上报）：
+     * PDC 归属校验——猫标记与主人 UUID 必须同时匹配，
+     * 防止把其他插件/原版/回档实体“收编”成本插件猫。
+     */
+    private boolean isOwnedCat(
+            org.bukkit.entity.Cat cat,
+            UUID playerUUID
+    ) {
+
+        if (!cat.getPersistentDataContainer()
+                .has(
+                        binding.getCatKey(),
+                        PersistentDataType.BYTE
+                )) {
+
+            return false;
+        }
+
+        String owner =
+                cat.getPersistentDataContainer()
+                        .get(
+                                binding.getOwnerKey(),
+                                PersistentDataType.STRING
+                        );
+
+        return playerUUID.toString()
+                .equals(owner);
+    }
+
     void findCat(
             Player player,
             String name,
-            Consumer<Boolean> callback,
+            Consumer<SummonResult> callback,
             long summonToken
     ) {
 
@@ -690,9 +801,20 @@ public class CatEntityRestorer {
             Entity entity =
                     Bukkit.getEntity(savedEntityUUID);
 
+            /*
+             * 0.8.1 修复（R4，社区上报）：
+             * Entity UUID 分支必须验证 PDC 归属——
+             * 只有“猫标记 + 主人一致”的实体才允许收编。
+             * 存档损坏 / 其他插件实体 / 世界回档
+             * 都不能被 updateCat() 强行占为己有。
+             */
             if (entity instanceof org.bukkit.entity.Cat cat &&
                     !cat.isDead() &&
-                    cat.isValid()) {
+                    cat.isValid() &&
+                    isOwnedCat(
+                            cat,
+                            playerUUID
+                    )) {
 
                 cleanupDuplicateCats(
                         playerUUID,
@@ -710,7 +832,7 @@ public class CatEntityRestorer {
                         cat,
                         name,
                         callback,
-                        false
+                        summonToken
                 );
 
                 return;
@@ -734,7 +856,7 @@ public class CatEntityRestorer {
     private void loadLastKnownChunk(
             Player player,
             String name,
-            Consumer<Boolean> callback,
+            Consumer<SummonResult> callback,
             long summonToken
     ) {
 
@@ -749,7 +871,8 @@ public class CatEntityRestorer {
             restoreNewCat(
                     player,
                     name,
-                    callback
+                    callback,
+                    summonToken
             );
 
             return;
@@ -786,7 +909,7 @@ public class CatEntityRestorer {
                         loadedCat,
                         name,
                         callback,
-                        false
+                        summonToken
                 );
 
                 return;
@@ -795,7 +918,8 @@ public class CatEntityRestorer {
             restoreNewCat(
                     player,
                     name,
-                    callback
+                    callback,
+                    summonToken
             );
 
             return;
@@ -835,7 +959,10 @@ public class CatEntityRestorer {
                                                     playerUUID,
                                                     summonToken
                                             ) ||
-                                                    !player.isOnline()) {
+                                                    !player.isOnline() ||
+                                                    !store.hasCat(
+                                                            playerUUID
+                                                    )) {
 
                                                 return;
                                             }
@@ -871,7 +998,7 @@ public class CatEntityRestorer {
                                                         oldCat,
                                                         name,
                                                         callback,
-                                                        false
+                                                        summonToken
                                                 );
 
                                                 return;
@@ -907,7 +1034,7 @@ public class CatEntityRestorer {
                                                         loadedCat,
                                                         name,
                                                         callback,
-                                                        false
+                                                        summonToken
                                                 );
 
                                                 return;
@@ -916,7 +1043,8 @@ public class CatEntityRestorer {
                                             restoreNewCat(
                                                     player,
                                                     name,
-                                                    callback
+                                                    callback,
+                                                    summonToken
                                             );
 
                                         } catch (Exception exception) {
@@ -928,7 +1056,9 @@ public class CatEntityRestorer {
                                                     exception
                                             );
 
-                                            callback.accept(false);
+                                            callback.accept(
+                                                    SummonResult.FAILED
+                                            );
                                         }
                                     }
                             );
@@ -954,7 +1084,10 @@ public class CatEntityRestorer {
                                                     playerUUID,
                                                     summonToken
                                             ) ||
-                                                    !player.isOnline()) {
+                                                    !player.isOnline() ||
+                                                    !store.hasCat(
+                                                            playerUUID
+                                                    )) {
 
                                                 return;
                                             }
@@ -996,7 +1129,7 @@ public class CatEntityRestorer {
                                                         loadedCat,
                                                         name,
                                                         callback,
-                                                        false
+                                                        summonToken
                                                 );
 
                                                 return;
@@ -1005,7 +1138,8 @@ public class CatEntityRestorer {
                                             restoreNewCat(
                                                     player,
                                                     name,
-                                                    callback
+                                                    callback,
+                                                    summonToken
                                             );
 
                                         } catch (Exception ex) {
@@ -1017,7 +1151,9 @@ public class CatEntityRestorer {
                                                     ex
                                             );
 
-                                            callback.accept(false);
+                                            callback.accept(
+                                                    SummonResult.FAILED
+                                            );
                                         }
                                     }
                             );
@@ -1137,6 +1273,57 @@ public class CatEntityRestorer {
      * ============================================================
      */
 
+    /*
+     * 0.8.1 修复（R3，社区上报）：
+     * 删除玩家猫咪时清理全部已加载世界中属于该玩家的
+     * 所有猫实体——包括游离的重复实体，而不仅是
+     * 存档登记的 Entity UUID。防止残留实体被后续绑定
+     * 路径重新“复活”。仅用于管理删除这一低频操作，
+     * 全图扫描成本可接受。
+     */
+    public void cleanupAllOwnedEntities(
+            UUID playerUUID
+    ) {
+
+        if (playerUUID == null) {
+            return;
+        }
+
+        for (World world :
+                Bukkit.getWorlds()) {
+
+            for (Entity entity :
+                    world.getEntities()) {
+
+                if (!(entity instanceof org.bukkit.entity.Cat cat)) {
+                    continue;
+                }
+
+                if (!cat.getPersistentDataContainer()
+                        .has(
+                                binding.getCatKey(),
+                                PersistentDataType.BYTE
+                        )) {
+
+                    continue;
+                }
+
+                String ownerUUID =
+                        cat.getPersistentDataContainer()
+                                .get(
+                                        binding.getOwnerKey(),
+                                        PersistentDataType.STRING
+                                );
+
+                if (playerUUID.toString()
+                        .equals(ownerUUID)) {
+
+                    cat.remove();
+                }
+            }
+        }
+    }
+
     private void cleanupDuplicateCats(
             UUID playerUUID,
             org.bukkit.entity.Cat keepCat
@@ -1199,8 +1386,8 @@ public class CatEntityRestorer {
             Player player,
             org.bukkit.entity.Cat cat,
             String name,
-            Consumer<Boolean> callback,
-            boolean replacement
+            Consumer<SummonResult> callback,
+            long summonToken
     ) {
 
         if (cat.isDead() || !cat.isValid()) {
@@ -1208,7 +1395,8 @@ public class CatEntityRestorer {
             restoreNewCat(
                     player,
                     name,
-                    callback
+                    callback,
+                    summonToken
             );
 
             return;
@@ -1230,6 +1418,19 @@ public class CatEntityRestorer {
                         name
                 );
 
+        /*
+         * 0.8.1 修复（R3）：玩家数据已被删除时中止流水线，
+         * 绝不把已删除的猫重新绑回实体。
+         */
+        if (logicalCat == null) {
+
+            callback.accept(
+                    SummonResult.FAILED
+            );
+
+            return;
+        }
+
         variantService.restoreVariant(
                 playerUUID,
                 cat,
@@ -1249,7 +1450,9 @@ public class CatEntityRestorer {
 
         if (targetWorld == null) {
 
-            callback.accept(replacement);
+            callback.accept(
+                    SummonResult.ALREADY_PRESENT
+            );
 
             return;
         }
@@ -1271,13 +1474,42 @@ public class CatEntityRestorer {
 
                                         try {
 
+                                            /*
+                                             * 0.8.1 修复（R4，社区上报）：
+                                             * 异步回调回归主线程后必须重新验证：
+                                             * 1. 召唤代际未失效（退出/删除/新召唤）
+                                             * 2. 玩家仍在线
+                                             * 3. 玩家数据仍存在（管理员删除后绝不重连）
+                                             * 否则旧回调可能把旧实体写回新一代猫的存档。
+                                             */
+                                            if (summonToken >= 0 &&
+                                                    !isCurrentSummon(
+                                                            playerUUID,
+                                                            summonToken
+                                                    )) {
+
+                                                return;
+                                            }
+
+                                            if (!player.isOnline()) {
+                                                return;
+                                            }
+
+                                            if (!store.hasCat(
+                                                    playerUUID
+                                            )) {
+
+                                                return;
+                                            }
+
                                             if (cat.isDead() ||
                                                     !cat.isValid()) {
 
                                                 restoreNewCat(
                                                         player,
                                                         name,
-                                                        callback
+                                                        callback,
+                                                        summonToken
                                                 );
 
                                                 return;
@@ -1300,7 +1532,9 @@ public class CatEntityRestorer {
                                                         )
                                                 );
 
-                                                callback.accept(false);
+                                                callback.accept(
+                                                        SummonResult.FAILED
+                                                );
 
                                                 return;
                                             }
@@ -1325,7 +1559,9 @@ public class CatEntityRestorer {
                                                     cat
                                             );
 
-                                            callback.accept(replacement);
+                                            callback.accept(
+                                                    SummonResult.ALREADY_PRESENT
+                                            );
 
                                         } catch (Exception exception) {
 
@@ -1336,7 +1572,9 @@ public class CatEntityRestorer {
                                                     exception
                                             );
 
-                                            callback.accept(false);
+                                            callback.accept(
+                                                    SummonResult.FAILED
+                                            );
                                         }
                                     }
                             );
@@ -1367,7 +1605,9 @@ public class CatEntityRestorer {
                                                             + exception.getMessage()
                                             );
 
-                                            callback.accept(false);
+                                            callback.accept(
+                                                    SummonResult.FAILED
+                                            );
 
                                         } catch (Exception ex) {
 
@@ -1378,7 +1618,9 @@ public class CatEntityRestorer {
                                                     ex
                                             );
 
-                                            callback.accept(false);
+                                            callback.accept(
+                                                    SummonResult.FAILED
+                                            );
                                         }
                                     }
                             );
@@ -1396,11 +1638,44 @@ public class CatEntityRestorer {
     private void restoreNewCat(
             Player player,
             String name,
-            Consumer<Boolean> callback
+            Consumer<SummonResult> callback,
+            long summonToken
     ) {
 
         UUID playerUUID =
                 player.getUniqueId();
+
+        /*
+         * 0.8.1 修复（R3）：
+         * 异步窗口内玩家数据可能已被管理员删除——
+         * 无数据即中止，绝不“复活”已删除的猫。
+         */
+        if (!store.hasCat(playerUUID)) {
+
+            callback.accept(
+                    SummonResult.FAILED
+            );
+
+            return;
+        }
+
+        /*
+         * 0.8.1 修复（R4，社区上报）：
+         * 同步重建入口同样自证代际未失效，
+         * 旧召唤不得把新建实体写回新一代猫的存档。
+         */
+        if (summonToken >= 0 &&
+                !isCurrentSummon(
+                        playerUUID,
+                        summonToken
+                )) {
+
+            callback.accept(
+                    SummonResult.FAILED
+            );
+
+            return;
+        }
 
         /*
          * 最后一次检查当前世界中是否已经有猫。
@@ -1422,18 +1697,25 @@ public class CatEntityRestorer {
                     existing
             );
 
-            binding.bindLogicalCat(
+            if (binding.bindLogicalCat(
                     player,
                     existing,
                     name
-            );
+            ) == null) {
+
+                callback.accept(
+                        SummonResult.FAILED
+                );
+
+                return;
+            }
 
             prepareTeleport(
                     player,
                     existing,
                     name,
                     callback,
-                    false
+                    summonToken
             );
 
             return;
@@ -1467,6 +1749,17 @@ public class CatEntityRestorer {
                         cat,
                         name
                 );
+
+        if (logicalCat == null) {
+
+            cat.remove();
+
+            callback.accept(
+                    SummonResult.FAILED
+            );
+
+            return;
+        }
 
         /*
          * 确定并永久保存花色。
@@ -1520,6 +1813,8 @@ public class CatEntityRestorer {
                 )
         );
 
-        callback.accept(true);
+        callback.accept(
+                SummonResult.SPAWNED
+        );
     }
 }

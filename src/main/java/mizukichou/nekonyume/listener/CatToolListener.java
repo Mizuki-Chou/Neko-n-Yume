@@ -10,6 +10,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
@@ -66,7 +67,15 @@ public class CatToolListener implements Listener {
         this.lang = lang;
     }
 
-    @EventHandler
+    /*
+     * 0.8.1 R5（社区上报）：
+     * ignoreCancelled = true——与喂食/装备事件同口径，
+     * 保护插件取消交互时逗猫棒不再生效。
+     */
+    @EventHandler(
+            priority = EventPriority.NORMAL,
+            ignoreCancelled = true
+    )
     public void onInteract(
             PlayerInteractEvent event
     ) {
@@ -101,7 +110,13 @@ public class CatToolListener implements Listener {
         );
     }
 
-    @EventHandler
+    /*
+     * 0.8.1 R5（社区上报）：同 onInteract 口径。
+     */
+    @EventHandler(
+            priority = EventPriority.NORMAL,
+            ignoreCancelled = true
+    )
     public void onInteractEntity(
             PlayerInteractAtEntityEvent event
     ) {
@@ -182,7 +197,7 @@ public class CatToolListener implements Listener {
             entityService.spawnCat(
                     player,
                     name,
-                    summoned -> {
+                    result -> {
                         /*
                          * 实体生成结果无需额外处理：
                          * title 已给出领取反馈，

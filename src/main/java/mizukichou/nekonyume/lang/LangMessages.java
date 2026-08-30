@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.Style;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -62,11 +63,22 @@ public final class LangMessages {
         if (code == null ||
                 code.isBlank()) {
 
-            code = "zh_cn";
+            code = "en_us";
         }
+
+        YamlConfiguration builtin =
+                loadBuiltinBase(
+                        plugin,
+                        code,
+                        logger
+                );
 
         /*
          * 1. 服务器端覆盖文件（管理员可改）。
+         *
+         * 0.8.1 R5（社区上报）：
+         * 覆盖文件是“局部覆盖”——与内建资源深度合并；
+         * 只写一个键也不会丢失其余内建文案。
          */
         File override =
                 new File(
@@ -134,6 +146,19 @@ public final class LangMessages {
                                     + override.getPath()
                     );
 
+                    if (builtin != null) {
+
+                        mergeDeep(
+                                builtin,
+                                overrideConfig
+                        );
+
+                        return new LangMessages(
+                                builtin,
+                                logger
+                        );
+                    }
+
                     return new LangMessages(
                             overrideConfig,
                             logger
@@ -142,26 +167,54 @@ public final class LangMessages {
             }
         }
 
-        /*
-         * 2. 插件内建资源。
-         */
+        if (builtin != null) {
+
+            return new LangMessages(
+                    builtin,
+                    logger
+            );
+        }
+
+        logger.warning(
+                "No language file available, messages will show raw keys."
+        );
+
+        return new LangMessages(
+                new YamlConfiguration(),
+                logger
+        );
+    }
+
+    /*
+     * 加载内建语言资源（含 en_us 回退链）。
+     *
+     * 0.8.1（用户要求）：全部回退场景统一 en_us——
+     * 不支持的语言 / 检测失败 / 文件缺失 / 解析失败。
+     * 返回 null 表示 en_us 自身也缺失/损坏。
+     */
+    private static YamlConfiguration loadBuiltinBase(
+            JavaPlugin plugin,
+            String code,
+            Logger logger
+    ) {
+
         InputStream stream =
                 plugin.getResource(
                         "lang/" + code + ".yml"
                 );
 
         if (stream == null &&
-                !"zh_cn".equals(code)) {
+                !"en_us".equals(code)) {
 
             logger.warning(
                     "Language '"
                             + code
-                            + "' not found, falling back to zh_cn."
+                            + "' not found, falling back to en_us."
             );
 
             stream =
                     plugin.getResource(
-                            "lang/zh_cn.yml"
+                            "lang/en_us.yml"
                     );
         }
 
@@ -182,10 +235,7 @@ public final class LangMessages {
                         content
                 );
 
-                return new LangMessages(
-                        resourceConfig,
-                        logger
-                );
+                return resourceConfig;
 
             } catch (IOException | InvalidConfigurationException e) {
 
@@ -196,17 +246,66 @@ public final class LangMessages {
                                 + ".yml",
                         e
                 );
+
+                if (!"en_us".equals(code)) {
+
+                    return loadBuiltinBase(
+                            plugin,
+                            "en_us",
+                            logger
+                    );
+                }
             }
         }
 
-        logger.warning(
-                "No language file available, messages will show raw keys."
-        );
+        return null;
+    }
 
-        return new LangMessages(
-                new YamlConfiguration(),
-                logger
-        );
+    /*
+     * 0.8.1 R5（社区上报）：
+     * 深度合并——覆盖文件的每个键覆盖内建同路径键，
+     * 未提及的键保留内建值；嵌套节逐层递归。
+     * 包级可见以便单元测试。
+     */
+    static void mergeDeep(
+            ConfigurationSection target,
+            ConfigurationSection source
+    ) {
+
+        for (String key :
+                source.getKeys(false)) {
+
+            Object sourceValue =
+                    source.get(key);
+
+            if (sourceValue instanceof ConfigurationSection sourceSection) {
+
+                ConfigurationSection targetSection =
+                        target.getConfigurationSection(
+                                key
+                        );
+
+                if (targetSection == null) {
+
+                    targetSection =
+                            target.createSection(
+                                    key
+                            );
+                }
+
+                mergeDeep(
+                        targetSection,
+                        sourceSection
+                );
+
+            } else {
+
+                target.set(
+                        key,
+                        sourceValue
+                );
+            }
+        }
     }
 
     /*
@@ -494,15 +593,34 @@ public final class LangMessages {
             return node;
         }
 
+        /*
+         * 0.8.1 修复（P0）：content 无占位符时绝不能丢弃它。
+         *
+         * 模板形如 <white>等级: <yellow>{0}</yellow></white>
+         * 解析后占位符位于子节点、父节点 content="等级: "。
+         * 旧实现此处返回 Component.text("")，父节点文本
+         * （"等级: "等大量前缀）随替换静默丢失。
+         * 此处 segments == null 时保留原 content，仅替换子节点。
+         */
+        if (segments == null) {
+
+            return Component.text(
+                            text.content()
+                    ).style(
+                            text.style()
+                    ).children(
+                            childrenChanged
+                                    ? newChildren
+                                    : children
+                    );
+        }
+
         List<Component> finalChildren =
                 new ArrayList<>();
 
-        if (segments != null) {
-
-            finalChildren.addAll(
-                    segments
-            );
-        }
+        finalChildren.addAll(
+                segments
+        );
 
         finalChildren.addAll(
                 childrenChanged
