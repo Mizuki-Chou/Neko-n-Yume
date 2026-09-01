@@ -46,10 +46,17 @@ public class CatGiftEvent extends Event {
 
         this.player = player;
         this.cat = cat;
+        /*
+         * 0.8.4 R18（社区上报 L-NEW-03）：
+         * List.copyOf 只保护列表结构，不保护其中的 ItemStack——
+         * 事件是事后通知，礼品必须是深快照而非活对象。
+         */
         this.gifts =
-                List.copyOf(
-                        gifts
-                );
+                gifts.stream()
+                        .map(
+                                ItemStack::clone
+                        )
+                        .toList();
         this.meowRank = meowRank;
     }
 

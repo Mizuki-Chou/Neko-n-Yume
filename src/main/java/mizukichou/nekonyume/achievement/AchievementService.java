@@ -54,6 +54,7 @@ public class AchievementService {
     private final CatProgressionService progression;
     private final ConfigManager configManager;
     private final Lang lang;
+    private final mizukichou.nekonyume.cat.CatEntityRuntime runtime;
     private final Logger logger;
 
     public AchievementService(
@@ -62,6 +63,7 @@ public class AchievementService {
             CatProgressionService progression,
             ConfigManager configManager,
             Lang lang,
+            mizukichou.nekonyume.cat.CatEntityRuntime runtime,
             Logger logger
     ) {
 
@@ -70,6 +72,7 @@ public class AchievementService {
         this.progression = progression;
         this.configManager = configManager;
         this.lang = lang;
+        this.runtime = runtime;
         this.logger = logger;
     }
 
@@ -337,9 +340,9 @@ public class AchievementService {
              * - 崩溃于奖励发放后、pending 清除前 →
              *   奖励也未随崩溃前的快照落盘，
              *   下次登录补发恰好一次；
-             * - 发放环节抛异常（0.7.4 台账）→
-             *   "先记台账、后发奖励"使失败方向被约束为
-             *   少发而非多发，绝不重复发放。
+             * - 发放环节抛异常（0.8.4 R17 幂等协议）→
+             *   逐币种"已发放"标记保证：已发放的绝不重发、
+             *   未发放的下次补发，不再偏向永久少发。
              */
             for (String pendingName :
                     store.getAchievementsPendingList(
@@ -480,6 +483,21 @@ public class AchievementService {
         UUID playerUuid =
                 player.getUniqueId();
 
+        /*
+         * 0.8.4 R24（审查复核）：
+         * 幂等守卫——奖励发放触发 CatLevelUpEvent 时，
+         * 第三方监听器可能重入 checkAll，内层先解锁后
+         * 外层再以旧快照进入 unlock：store 已标记则直接
+         * 返回，杜绝重复通知（title/消息/粒子）。
+         */
+        if (store.isAchievementUnlocked(
+                playerUuid,
+                achievement.name()
+        )) {
+
+            return;
+        }
+
         store.addAchievementUnlocked(
                 playerUuid,
                 achievement.name()
@@ -561,7 +579,8 @@ public class AchievementService {
         );
 
         /*
-         * 防重核心：台账已记账 → 只清 pending，绝不重发。
+         * 防重核心：台账已记账 → 只清 pending 与逐币种标记，
+         * 绝不重发。
          */
         if (store.isAchievementRewarded(
                 playerUuid,
@@ -573,19 +592,18 @@ public class AchievementService {
                     achievement.name()
             );
 
+            store.removeAchievementRewardXpApplied(
+                    playerUuid,
+                    achievement.name()
+            );
+
+            store.removeAchievementRewardMeowApplied(
+                    playerUuid,
+                    achievement.name()
+            );
+
             return;
         }
-
-        /*
-         * 先记台账，后发奖励。
-         * 若此后的发放环节抛异常，pending 保持而台账已记，
-         * 下次补发会因台账命中而跳过——失败方向被
-         * 约束为"少发"而非"多发"（经济系统正确方向）。
-         */
-        store.addAchievementRewarded(
-                playerUuid,
-                achievement.name()
-        );
 
         int xp =
                 rewardXp(achievement);
@@ -593,25 +611,104 @@ public class AchievementService {
         int meow =
                 rewardMeowPower(achievement);
 
-        if (xp > 0) {
+        /*
+         * 0.8.4 R17（社区上报）：
+         * 逐币种幂等发放协议——
+         *
+         * 每个币种发放成功后立即落"已发放"标记，
+         * 标记与经验/喵力同文档同快照原子落盘：
+         * - 异常中断 → 已发放的绝不重发，未发放的下次补发，
+         *   不再出现"台账已记但奖励没发"的永久少发；
+         * - 崩溃 → 发放与标记要么都落盘、要么都丢失，
+         *   补发恰好一次，不重复；
+         * - 全部币种发放完毕才记总台账，台账语义恢复为
+         *   "奖励确已全部发放"。
+         */
+        if (xp > 0 &&
+                !store.isAchievementRewardXpApplied(
+                        playerUuid,
+                        achievement.name()
+                )) {
 
-            progression.gainExperience(
-                    player,
-                    cat,
-                    xp
+            /*
+             * 0.8.4 R18（社区上报 H-02）：
+             * 标记先于发放落地——gainExperience 内部会触发
+             * CatLevelUpEvent（第三方监听器可同步执行、甚至 flush）。
+             * 标记与经验同文档同快照：任何重入 flush 都只会看到
+             * "经验 + 标记"的成对状态，绝不出现"经验已持久化、
+             * 标记未持久化"的窗口；发放抛异常则回滚标记，
+             * pending 保留由外层重试。
+             */
+            store.addAchievementRewardXpApplied(
+                    playerUuid,
+                    achievement.name()
             );
+
+            try {
+
+                progression.gainExperience(
+                        player,
+                        cat,
+                        xp
+                );
+
+            } catch (RuntimeException e) {
+
+                store.removeAchievementRewardXpApplied(
+                        playerUuid,
+                        achievement.name()
+                );
+
+                throw e;
+            }
         }
 
-        if (meow > 0) {
+        if (meow > 0 &&
+                !store.isAchievementRewardMeowApplied(
+                        playerUuid,
+                        achievement.name()
+                )) {
 
-            progression.grantMeowPower(
-                    player,
-                    cat,
-                    meow
+            store.addAchievementRewardMeowApplied(
+                    playerUuid,
+                    achievement.name()
             );
+
+            try {
+
+                progression.grantMeowPower(
+                        player,
+                        cat,
+                        meow
+                );
+
+            } catch (RuntimeException e) {
+
+                store.removeAchievementRewardMeowApplied(
+                        playerUuid,
+                        achievement.name()
+                );
+
+                throw e;
+            }
         }
+
+        store.addAchievementRewarded(
+                playerUuid,
+                achievement.name()
+        );
 
         store.removeAchievementPending(
+                playerUuid,
+                achievement.name()
+        );
+
+        store.removeAchievementRewardXpApplied(
+                playerUuid,
+                achievement.name()
+        );
+
+        store.removeAchievementRewardMeowApplied(
                 playerUuid,
                 achievement.name()
         );
@@ -644,9 +741,9 @@ public class AchievementService {
                 10
         );
 
-        player.playSound(
+        runtime.playSound(
                 player.getLocation(),
-                Sound.UI_TOAST_CHALLENGE_COMPLETE,
+                "toast",
                 1.0f,
                 1.0f
         );

@@ -1,9 +1,7 @@
 package mizukichou.nekonyume.cat;
 
-import io.papermc.paper.registry.RegistryKey;
 import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.NamespacedKey;
-import org.bukkit.Registry;
 
 import java.util.Random;
 import java.util.UUID;
@@ -13,50 +11,31 @@ import java.util.UUID;
  *
  * <p>
  * 从 CatEntityService 抽出，阻止其继续膨胀：
- * 花色注册表 / 随机花色 / 持久化 / 恢复规则。
+ * 花色解析 / 随机花色 / 持久化 / 恢复规则。
+ * 0.8.4 起注册表访问经 {@link CatEntityRuntime} 收口，可在无服务端环境测试。
  * </p>
  */
 public class CatVariantService {
 
     private final CatStore store;
 
+    private final CatEntityRuntime runtime;
+
     private final Random random =
             new Random();
 
     public CatVariantService(
-            CatStore store
+            CatStore store,
+            CatEntityRuntime runtime
     ) {
 
         this.store = store;
-    }
-
-    public Registry<org.bukkit.entity.Cat.Type>
-    getRegistry() {
-
-        return io.papermc.paper.registry.RegistryAccess
-                .registryAccess()
-                .getRegistry(
-                        RegistryKey.CAT_VARIANT
-                );
+        this.runtime = runtime;
     }
 
     public org.bukkit.entity.Cat.Type getRandomType() {
 
-        java.util.List<org.bukkit.entity.Cat.Type> types =
-                getRegistry()
-                        .stream()
-                        .toList();
-
-        if (types.isEmpty()) {
-
-            throw new IllegalStateException(
-                    "No cat variants are registered!"
-            );
-        }
-
-        return types.get(
-                random.nextInt(types.size())
-        );
+        return runtime.randomCatType();
     }
 
     public String saveVariant(
@@ -71,10 +50,9 @@ public class CatVariantService {
         }
 
         NamespacedKey key =
-                getRegistry()
-                        .getKey(
-                                variant
-                        );
+                runtime.typeKey(
+                        variant
+                );
 
         if (key == null) {
             return null;
@@ -206,22 +184,8 @@ public class CatVariantService {
             String variantString
     ) {
 
-        if (variantString == null ||
-                variantString.isBlank()) {
-
-            return null;
-        }
-
-        NamespacedKey key =
-                NamespacedKey.fromString(
-                        variantString
-                );
-
-        if (key == null) {
-            return null;
-        }
-
-        return getRegistry()
-                .get(key);
+        return runtime.resolveCatType(
+                variantString
+        );
     }
 }

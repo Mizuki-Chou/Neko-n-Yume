@@ -107,12 +107,15 @@ public class CatManager {
      * 只跳过这一只，绝不阻断其余猫咪的保存。
      * </p>
      */
-    public void saveAllCats() {
+    public java.util.List<Cat> saveAllCats() {
 
         /*
-         * 0.8.1 修复（R3，社区上报 P1）：
-         * 只驱逐本轮成功回写的猫；保存失败的猫保留在内存中
-         * 下一轮重试，绝不把未落盘的更新状态扔掉。
+         * 0.8.4 R18（社区上报 H-NEW-01）：
+         * 回写成功后不再立即驱逐——驱逐的安全条件是
+         * "该 UUID 的最新快照已成功落盘"，而非
+         * "已提交到 Store 内存"。
+         * 驱逐交由自动保存任务在落盘确认（awaitPendingSave +
+         * 无写失败）之后通过 evictOfflineCats 执行。
          */
         java.util.List<Cat> savedCats =
                 new java.util.ArrayList<>();
@@ -138,9 +141,23 @@ public class CatManager {
             }
         }
 
+        return savedCats;
+    }
+
+    /*
+     * 0.8.4 R18（社区上报 H-NEW-01）：
+     * 落盘确认之后的驱逐入口。
+     * 写盘失败的周期绝不移除内存副本——那是失败时
+     * 唯一的第二份数据。
+     */
+    public void evictOfflineCats(
+            long now,
+            java.util.List<Cat> candidates
+    ) {
+
         catCache.evictOffline(
-                System.currentTimeMillis(),
-                savedCats
+                now,
+                candidates
         );
     }
 

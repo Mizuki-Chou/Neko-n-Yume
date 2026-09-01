@@ -32,6 +32,7 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.world.WorldLoadEvent;
+import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -828,6 +829,21 @@ public class CatEntityListener implements Listener {
     ) {
 
         entityService.retryPendingWorldRestores(
+                event.getWorld()
+        );
+    }
+
+    /*
+     * 0.8.4 R24（审查复核）：
+     * 对称清理——世界卸载时作废该世界的待恢复记录，
+     * 防止动态世界场景下的无界累积。
+     */
+    @EventHandler
+    public void onWorldUnload(
+            WorldUnloadEvent event
+    ) {
+
+        entityService.forgetPendingWorldRestores(
                 event.getWorld()
         );
     }

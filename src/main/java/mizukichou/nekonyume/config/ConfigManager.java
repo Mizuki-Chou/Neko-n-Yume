@@ -22,18 +22,33 @@ import java.util.logging.Logger;
  */
 public final class ConfigManager {
 
-    private final JavaPlugin plugin;
+    private final java.util.function.Supplier<FileConfiguration> configSupplier;
 
     private final Logger logger;
 
     private volatile ConfigSnapshot snapshot;
 
+    /**
+     * 生产入口：从插件 config.yml 读取。
+     */
     public ConfigManager(
             JavaPlugin plugin
     ) {
 
-        this.plugin = plugin;
-        this.logger = plugin.getLogger();
+        this(plugin::getConfig, plugin.getLogger());
+    }
+
+    /**
+     * 0.8.4：测试入口——配置供应器 seam。
+     * 集成测试里供应内存 YamlConfiguration，无需真实插件实例。
+     */
+    public ConfigManager(
+            java.util.function.Supplier<FileConfiguration> configSupplier,
+            Logger logger
+    ) {
+
+        this.configSupplier = configSupplier;
+        this.logger = logger;
 
         reload();
     }
@@ -44,12 +59,9 @@ public final class ConfigManager {
      */
     public void reload() {
 
-        FileConfiguration config =
-                plugin.getConfig();
-
         snapshot =
                 ConfigLoader.load(
-                        config,
+                        configSupplier.get(),
                         logger
                 );
     }

@@ -12,7 +12,6 @@ import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Particle;
-import org.bukkit.Sound;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Entity;
@@ -39,6 +38,7 @@ public class CatProgressionService {
     private final ConfigManager configManager;
     private final CatSkillManager skillManager;
     private final Lang lang;
+    private final CatEntityRuntime runtime;
 
     private final Random random =
             new Random();
@@ -48,7 +48,8 @@ public class CatProgressionService {
             CatCache cache,
             ConfigManager configManager,
             CatSkillManager skillManager,
-            Lang lang
+            Lang lang,
+            CatEntityRuntime runtime
     ) {
 
         this.store = store;
@@ -56,6 +57,7 @@ public class CatProgressionService {
         this.configManager = configManager;
         this.skillManager = skillManager;
         this.lang = lang;
+        this.runtime = runtime;
     }
 
     public void gainExperience(
@@ -160,22 +162,46 @@ public class CatProgressionService {
                 )
         );
 
-        player.playSound(
+        runtime.playSound(
+
+
                 player.getLocation(),
-                Sound.ENTITY_PLAYER_LEVELUP,
+
+
+                "levelup",
+
+
                 1.0f,
+
+
                 1.0f
+
+
         );
 
-        Bukkit.getPluginManager()
-                .callEvent(
-                        new CatLevelUpEvent(
-                                player,
-                                cat,
-                                fromLevel,
-                                cat.getLevel()
-                        )
-                );
+        runtime.callEvent(
+
+
+                new CatLevelUpEvent(
+
+
+
+                player,
+
+
+                cat,
+
+
+                fromLevel,
+
+
+                cat.getLevel()
+
+
+                )
+
+
+        );
 
         /*
          * 升级：同步实体最大生命（10 + 等级/4）。
@@ -231,11 +257,21 @@ public class CatProgressionService {
                 )
         );
 
-        player.playSound(
+        runtime.playSound(
+
+
                 player.getLocation(),
-                Sound.ENTITY_EXPERIENCE_ORB_PICKUP,
+
+
+                "exp-orb",
+
+
                 1.0f,
+
+
                 1.5f
+
+
         );
 
         if (gained <= 0) {
@@ -252,10 +288,18 @@ public class CatProgressionService {
                 )
         );
 
-        player.playSound(
+        runtime.playSound(
+
+
                 player.getLocation(),
-                Sound.ENTITY_PLAYER_LEVELUP,
+
+
+                "levelup",
+
+
                 1.0f,
+
+
                 1.2f
         );
 
@@ -264,7 +308,9 @@ public class CatProgressionService {
         if (entityUuid != null) {
 
             Entity entity =
-                    Bukkit.getEntity(entityUuid);
+                        runtime.getEntity(
+                                entityUuid
+                        );
 
             if (entity != null && entity.isValid()) {
 
@@ -281,15 +327,29 @@ public class CatProgressionService {
             }
         }
 
-        Bukkit.getPluginManager()
-                .callEvent(
-                        new CatMeowRankUpEvent(
-                                player,
-                                cat,
-                                fromRank,
-                                cat.getMeowRank()
-                        )
-                );
+        runtime.callEvent(
+
+
+                new CatMeowRankUpEvent(
+
+
+
+                player,
+
+
+                cat,
+
+
+                fromRank,
+
+
+                cat.getMeowRank()
+
+
+                )
+
+
+        );
 
         syncSkillSlots(player, cat);
     }
@@ -397,17 +457,22 @@ public class CatProgressionService {
             List<CatSkill> pool
     ) {
 
-        int totalWeight = 0;
+        /*
+         * 0.8.4 R22（社区反馈）：
+         * 权重累加用 long——当前规模不可能溢出，
+         * 属一次性填掉未来扩展坑。
+         */
+        long totalWeight = 0L;
 
         for (CatSkill skill : pool) {
             totalWeight += skill.getTier().getWeight();
         }
 
-        if (totalWeight <= 0) {
+        if (totalWeight <= 0L) {
             return null;
         }
 
-        int roll = random.nextInt(totalWeight);
+        long roll = random.nextLong(totalWeight);
 
         CatSkill chosen =
                 pool.get(pool.size() - 1);
@@ -416,7 +481,7 @@ public class CatProgressionService {
 
             roll -= skill.getTier().getWeight();
 
-            if (roll < 0) {
+            if (roll < 0L) {
 
                 chosen = skill;
                 break;
@@ -564,17 +629,35 @@ public class CatProgressionService {
 
         persistSkills(player.getUniqueId(), cat);
 
-        Bukkit.getPluginManager()
-                .callEvent(
-                        new CatSkillRollEvent(
-                                player,
-                                cat,
-                                slotIndex,
-                                oldSkill,
-                                newSkill,
-                                true
-                        )
-                );
+        runtime.callEvent(
+
+
+                new CatSkillRollEvent(
+
+
+
+                player,
+
+
+                cat,
+
+
+                slotIndex,
+
+
+                oldSkill,
+
+
+                newSkill,
+
+
+                true
+
+
+                )
+
+
+        );
 
         player.sendMessage(
                 lang.forPlayer(player).message(
@@ -646,7 +729,7 @@ public class CatProgressionService {
         }
 
         Entity entity =
-                Bukkit.getEntity(
+                runtime.getEntity(
                         entityUuid
                 );
 
@@ -657,8 +740,8 @@ public class CatProgressionService {
         }
 
         AttributeInstance attribute =
-                living.getAttribute(
-                        Attribute.MAX_HEALTH
+                runtime.maxHealthAttribute(
+                        living
                 );
 
         if (attribute == null) {

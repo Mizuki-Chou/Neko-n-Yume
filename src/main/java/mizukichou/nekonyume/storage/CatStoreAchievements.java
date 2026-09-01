@@ -24,6 +24,170 @@ final class CatStoreAchievements {
         this.store = store;
     }
 
+    /*
+     * 0.8.4 R17（社区上报）：
+     * 逐币种奖励已发放标记。
+     * 与经验/喵力数据同文档同快照，异常/崩溃下
+     * 发放重试幂等：已发放币种绝不重复。
+     */
+
+    boolean isRewardXpApplied(UUID playerUUID, String id) {
+
+        if (playerUUID == null ||
+                id == null ||
+                id.isBlank() ||
+                !store.hasCat(playerUUID)) {
+
+            return false;
+        }
+
+        return store.getStringList(
+                playerUUID,
+                AbstractCatStore.FIELD_ACHIEVEMENTS_REWARD_XP_APPLIED
+        ).contains(id);
+    }
+
+    void addRewardXpApplied(
+            UUID playerUUID,
+            String id
+    ) {
+
+        if (playerUUID == null ||
+                id == null ||
+                id.isBlank() ||
+                !store.hasCat(playerUUID)) {
+
+            return;
+        }
+
+        List<String> applied =
+                store.getStringList(
+                        playerUUID,
+                        AbstractCatStore.FIELD_ACHIEVEMENTS_REWARD_XP_APPLIED
+                );
+
+        if (applied.contains(id)) {
+            return;
+        }
+
+        applied.add(id);
+
+        store.setRaw(
+                playerUUID,
+                AbstractCatStore.FIELD_ACHIEVEMENTS_REWARD_XP_APPLIED,
+                applied
+        );
+    }
+
+    void removeRewardXpApplied(
+            UUID playerUUID,
+            String id
+    ) {
+
+        if (playerUUID == null ||
+                id == null ||
+                id.isBlank() ||
+                !store.hasCat(playerUUID)) {
+
+            return;
+        }
+
+        List<String> applied =
+                store.getStringList(
+                        playerUUID,
+                        AbstractCatStore.FIELD_ACHIEVEMENTS_REWARD_XP_APPLIED
+                );
+
+        if (applied.remove(id)) {
+
+            store.setRaw(
+                    playerUUID,
+                    AbstractCatStore.FIELD_ACHIEVEMENTS_REWARD_XP_APPLIED,
+                    applied
+            );
+        }
+    }
+
+    boolean isRewardMeowApplied(
+            UUID playerUUID,
+            String id
+    ) {
+
+        if (playerUUID == null ||
+                id == null ||
+                id.isBlank() ||
+                !store.hasCat(playerUUID)) {
+
+            return false;
+        }
+
+        return store.getStringList(
+                playerUUID,
+                AbstractCatStore.FIELD_ACHIEVEMENTS_REWARD_MEOW_APPLIED
+        ).contains(id);
+    }
+
+    void addRewardMeowApplied(
+            UUID playerUUID,
+            String id
+    ) {
+
+        if (playerUUID == null ||
+                id == null ||
+                id.isBlank() ||
+                !store.hasCat(playerUUID)) {
+
+            return;
+        }
+
+        List<String> applied =
+                store.getStringList(
+                        playerUUID,
+                        AbstractCatStore.FIELD_ACHIEVEMENTS_REWARD_MEOW_APPLIED
+                );
+
+        if (applied.contains(id)) {
+            return;
+        }
+
+        applied.add(id);
+
+        store.setRaw(
+                playerUUID,
+                AbstractCatStore.FIELD_ACHIEVEMENTS_REWARD_MEOW_APPLIED,
+                applied
+        );
+    }
+
+    void removeRewardMeowApplied(
+            UUID playerUUID,
+            String id
+    ) {
+
+        if (playerUUID == null ||
+                id == null ||
+                id.isBlank() ||
+                !store.hasCat(playerUUID)) {
+
+            return;
+        }
+
+        List<String> applied =
+                store.getStringList(
+                        playerUUID,
+                        AbstractCatStore.FIELD_ACHIEVEMENTS_REWARD_MEOW_APPLIED
+                );
+
+        if (applied.remove(id)) {
+
+            store.setRaw(
+                    playerUUID,
+                    AbstractCatStore.FIELD_ACHIEVEMENTS_REWARD_MEOW_APPLIED,
+                    applied
+            );
+        }
+    }
+
     List<String> getAchievementsUnlockedList(UUID playerUUID) {
 
         return store.getStringList(

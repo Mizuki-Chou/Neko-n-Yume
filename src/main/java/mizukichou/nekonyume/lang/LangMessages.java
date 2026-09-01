@@ -7,7 +7,6 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.io.IOException;
@@ -55,7 +54,8 @@ public final class LangMessages {
      */
 
     static LangMessages load(
-            JavaPlugin plugin,
+            ClassLoader loader,
+            java.nio.file.Path dataFolder,
             String code,
             Logger logger
     ) {
@@ -68,7 +68,7 @@ public final class LangMessages {
 
         YamlConfiguration builtin =
                 loadBuiltinBase(
-                        plugin,
+                        loader,
                         code,
                         logger
                 );
@@ -81,13 +81,14 @@ public final class LangMessages {
          * 只写一个键也不会丢失其余内建文案。
          */
         File override =
-                new File(
-                        plugin.getDataFolder(),
-                        "lang"
-                                + File.separator
-                                + code
-                                + ".yml"
-                );
+                dataFolder
+                        .resolve(
+                                "lang"
+                                        + File.separator
+                                        + code
+                                        + ".yml"
+                        )
+                        .toFile();
 
         if (override.exists() &&
                 override.length() > 0) {
@@ -193,13 +194,13 @@ public final class LangMessages {
      * 返回 null 表示 en_us 自身也缺失/损坏。
      */
     private static YamlConfiguration loadBuiltinBase(
-            JavaPlugin plugin,
+            ClassLoader loader,
             String code,
             Logger logger
     ) {
 
         InputStream stream =
-                plugin.getResource(
+                loader.getResourceAsStream(
                         "lang/" + code + ".yml"
                 );
 
@@ -213,7 +214,7 @@ public final class LangMessages {
             );
 
             stream =
-                    plugin.getResource(
+                    loader.getResourceAsStream(
                             "lang/en_us.yml"
                     );
         }
@@ -250,7 +251,7 @@ public final class LangMessages {
                 if (!"en_us".equals(code)) {
 
                     return loadBuiltinBase(
-                            plugin,
+                            loader,
                             "en_us",
                             logger
                     );

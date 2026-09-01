@@ -359,7 +359,10 @@ public class Cat {
         this.level =
                 Math.max(
                         1,
-                        level
+                        Math.min(
+                                GrowthMath.MAX_LEVEL,
+                                level
+                        )
                 );
 
         this.experience = 0;
@@ -518,10 +521,18 @@ public class Cat {
             int level
     ) {
 
+        /*
+         * 0.8.4 R21（社区上报 L-NEW-09/10）：
+         * 等级与 GrowthMath.MAX_LEVEL 统一为一个不变量，
+         * 损坏数据无法再把等级抬到 10000 以上或溢出为负。
+         */
         this.level =
                 Math.max(
                         1,
-                        level
+                        Math.min(
+                                GrowthMath.MAX_LEVEL,
+                                level
+                        )
                 );
     }
 
@@ -529,8 +540,23 @@ public class Cat {
             int amount
     ) {
 
+        /*
+         * 0.8.4 R21（社区上报 L-NEW-09）：
+         * long 数学 + 饱和钳制——this.level + amount 的
+         * int 溢出不再能把等级打回 1。
+         */
+        long next =
+                (long) this.level
+                        + amount;
+
         setLevel(
-                this.level + amount
+                (int) Math.min(
+                        GrowthMath.MAX_LEVEL,
+                        Math.max(
+                                1L,
+                                next
+                        )
+                )
         );
     }
 
@@ -850,8 +876,16 @@ public class Cat {
             int amount
     ) {
 
+        /*
+         * 0.8.4 R22（社区反馈）：
+         * long 中间计算——极端数值下 int 加减溢出后
+         * 会被钳制误归零（"加值反而清零"）。
+         */
+        long next =
+                (long) this.hunger + amount;
+
         setHunger(
-                this.hunger + amount
+                (int) next
         );
     }
 
@@ -859,8 +893,16 @@ public class Cat {
             int amount
     ) {
 
+        /*
+         * 0.8.4 R22（社区反馈）：
+         * long 中间计算——极端数值下 int 加减溢出后
+         * 会被钳制误归零（"加值反而清零"）。
+         */
+        long next =
+                (long) this.hunger - amount;
+
         setHunger(
-                this.hunger - amount
+                (int) next
         );
     }
 
@@ -886,8 +928,16 @@ public class Cat {
             int amount
     ) {
 
+        /*
+         * 0.8.4 R22（社区反馈）：
+         * long 中间计算——极端数值下 int 加减溢出后
+         * 会被钳制误归零（"加值反而清零"）。
+         */
+        long next =
+                (long) this.affection + amount;
+
         setAffection(
-                this.affection + amount
+                (int) next
         );
     }
 
@@ -895,8 +945,16 @@ public class Cat {
             int amount
     ) {
 
+        /*
+         * 0.8.4 R22（社区反馈）：
+         * long 中间计算——极端数值下 int 加减溢出后
+         * 会被钳制误归零（"加值反而清零"）。
+         */
+        long next =
+                (long) this.affection - amount;
+
         setAffection(
-                this.affection - amount
+                (int) next
         );
     }
 
@@ -922,8 +980,16 @@ public class Cat {
             int amount
     ) {
 
+        /*
+         * 0.8.4 R22（社区反馈）：
+         * long 中间计算——极端数值下 int 加减溢出后
+         * 会被钳制误归零（"加值反而清零"）。
+         */
+        long next =
+                (long) this.health + amount;
+
         setHealth(
-                this.health + amount
+                (int) next
         );
     }
 
@@ -931,8 +997,16 @@ public class Cat {
             int amount
     ) {
 
+        /*
+         * 0.8.4 R22（社区反馈）：
+         * long 中间计算——极端数值下 int 加减溢出后
+         * 会被钳制误归零（"加值反而清零"）。
+         */
+        long next =
+                (long) this.health - amount;
+
         setHealth(
-                this.health - amount
+                (int) next
         );
     }
 

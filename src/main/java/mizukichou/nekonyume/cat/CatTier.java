@@ -70,6 +70,16 @@ public enum CatTier {
     private final String displayName;
     private final int baseSlots;
     private final int[] slotsPerCheckpoint;
+
+    /*
+     * 0.8.4 R18（社区上报 L-NEW-01）：
+     * Lombok 生成的 getter 会暴露内部数组——显式返回克隆，
+     * 防止外部修改枚举全局状态。
+     */
+    public int[] getSlotsPerCheckpoint() {
+
+        return slotsPerCheckpoint.clone();
+    }
     private final int weight;
 
     CatTier(

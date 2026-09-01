@@ -87,6 +87,8 @@ public abstract class AbstractCatStore implements CatStore {
     protected static final String FIELD_ACHIEVEMENTS_PENDING = "achievements-pending";
 
     protected static final String FIELD_ACHIEVEMENTS_REWARDED = "achievements-rewarded";
+    protected static final String FIELD_ACHIEVEMENTS_REWARD_XP_APPLIED = "achievements-reward-xp-applied";
+    protected static final String FIELD_ACHIEVEMENTS_REWARD_MEOW_APPLIED = "achievements-reward-meow-applied";
 
     /*
      * 默认值。
@@ -274,9 +276,27 @@ public abstract class AbstractCatStore implements CatStore {
          */
         if (value instanceof java.util.Date date) {
 
-            return new java.text.SimpleDateFormat(
-                    "yyyy-MM-dd"
-            ).format(date);
+            /*
+             * 0.8.4 R22（社区反馈）：
+             * 业务日期是纯日期（无时区语义，写入时即
+             * "yyyy-MM-dd"），格式化必须固定 UTC——用 JVM
+             * 默认时区在 UTC 以西的环境会把午夜 UTC 的
+             * Date 偏移到前一天，破坏每日重置的边界。
+             */
+            java.text.SimpleDateFormat dateFormat =
+                    new java.text.SimpleDateFormat(
+                            "yyyy-MM-dd"
+                    );
+
+            dateFormat.setTimeZone(
+                    java.util.TimeZone.getTimeZone(
+                            "UTC"
+                    )
+            );
+
+            return dateFormat.format(
+                    date
+            );
         }
 
         return def;
@@ -933,6 +953,43 @@ public abstract class AbstractCatStore implements CatStore {
     @Override
     public void addAchievementRewarded(UUID playerUUID, String id) {
         achievements.addRewarded(playerUUID, id);
+    }
+
+    /*
+     * 0.8.4 R17（社区上报）：
+     * 逐币种“已发放”标记——与经验/喵力同文档同快照落盘，
+     * 奖励发放具备幂等性：异常/崩溃后补发绝不重复，
+     * 也不永久丢失。
+     */
+
+    @Override
+    public boolean isAchievementRewardXpApplied(UUID playerUUID, String id) {
+        return achievements.isRewardXpApplied(playerUUID, id);
+    }
+
+    @Override
+    public void addAchievementRewardXpApplied(UUID playerUUID, String id) {
+        achievements.addRewardXpApplied(playerUUID, id);
+    }
+
+    @Override
+    public void removeAchievementRewardXpApplied(UUID playerUUID, String id) {
+        achievements.removeRewardXpApplied(playerUUID, id);
+    }
+
+    @Override
+    public boolean isAchievementRewardMeowApplied(UUID playerUUID, String id) {
+        return achievements.isRewardMeowApplied(playerUUID, id);
+    }
+
+    @Override
+    public void addAchievementRewardMeowApplied(UUID playerUUID, String id) {
+        achievements.addRewardMeowApplied(playerUUID, id);
+    }
+
+    @Override
+    public void removeAchievementRewardMeowApplied(UUID playerUUID, String id) {
+        achievements.removeRewardMeowApplied(playerUUID, id);
     }
 
     @Override

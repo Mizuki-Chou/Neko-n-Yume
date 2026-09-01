@@ -626,4 +626,61 @@ class CatGrowthTest {
         return rank;
     }
 
+
+    @Test
+    void setLevelClampsToDomainContract() {
+
+        /*
+         * 0.8.4 R21（社区上报 L-NEW-09/10）：
+         * 等级必须被钳制到 [1, MAX_LEVEL]——
+         * 损坏数据既不能抬到 10000 以上，也不能溢出为负。
+         */
+        Cat cat = newCat();
+
+        cat.setLevel(
+                GrowthMath.MAX_LEVEL
+                        + 500_000
+        );
+
+        assertEquals(
+                GrowthMath.MAX_LEVEL,
+                cat.getLevel()
+        );
+    }
+
+    @Test
+    void addLevelSaturatesInsteadOfWrapping() {
+
+        Cat cat = newCat();
+
+        cat.setLevel(
+                Integer.MAX_VALUE
+                        - 10
+        );
+
+        cat.addLevel(
+                100
+        );
+
+        assertEquals(
+                GrowthMath.MAX_LEVEL,
+                cat.getLevel()
+        );
+
+        Cat low = newCat();
+
+        low.setLevel(
+                2
+        );
+
+        low.addLevel(
+                -100
+        );
+
+        assertEquals(
+                1,
+                low.getLevel()
+        );
+    }
+
 }

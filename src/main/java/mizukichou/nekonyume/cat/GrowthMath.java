@@ -28,8 +28,12 @@ public final class GrowthMath {
     /*
      * 等级 / 喵阶的安全上限。
      * 与旧 Cat 实现一致，防止异常数据死循环。
+     *
+     * 0.8.4 R21（社区上报 L-NEW-10）：
+     * 公开为统一 domain contract，Cat.setLevel/addLevel
+     * 与等级计算共同遵守同一上限。
      */
-    private static final int MAX_LEVEL = 10000;
+    public static final int MAX_LEVEL = 10000;
 
     private static final int MAX_RANK = 10000;
 

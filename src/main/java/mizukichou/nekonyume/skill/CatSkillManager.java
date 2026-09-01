@@ -4,6 +4,7 @@ import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CareMath;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEquipItem;
+import mizukichou.nekonyume.cat.CatEntityRuntime;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.EquipBonusAttribute;
 import mizukichou.nekonyume.config.ConfigManager;
@@ -14,18 +15,16 @@ import mizukichou.nekonyume.lang.LangMessages;
 import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.Bukkit;
 import org.bukkit.Particle;
-import org.bukkit.Sound;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
+import java.util.logging.Level;
 
 /**
  * 技能管理。
@@ -54,6 +53,7 @@ public class CatSkillManager {
     private final ConfigManager configManager;
     private final CatBattleState battleState;
     private final Lang lang;
+    private final CatEntityRuntime runtime;
 
     /*
      * 冷却：
@@ -71,7 +71,8 @@ public class CatSkillManager {
             CatCache cache,
             ConfigManager configManager,
             CatBattleState battleState,
-            Lang lang
+            Lang lang,
+            CatEntityRuntime runtime
     ) {
 
         this.logger = logger;
@@ -80,6 +81,7 @@ public class CatSkillManager {
         this.configManager = configManager;
         this.battleState = battleState;
         this.lang = lang;
+        this.runtime = runtime;
 
         loadRefreshCostProvider();
     }
@@ -145,8 +147,16 @@ public class CatSkillManager {
 
         if (dreamSlot) {
 
-            return base
-                    * skills.getDreamSlotCostMultiplier();
+            /*
+             * 0.8.4 R21（社区上报 L-NEW-08）：
+             * long 数学 + 饱和钳制——极端配置下 int 乘法
+             * 溢出为负，会令刷新功能整体失效。
+             */
+            return (int) Math.min(
+                    Integer.MAX_VALUE,
+                    (long) base
+                            * skills.getDreamSlotCostMultiplier()
+            );
         }
 
         return base;
@@ -476,14 +486,11 @@ public class CatSkillManager {
             return false;
         }
 
-        applyEffect(
-                player,
-                cat,
-                skill
-        );
-
         /*
-         * 记录冷却。
+         * 0.8.4 R21（社区上报 M-NEW-09）：
+         * 先记冷却再放效果——多副作用技能（如 TIME_ECHO 五连）
+         * 部分成功后异常时冷却仍然成立，杜绝
+         * "部分效果已生效 + 无冷却 → 反复重放"。
          */
         cooldowns
                 .computeIfAbsent(
@@ -497,28 +504,52 @@ public class CatSkillManager {
                         System.currentTimeMillis()
                 );
 
+        try {
+
+            applyEffect(
+                    player,
+                    cat,
+                    skill
+            );
+
         /*
          * 反馈。
          */
-        player.playSound(
+        runtime.playSound(
+
                 player.getLocation(),
-                Sound.ENTITY_CAT_PURR,
+
+                "purr",
+
                 1.0f,
+
                 1.2f
         );
 
         spawnSkillParticles(
                 cat
+
         );
 
-        Bukkit.getPluginManager()
-                .callEvent(
-                        new CatSkillActivatedEvent(
-                                player,
-                                cat,
-                                skill
-                        )
-                );
+            runtime.callEvent(
+                    new CatSkillActivatedEvent(
+                            player,
+                            cat,
+                            skill
+                    )
+            );
+
+        } catch (Exception exception) {
+
+            logger.log(
+                    Level.SEVERE,
+                    "Failed to apply skill "
+                            + skill
+                            + " for "
+                            + player.getName(),
+                    exception
+            );
+        }
 
         return true;
     }
@@ -615,13 +646,12 @@ public class CatSkillManager {
                                 20
                         );
 
-                player.addPotionEffect(
-                        new PotionEffect(
-                                PotionEffectType.SPEED,
+                                        runtime.applyPotion(
+                                player,
+                                "speed",
                                 duration * 20,
                                 1
-                        )
-                );
+                        );
 
                 player.sendMessage(
                         lang.forPlayer(player).message(
@@ -639,13 +669,12 @@ public class CatSkillManager {
                                 30
                         );
 
-                player.addPotionEffect(
-                        new PotionEffect(
-                                PotionEffectType.STRENGTH,
+                                        runtime.applyPotion(
+                                player,
+                                "strength",
                                 duration * 20,
                                 1
-                        )
-                );
+                        );
 
                 player.sendMessage(
                         lang.forPlayer(player).message(
@@ -663,13 +692,12 @@ public class CatSkillManager {
                                 10
                         );
 
-                player.addPotionEffect(
-                        new PotionEffect(
-                                PotionEffectType.RESISTANCE,
+                                        runtime.applyPotion(
+                                player,
+                                "resistance",
                                 duration * 20,
                                 1
-                        )
-                );
+                        );
 
                 player.sendMessage(
                         lang.forPlayer(player).message(
@@ -717,13 +745,12 @@ public class CatSkillManager {
                     if (entity instanceof Monster monster &&
                             !monster.isDead()) {
 
-                        monster.addPotionEffect(
-                                new PotionEffect(
-                                        PotionEffectType.SLOWNESS,
+                                                        runtime.applyPotion(
+                                        monster,
+                                        "slowness",
                                         slowSeconds * 20,
                                         2
-                                )
-                        );
+                                );
                     }
                 }
 
@@ -800,29 +827,26 @@ public class CatSkillManager {
                                 8
                         );
 
-                player.addPotionEffect(
-                        new PotionEffect(
-                                PotionEffectType.RESISTANCE,
+                                        runtime.applyPotion(
+                                player,
+                                "resistance",
                                 duration * 20,
                                 2
-                        )
-                );
+                        );
 
-                player.addPotionEffect(
-                        new PotionEffect(
-                                PotionEffectType.REGENERATION,
+                                        runtime.applyPotion(
+                                player,
+                                "regeneration",
                                 duration * 20,
                                 1
-                        )
-                );
+                        );
 
-                player.addPotionEffect(
-                        new PotionEffect(
-                                PotionEffectType.STRENGTH,
+                                        runtime.applyPotion(
+                                player,
+                                "strength",
                                 duration * 20,
                                 1
-                        )
-                );
+                        );
 
                 /*
                  * 猫也获得增益。
@@ -833,27 +857,25 @@ public class CatSkillManager {
                 if (entityUuid != null) {
 
                     Entity entity =
-                            Bukkit.getEntity(
+                            runtime.getEntity(
                                     entityUuid
                             );
 
                     if (entity instanceof org.bukkit.entity.Cat catEntity) {
 
-                        catEntity.addPotionEffect(
-                                new PotionEffect(
-                                        PotionEffectType.RESISTANCE,
+                                                        runtime.applyPotion(
+                                        catEntity,
+                                        "resistance",
                                         duration * 20,
                                         1
-                                )
-                        );
+                                );
 
-                        catEntity.addPotionEffect(
-                                new PotionEffect(
-                                        PotionEffectType.REGENERATION,
+                                                        runtime.applyPotion(
+                                        catEntity,
+                                        "regeneration",
                                         duration * 20,
                                         1
-                                )
-                        );
+                                );
                     }
                 }
 
@@ -908,7 +930,7 @@ public class CatSkillManager {
         }
 
         Entity entity =
-                Bukkit.getEntity(
+                runtime.getEntity(
                         entityUuid
                 );
 

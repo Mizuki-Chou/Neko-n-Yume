@@ -164,6 +164,10 @@ public class CatEntityService {
         restorer.retryPendingWorldRestores(world);
     }
 
+    public void forgetPendingWorldRestores(World world) {
+        restorer.forgetPendingWorldRestores(world);
+    }
+
     public void clearPendingRestore(UUID playerUUID) {
         restorer.clearPendingRestore(playerUUID);
     }

@@ -182,7 +182,8 @@ public class CatFoodListener implements Listener {
             if (foodManager.equipCat(
                     player,
                     cat,
-                    equip
+                    equip,
+                    item
             )) {
 
                 player.getWorld()

@@ -279,6 +279,23 @@ public interface CatStore {
     void addAchievementRewarded(UUID playerUUID, String id);
 
     /*
+     * 0.8.4 R17（社区上报）：
+     * 逐币种奖励已发放标记（幂等发放协议）。
+     */
+
+    boolean isAchievementRewardXpApplied(UUID playerUUID, String id);
+
+    void addAchievementRewardXpApplied(UUID playerUUID, String id);
+
+    void removeAchievementRewardXpApplied(UUID playerUUID, String id);
+
+    boolean isAchievementRewardMeowApplied(UUID playerUUID, String id);
+
+    void addAchievementRewardMeowApplied(UUID playerUUID, String id);
+
+    void removeAchievementRewardMeowApplied(UUID playerUUID, String id);
+
+    /*
      * ---------- 集合 ----------
      */
 
@@ -335,9 +352,10 @@ public interface CatStore {
      * 默认实现为空操作（内存实现无磁盘概念）；
      * 磁盘实现重写为真实等待。
      */
-    default void awaitPendingSave(long timeoutMillis) {
+    default boolean awaitPendingSave(long timeoutMillis) {
 
         // 内存实现：无磁盘，无需等待。
+        return true;
     }
 
     /**

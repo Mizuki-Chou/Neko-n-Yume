@@ -518,6 +518,38 @@ class CareMathTest {
     }
 
     @Test
+    void extremeExperienceSaturatesInsteadOfWrapping() {
+
+        /*
+         * 0.8.4 R21（社区上报 M-NEW-06）：
+         * 20 亿经验 × 3.0 倍率若按 int 计算会溢出为负，
+         * 再被保底 1 兜成 1 XP——必须饱和到上限。
+         */
+        assertEquals(
+                Integer.MAX_VALUE,
+                CareMath.applyExperience(
+                        2_000_000_000,
+                        3.0
+                )
+        );
+    }
+
+    @Test
+    void extremeDamageSaturatesInsteadOfWrapping() {
+
+        /*
+         * 0.8.4 R21（社区上报 M-NEW-07）。
+         */
+        assertEquals(
+                Integer.MAX_VALUE,
+                CareMath.applyDamage(
+                        Integer.MAX_VALUE,
+                        3.0
+                )
+        );
+    }
+
+    @Test
     void cooldownReductionInvalidFactorFallsBack() {
 
         assertEquals(

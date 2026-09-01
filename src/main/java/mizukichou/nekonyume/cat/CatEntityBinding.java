@@ -46,6 +46,11 @@ public class CatEntityBinding {
      */
     private final CatEntityIndex entityIndex;
 
+    /*
+     * 0.8.4：实体运行时 seam（生产委托 Bukkit，测试用 fake）。
+     */
+    private final CatEntityRuntime runtime;
+
     public CatEntityBinding(
             CatStore store,
             CatCache cache,
@@ -55,7 +60,8 @@ public class CatEntityBinding {
             Lang lang,
             NamespacedKey catKey,
             NamespacedKey ownerKey,
-            CatEntityIndex entityIndex
+            CatEntityIndex entityIndex,
+            CatEntityRuntime runtime
     ) {
 
         this.store = store;
@@ -67,6 +73,7 @@ public class CatEntityBinding {
         this.catKey = catKey;
         this.ownerKey = ownerKey;
         this.entityIndex = entityIndex;
+        this.runtime = runtime;
     }
 
     /*
@@ -106,7 +113,7 @@ public class CatEntityBinding {
         }
 
         Entity entity =
-                Bukkit.getEntity(entityUUID);
+                runtime.getEntity(entityUUID);
 
         if (!(entity instanceof org.bukkit.entity.Cat bukkitCat) ||
                 bukkitCat.isDead() ||
@@ -116,9 +123,8 @@ public class CatEntityBinding {
         }
 
         NamespacedKey key =
-                variantService
-                        .getRegistry()
-                        .getKey(
+                runtime
+                        .typeKey(
                                 bukkitCat.getCatType()
                         );
 
@@ -301,8 +307,8 @@ public class CatEntityBinding {
                     logical.entityMaxHealth();
 
             org.bukkit.attribute.AttributeInstance attribute =
-                    cat.getAttribute(
-                            Attribute.MAX_HEALTH
+                    runtime.maxHealthAttribute(
+                            cat
                     );
 
             if (attribute != null &&
@@ -434,7 +440,7 @@ public class CatEntityBinding {
         }
 
         Entity entity =
-                Bukkit.getEntity(entityUUID);
+                runtime.getEntity(entityUUID);
 
         if (!(entity instanceof org.bukkit.entity.Cat cat)) {
             return;
@@ -500,7 +506,7 @@ public class CatEntityBinding {
         }
 
         Entity entity =
-                Bukkit.getEntity(entityUuid);
+                runtime.getEntity(entityUuid);
 
         if (!(entity instanceof org.bukkit.entity.Cat cat) ||
                 cat.isDead() ||

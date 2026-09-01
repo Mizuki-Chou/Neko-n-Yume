@@ -1022,9 +1022,14 @@ public class CatBattleTask implements Runnable {
         int perRank =
                 battleConfig.getPerRankDamage();
 
-        int damage =
-                base
-                        + perRank
+        /*
+         * 0.8.4 R21（社区上报 M-NEW-07）：
+         * 伤害累加全程 long——perRank × meowRank 等 int 乘法
+         * 在极端配置/数据下溢出为负，最后统一饱和钳制。
+         */
+        long damage =
+                (long) base
+                        + (long) perRank
                         * logicalCat.getMeowRank();
 
         if (logicalCat.hasSkill(
@@ -1096,7 +1101,7 @@ public class CatBattleTask implements Runnable {
                     world.getTime() <= 23000) {
 
                 damage =
-                        (int) (damage * 1.2);
+                        (long) (damage * 1.2);
             }
         }
 
@@ -1110,7 +1115,10 @@ public class CatBattleTask implements Runnable {
 
         damage =
                 CareMath.applyDamage(
-                        damage,
+                        (int) Math.min(
+                                Integer.MAX_VALUE,
+                                damage
+                        ),
                         CareMath.battleDamageMultiplier(
                                 logicalCat.getMood(),
                                 CareMath.bondFor(
@@ -1121,8 +1129,8 @@ public class CatBattleTask implements Runnable {
                         )
                 );
 
-        return Math.max(
-                1,
+        return (int) Math.max(
+                1L,
                 damage
         );
     }

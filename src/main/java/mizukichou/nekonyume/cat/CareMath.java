@@ -209,13 +209,24 @@ public final class CareMath {
             return 0;
         }
 
-        return Math.max(
-                1,
-                (int) Math.round(
+        /*
+         * 0.8.4 R21（社区上报 M-NEW-06）：
+         * long 数学 + 饱和钳制——int 计算在极端经验/倍率下
+         * 溢出为负，Math.max(1,负值) 会把巨额经验错误地变成 1。
+         */
+        long scaled =
+                Math.round(
                         amount
                                 * clampMultiplier(
                                 multiplier
                         )
+                );
+
+        return (int) Math.min(
+                Integer.MAX_VALUE,
+                Math.max(
+                        1L,
+                        scaled
                 )
         );
     }
@@ -239,10 +250,20 @@ public final class CareMath {
             return 0;
         }
 
-        return Math.max(
-                1,
-                (int) Math.round(
+        /*
+         * 0.8.4 R21（社区上报 M-NEW-07）：
+         * long 数学 + 饱和钳制（同 applyExperience）。
+         */
+        long scaled =
+                Math.round(
                         damage * multiplier
+                );
+
+        return (int) Math.min(
+                Integer.MAX_VALUE,
+                Math.max(
+                        1L,
+                        scaled
                 )
         );
     }

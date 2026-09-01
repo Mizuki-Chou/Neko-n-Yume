@@ -5,6 +5,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -1754,7 +1755,458 @@ class YamlCatStoreLifecycleTest {
         reopened.shutdownAndAwait();
     }
 
-    private static class FakeCatStoreEnv implements CatStoreEnv {
+    /*
+     * ============================================================
+     * 0.8.4 R18（社区上报 H-01 / H-NEW-03）：墓碑协议
+     * ============================================================
+     */
+
+    @Test
+    void tombstoneSkipsAndCleansResurrectedShard() throws IOException {
+
+        /*
+         * 模拟"删除时墓碑已落盘、物理删除失败"的现场：
+         * deletions.yml 记录玩家 + 分片仍在磁盘。
+         * 启动必须跳过该分片、重试清理并清除墓碑。
+         */
+        UUID dead =
+                UUID.randomUUID();
+
+        YamlCatStore first =
+                newStore();
+
+        first.createCat(
+                dead
+        );
+
+        first.saveNow();
+
+        first.awaitPendingSave();
+
+        first.shutdownAndAwait();
+
+        Files.writeString(
+                tempDir.resolve(
+                        "deletions.yml"
+                ),
+                "deleted:\n"
+                        + " - " + dead + "\n",
+                StandardCharsets.UTF_8
+        );
+
+        Path shard =
+                tempDir.resolve(
+                        "players/" + dead + ".yml"
+                );
+
+        assertTrue(
+                Files.exists(shard),
+                "前置：分片应存在"
+        );
+
+        YamlCatStore reopened =
+                newStore();
+
+        assertFalse(
+                reopened.hasCat(
+                        dead
+                ),
+                "墓碑中的玩家绝不复活"
+        );
+
+        assertFalse(
+                Files.exists(shard),
+                "启动必须重试清理墓碑分片"
+        );
+
+        String deletions =
+                Files.readString(
+                        tempDir.resolve(
+                                "deletions.yml"
+                        )
+                );
+
+        assertFalse(
+                deletions.contains(
+                        dead.toString()
+                ),
+                "清理成功后墓碑必须移除"
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+    @Test
+    void tombstoneDiscardsStaleTempFile() throws IOException {
+
+        /*
+         * 墓碑中的玩家 + 残留 .yml.tmp：
+         * tmp 是删除前的旧快照，启动时直接丢弃，绝不晋升复活。
+         */
+        UUID dead =
+                UUID.randomUUID();
+
+        Files.writeString(
+                tempDir.resolve(
+                        "deletions.yml"
+                ),
+                "deleted:\n"
+                        + " - " + dead + "\n",
+                StandardCharsets.UTF_8
+        );
+
+        Files.createDirectories(
+                tempDir.resolve(
+                        "players"
+                )
+        );
+
+        Files.writeString(
+                tempDir.resolve(
+                        "players/" + dead + ".yml.tmp"
+                ),
+                "name: StaleCat\n",
+                StandardCharsets.UTF_8
+        );
+
+        YamlCatStore reopened =
+                newStore();
+
+        assertFalse(
+                reopened.hasCat(
+                        dead
+                )
+        );
+
+        assertFalse(
+                Files.exists(
+                        tempDir.resolve(
+                                "players/" + dead + ".yml.tmp"
+                        )
+                ),
+                "墓碑玩家的 tmp 必须被丢弃"
+        );
+
+        assertFalse(
+                Files.exists(
+                        tempDir.resolve(
+                                "players/" + dead + ".yml"
+                        )
+                ),
+                "墓碑玩家的 tmp 绝不晋升为分片"
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+    @Test
+    void reclaimClearsTombstone() throws IOException {
+
+        /*
+         * 墓碑 + 重新领养：新生命绝不被旧的删除标记抹掉。
+         */
+        UUID player =
+                UUID.randomUUID();
+
+        Files.writeString(
+                tempDir.resolve(
+                        "deletions.yml"
+                ),
+                "deleted:\n"
+                        + " - " + player + "\n",
+                StandardCharsets.UTF_8
+        );
+
+        YamlCatStore first =
+                newStore();
+
+        first.createCat(
+                player
+        );
+
+        first.saveNow();
+
+        first.awaitPendingSave();
+
+        first.shutdownAndAwait();
+
+        YamlCatStore reopened =
+                newStore();
+
+        assertTrue(
+                reopened.hasCat(
+                        player
+                ),
+                "重新领养的猫必须存活"
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+    
+    @Test
+    void newerShardTempIsAdoptedOverExistingTarget() throws IOException {
+
+        /*
+         * 0.8.4 R21（社区上报 H-NEW-04）：
+         * 非原子替换崩溃现场：target 存在（旧版本）+
+         * tmp 是完整新快照——必须按版本采纳 tmp，绝不误删。
+         */
+        YamlCatStore first = newStore();
+
+        UUID player = UUID.randomUUID();
+
+        first.createCat(player);
+        first.saveNow();
+        first.awaitPendingSave();
+        first.shutdownAndAwait();
+
+        Files.writeString(
+                tempDir.resolve("players/" + player + ".yml"),
+                "save-snapshot: 0\nname: OldName\n",
+                StandardCharsets.UTF_8
+        );
+
+        Files.writeString(
+                tempDir.resolve("players/" + player + ".yml.tmp"),
+                "save-snapshot: 5\nname: NewName\n",
+                StandardCharsets.UTF_8
+        );
+
+        YamlCatStore reopened = newStore();
+
+        assertEquals(
+                "NewName",
+                reopened.getCatName(player),
+                "更新版本的 tmp 必须被采纳"
+        );
+
+        assertFalse(
+                Files.exists(
+                        tempDir.resolve(
+                                "players/" + player + ".yml.tmp"
+                        )
+                )
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+    @Test
+    void olderShardTempWithExistingTargetIsDeleted() throws IOException {
+
+        /*
+         * 0.8.4 R21：反向对照——tmp 不新于 target 时保守删除。
+         */
+        YamlCatStore first = newStore();
+
+        UUID player = UUID.randomUUID();
+
+        first.createCat(player);
+        first.saveNow();
+        first.awaitPendingSave();
+        first.shutdownAndAwait();
+
+        Files.writeString(
+                tempDir.resolve("players/" + player + ".yml"),
+                "save-snapshot: 5\nname: KeepMe\n",
+                StandardCharsets.UTF_8
+        );
+
+        Files.writeString(
+                tempDir.resolve("players/" + player + ".yml.tmp"),
+                "save-snapshot: 3\nname: StaleName\n",
+                StandardCharsets.UTF_8
+        );
+
+        YamlCatStore reopened = newStore();
+
+        assertEquals(
+                "KeepMe",
+                reopened.getCatName(player)
+        );
+
+        assertFalse(
+                Files.exists(
+                        tempDir.resolve(
+                                "players/" + player + ".yml.tmp"
+                        )
+                )
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+
+    @Test
+    void deletionsTmpIsRecoveredOnStartup() throws IOException {
+
+        /*
+         * 0.8.4 R23（社区上报 H-1）：
+         * deletions.yml.tmp（move 前崩溃的完整墓碑写入）
+         * 必须在启动时采纳，否则刚删除的玩家会复活。
+         */
+        YamlCatStore first = newStore();
+
+        UUID player = UUID.randomUUID();
+
+        first.createCat(player);
+        first.saveNow();
+        first.awaitPendingSave();
+        first.shutdownAndAwait();
+
+        // 旧 deletions.yml 没有 player；tmp 有（map 格式 + 版本 2）
+        Files.writeString(
+                tempDir.resolve("deletions.yml"),
+                "deleted:\n other: 1\n",
+                StandardCharsets.UTF_8
+        );
+
+        Files.writeString(
+                tempDir.resolve("deletions.yml.tmp"),
+                "deleted:\n " + player + ": 2\n",
+                StandardCharsets.UTF_8
+        );
+
+        YamlCatStore reopened = newStore();
+
+        assertFalse(
+                reopened.hasCat(player),
+                "墓碑 tmp 恢复后，已删除玩家不得复活"
+        );
+
+        assertFalse(
+                Files.exists(
+                        tempDir.resolve(
+                                "players/" + player + ".yml"
+                        )
+                )
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+    @Test
+    void corruptDeletionsFileFailsFast() throws IOException {
+
+        /*
+         * 0.8.4 R23（社区上报 H-1）：
+         * 删除日志不可信 → 拒绝启动（fail-closed），
+         * 绝不把已删除玩家重新加载。
+         */
+        YamlCatStore first = newStore();
+
+        first.createCat(
+                UUID.randomUUID()
+        );
+
+        first.saveNow();
+        first.awaitPendingSave();
+        first.shutdownAndAwait();
+
+        Files.writeString(
+                tempDir.resolve("deletions.yml"),
+                "deleted: [not-a-uuid\n",
+                StandardCharsets.UTF_8
+        );
+
+        assertThrows(
+                IllegalStateException.class,
+                this::newStore,
+                "deletions.yml 损坏必须拒绝启动"
+        );
+    }
+
+    @Test
+    void reclaimedShardWithNewerVersionSurvivesTombstone() throws IOException {
+
+        /*
+         * 0.8.4 R23（社区上报 H-2）：
+         * 墓碑版本 2 + 分片版本 7 = 删除后重新领养的新化身，
+         * 启动清理必须保留分片并清除墓碑。
+         */
+        YamlCatStore first = newStore();
+
+        UUID player = UUID.randomUUID();
+
+        first.createCat(player);
+        first.saveNow();
+        first.awaitPendingSave();
+        first.shutdownAndAwait();
+
+        Files.writeString(
+                tempDir.resolve("deletions.yml"),
+                "deleted:\n " + player + ": 2\n",
+                StandardCharsets.UTF_8
+        );
+
+        Files.writeString(
+                tempDir.resolve("players/" + player + ".yml"),
+                "save-snapshot: 7\nname: Reincarnated\n",
+                StandardCharsets.UTF_8
+        );
+
+        YamlCatStore reopened = newStore();
+
+        assertTrue(
+                reopened.hasCat(player),
+                "版本高于删除版本的新化身必须保留"
+        );
+
+        assertEquals(
+                "Reincarnated",
+                reopened.getCatName(player)
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+    @Test
+    void oldResidueShardIsDeletedWhenVersionNotNewer() throws IOException {
+
+        /*
+         * 0.8.4 R23：对照——分片版本 ≤ 删除版本 = 旧残留，
+         * 启动清理删除并保持删除语义。
+         */
+        YamlCatStore first = newStore();
+
+        UUID player = UUID.randomUUID();
+
+        first.createCat(player);
+        first.saveNow();
+        first.awaitPendingSave();
+        first.shutdownAndAwait();
+
+        Files.writeString(
+                tempDir.resolve("deletions.yml"),
+                "deleted:\n " + player + ": 9\n",
+                StandardCharsets.UTF_8
+        );
+
+        Files.writeString(
+                tempDir.resolve("players/" + player + ".yml"),
+                "save-snapshot: 5\nname: OldResidue\n",
+                StandardCharsets.UTF_8
+        );
+
+        YamlCatStore reopened = newStore();
+
+        assertFalse(
+                reopened.hasCat(player)
+        );
+
+        assertFalse(
+                Files.exists(
+                        tempDir.resolve(
+                                "players/" + player + ".yml"
+                        )
+                )
+        );
+
+        reopened.shutdownAndAwait();
+    }
+
+private static class FakeCatStoreEnv implements CatStoreEnv {
 
         private final Path dataFolder;
         private final Logger logger;

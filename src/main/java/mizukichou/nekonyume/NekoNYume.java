@@ -16,10 +16,12 @@ Sora 2026-今 - 不懂事的猫咪，只能笼养呜呜
 
 import mizukichou.nekonyume.gui.AchievementGuiManager;
 import mizukichou.nekonyume.achievement.AchievementService;
+import mizukichou.nekonyume.cat.BukkitCatEntityRuntime;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEntityBinding;
 import mizukichou.nekonyume.cat.CatEntityIndex;
 import mizukichou.nekonyume.cat.CatEntityRestorer;
+import mizukichou.nekonyume.cat.CatEntityRuntime;
 import mizukichou.nekonyume.cat.CatEntityService;
 import mizukichou.nekonyume.cat.CatFoodManager;
 import mizukichou.nekonyume.cat.CatManager;
@@ -125,6 +127,7 @@ public final class NekoNYume extends JavaPlugin {
     private CatCache catCache;
     private CatProgressionService catProgressionService;
     private CatEntityIndex catEntityIndex;
+    private CatEntityRuntime catEntityRuntime;
     private CatEntityBinding catEntityBinding;
     private CatEntityRestorer catEntityRestorer;
     private CatEntityService catEntityService;
@@ -367,9 +370,15 @@ public final class NekoNYume extends JavaPlugin {
         battleState =
                 new CatBattleState();
 
+        catEntityRuntime =
+                new BukkitCatEntityRuntime(
+                        this
+                );
+
         catVariantService =
                 new CatVariantService(
-                        catStore
+                        catStore,
+                        catEntityRuntime
                 );
 
         /*
@@ -395,7 +404,8 @@ public final class NekoNYume extends JavaPlugin {
                         catCache,
                         configManager,
                         battleState,
-                        lang
+                        lang,
+                        catEntityRuntime
                 );
 
         catProgressionService =
@@ -404,7 +414,8 @@ public final class NekoNYume extends JavaPlugin {
                         catCache,
                         configManager,
                         catSkillManager,
-                        lang
+                        lang,
+                        catEntityRuntime
                 );
 
         /*
@@ -423,12 +434,13 @@ public final class NekoNYume extends JavaPlugin {
                         lang,
                         catKey,
                         ownerKey,
-                        catEntityIndex
+                        catEntityIndex,
+                        catEntityRuntime
                 );
 
         catEntityRestorer =
                 new CatEntityRestorer(
-                        this,
+                        catEntityRuntime,
                         getLogger(),
                         catStore,
                         catCache,
@@ -464,7 +476,11 @@ public final class NekoNYume extends JavaPlugin {
 
         catFoodManager =
                 new CatFoodManager(
-                        this,
+                        catEntityRuntime,
+                        this.getName()
+                                .toLowerCase(
+                                        java.util.Locale.ROOT
+                                ),
                         catStore,
                         catCache,
                         configManager,
@@ -575,6 +591,7 @@ public final class NekoNYume extends JavaPlugin {
                         catProgressionService,
                         configManager,
                         lang,
+                        catEntityRuntime,
                         getLogger()
                 );
 
@@ -689,6 +706,7 @@ public final class NekoNYume extends JavaPlugin {
                         catStore,
                         catEntityService,
                         catSkillManager,
+                        battleState,
                         lang
                 ),
                 new AchievementListener(
@@ -935,11 +953,45 @@ public final class NekoNYume extends JavaPlugin {
 
                                     try {
 
-                                        catManager
-                                                .saveAllCats();
+                                        java.util.List<
+                                                mizukichou.nekonyume.cat.Cat
+                                        > savedCats =
+                                                catManager
+                                                        .saveAllCats();
 
                                         dataManager
                                                 .flush();
+
+                                        /*
+                                         * 0.8.4 R18/R23（社区上报 H-NEW-01/H-3）：
+                                         * 驱逐前必须拿到真实落盘确认。
+                                         * awaitPendingSave 返回本轮是否全部确认——
+                                         * 超时（磁盘卡死）绝不等于保存成功，
+                                         * 未确认落盘前绝不驱逐内存副本。
+                                         */
+                                        boolean saved =
+                                                dataManager
+                                                        .awaitPendingSave(
+                                                                10_000L
+                                                        );
+
+                                        if (saved) {
+
+                                            catManager
+                                                    .evictOfflineCats(
+                                                            System
+                                                                    .currentTimeMillis(),
+                                                            savedCats
+                                                    );
+
+                                        } else {
+
+                                            getLogger().warning(
+                                                    "Autosave flush not confirmed;"
+                                                            + " keeping offline cats"
+                                                            + " cached for retry."
+                                            );
+                                        }
 
                                     } catch (Exception exception) {
 

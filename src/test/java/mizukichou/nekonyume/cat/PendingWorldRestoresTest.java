@@ -99,6 +99,39 @@ class PendingWorldRestoresTest {
     }
 
     @Test
+    void forgetWorldDropsPendingEntries() {
+
+        /*
+         * 0.8.4 R24（审查复核）：
+         * 世界卸载 → 该世界的待恢复记录作废。
+         */
+        PendingWorldRestores queue =
+                new PendingWorldRestores();
+
+        UUID worldA = UUID.randomUUID();
+        UUID worldB = UUID.randomUUID();
+        UUID playerA = UUID.randomUUID();
+        UUID playerB = UUID.randomUUID();
+
+        queue.add(worldA, playerA);
+        queue.add(worldB, playerB);
+
+        queue.forgetWorld(worldA);
+
+        assertTrue(
+                queue.consumeForWorld(worldA)
+                        .isEmpty()
+        );
+
+        assertEquals(
+                Set.of(playerB),
+                queue.consumeForWorld(worldB)
+        );
+
+        assertTrue(queue.isEmpty());
+    }
+
+    @Test
     void unknownWorldReturnsEmpty() {
 
         PendingWorldRestores queue =

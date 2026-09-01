@@ -17,6 +17,7 @@ public class PlayerQuitListener implements Listener {
     private final CatStore store;
     private final CatEntityService entityService;
     private final CatSkillManager skillManager;
+    private final mizukichou.nekonyume.skill.CatBattleState battleState;
     private final Lang lang;
 
     public PlayerQuitListener(
@@ -24,6 +25,7 @@ public class PlayerQuitListener implements Listener {
             CatStore store,
             CatEntityService entityService,
             CatSkillManager skillManager,
+            mizukichou.nekonyume.skill.CatBattleState battleState,
             Lang lang
     ) {
 
@@ -31,6 +33,7 @@ public class PlayerQuitListener implements Listener {
         this.store = store;
         this.entityService = entityService;
         this.skillManager = skillManager;
+        this.battleState = battleState;
         this.lang = lang;
     }
 
@@ -44,75 +47,86 @@ public class PlayerQuitListener implements Listener {
                         .getUniqueId();
 
         /*
-         * 0.8.1 修复（R3，社区上报）：
-         * 退出前先从实体捕获最新位置/花色/世界，
-         * 否则刚移动就退出会回写 30 秒前的旧位置。
+         * 0.8.4 R18（社区上报 L-NEW-04 + M-NEW-02）：
+         * 退出清理整体 finally 化——保存环节任何一步抛异常，
+         * 运行时状态清理都必须全部执行；并顺带清理
+         * 协助目标（会话态，退出即失效）。
          */
-        entityService.captureEntityState(
-                cache.getCat(
-                        playerUUID
-                )
-        );
+        try {
 
-        /*
-         * 保存这个玩家的运行时猫咪。
-         */
-        cache.saveCat(
-                cache.getCat(
-                        playerUUID
-                )
-        );
+            /*
+             * 0.8.1 修复（R3，社区上报）：
+             * 退出前先从实体捕获最新位置/花色/世界，
+             * 否则刚移动就退出会回写 30 秒前的旧位置。
+             */
+            entityService.captureEntityState(
+                    cache.getCat(
+                            playerUUID
+                    )
+            );
 
-        /*
-         * 玩家退出是一个关键保存节点，
-         * 所以这里立即 flush。
-         */
-        store.flush();
+            /*
+             * 保存这个玩家的运行时猫咪。
+             */
+            cache.saveCat(
+                    cache.getCat(
+                            playerUUID
+                    )
+            );
 
-        /*
-         * 从内存卸载。
-         *
-         * 下次玩家加入时会重新从 players.yml 加载。
-         */
-        cache.removeByOwner(
-                playerUUID
-        );
+            /*
+             * 玩家退出是一个关键保存节点，
+             * 所以这里立即 flush。
+             */
+            store.flush();
 
-        /*
-         * 清除待恢复队列。
-         *
-         * 如果这个玩家登录时猫咪所在世界尚未加载，
-         * 他会被放入待恢复队列。
-         * 退出时移除，避免世界加载后
-         * 为已离线的玩家执行恢复。
-         */
-        entityService.clearPendingRestore(
-                playerUUID
-        );
+        } finally {
 
-        /*
-         * 清理技能冷却表条目：
-         * 防止长跑服务器上冷却 Map 累积离线玩家记录。
-         */
-        skillManager.clearCooldowns(
-                playerUUID
-        );
+            /*
+             * 从内存卸载。
+             */
+            cache.removeByOwner(
+                    playerUUID
+            );
 
-        /*
-         * 0.8.1 修复（P2）：
-         * 清除个人语言覆盖，防止 overrides 表单调增长。
-         */
-        lang.clearOverride(
-                playerUUID
-        );
+            /*
+             * 清除待恢复队列。
+             */
+            entityService.clearPendingRestore(
+                    playerUUID
+            );
 
-        /*
-         * 释放召唤标记（0.7.4 修复）：
-         * 异步区块加载完成前下线会绕过回调的 finally，
-         * 残留标记会永久封锁该玩家的召唤功能。
-         */
-        entityService.clearSummoning(
-                playerUUID
-        );
+            /*
+             * 清理技能冷却表条目：
+             * 防止长跑服务器上冷却 Map 累积离线玩家记录。
+             */
+            skillManager.clearCooldowns(
+                    playerUUID
+            );
+
+            /*
+             * 清除个人语言覆盖，防止 overrides 表单调增长。
+             */
+            lang.clearOverride(
+                    playerUUID
+            );
+
+            /*
+             * 释放召唤标记（0.7.4 修复）：
+             * 异步区块加载完成前下线会绕过回调的 finally，
+             * 残留标记会永久封锁该玩家的召唤功能。
+             */
+            entityService.clearSummoning(
+                    playerUUID
+            );
+
+            /*
+             * 0.8.4 R18（社区上报 M-NEW-02）：
+             * 协助目标属于会话态——退出即失效。
+             */
+            battleState.clearAssistTarget(
+                    playerUUID
+            );
+        }
     }
 }

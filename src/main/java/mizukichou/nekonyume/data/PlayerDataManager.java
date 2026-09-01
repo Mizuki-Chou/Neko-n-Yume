@@ -439,6 +439,36 @@ public class PlayerDataManager implements CatStore {
     }
 
     @Override
+    public boolean isAchievementRewardXpApplied(UUID playerUUID, String id) {
+        return delegate.isAchievementRewardXpApplied(playerUUID, id);
+    }
+
+    @Override
+    public void addAchievementRewardXpApplied(UUID playerUUID, String id) {
+        delegate.addAchievementRewardXpApplied(playerUUID, id);
+    }
+
+    @Override
+    public void removeAchievementRewardXpApplied(UUID playerUUID, String id) {
+        delegate.removeAchievementRewardXpApplied(playerUUID, id);
+    }
+
+    @Override
+    public boolean isAchievementRewardMeowApplied(UUID playerUUID, String id) {
+        return delegate.isAchievementRewardMeowApplied(playerUUID, id);
+    }
+
+    @Override
+    public void addAchievementRewardMeowApplied(UUID playerUUID, String id) {
+        delegate.addAchievementRewardMeowApplied(playerUUID, id);
+    }
+
+    @Override
+    public void removeAchievementRewardMeowApplied(UUID playerUUID, String id) {
+        delegate.removeAchievementRewardMeowApplied(playerUUID, id);
+    }
+
+    @Override
     public Set<UUID> getCatPlayers() {
         return delegate.getCatPlayers();
     }
@@ -461,5 +491,20 @@ public class PlayerDataManager implements CatStore {
     @Override
     public void saveNow() {
         delegate.saveNow();
+    }
+
+    /*
+     * 0.8.4 R18（社区上报 H-NEW-01）：
+     * 委托耐久性协议——自动保存的驱逐判定需要真实的
+     * 落盘确认与失败状态，绝不能走接口的空默认实现。
+     */
+    @Override
+    public boolean awaitPendingSave(long timeoutMillis) {
+        return delegate.awaitPendingSave(timeoutMillis);
+    }
+
+    @Override
+    public boolean isLastWriteFailed() {
+        return delegate.isLastWriteFailed();
     }
 }

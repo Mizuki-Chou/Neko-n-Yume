@@ -7,14 +7,13 @@ import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -39,7 +38,7 @@ import java.util.logging.Logger;
  */
 public class CatEntityRestorer {
 
-    private final JavaPlugin plugin;
+    private final CatEntityRuntime runtime;
     private final Logger logger;
     private final CatStore store;
     private final CatCache cache;
@@ -65,11 +64,21 @@ public class CatEntityRestorer {
      * 代际 token，回到主线程后若代际已过期则直接丢弃结果，
      * 实现真正的异步取消语义（退出清标记不再重新打开竞争窗口）。
      */
-    private final ConcurrentHashMap<UUID, Long> summonGeneration =
+    /*
+     * 0.8.4 R17（社区上报）：
+     * 全局单调令牌序列 + 每玩家"当前令牌"——
+     * 令牌永不重复（AtomicLong），退出/删除时移除条目，
+     * 不再随玩家数量无界增长；
+     * 旧流水线的陈旧令牌永远不可能撞上新会话。
+     */
+    private final AtomicLong summonTokenSequence =
+            new AtomicLong();
+
+    private final ConcurrentHashMap<UUID, Long> summonTokens =
             new ConcurrentHashMap<>();
 
     public CatEntityRestorer(
-            JavaPlugin plugin,
+            CatEntityRuntime runtime,
             Logger logger,
             CatStore store,
             CatCache cache,
@@ -79,7 +88,7 @@ public class CatEntityRestorer {
             CatEntityIndex entityIndex
     ) {
 
-        this.plugin = plugin;
+        this.runtime = runtime;
         this.logger = logger;
         this.store = store;
         this.cache = cache;
@@ -99,11 +108,18 @@ public class CatEntityRestorer {
             UUID playerUUID
     ) {
 
-        return summonGeneration.merge(
-                playerUUID,
-                1L,
-                Long::sum
-        );
+        long token =
+                summonTokenSequence.incrementAndGet();
+
+        if (playerUUID != null) {
+
+            summonTokens.put(
+                    playerUUID,
+                    token
+            );
+        }
+
+        return token;
     }
 
     boolean isCurrentSummon(
@@ -111,11 +127,17 @@ public class CatEntityRestorer {
             long token
     ) {
 
-        return playerUUID != null &&
-                summonGeneration.getOrDefault(
-                        playerUUID,
-                        0L
-                ) == token;
+        if (playerUUID == null) {
+            return false;
+        }
+
+        Long current =
+                summonTokens.get(
+                        playerUUID
+                );
+
+        return current != null &&
+                current == token;
     }
 
     void invalidateSummons(
@@ -124,10 +146,13 @@ public class CatEntityRestorer {
 
         if (playerUUID != null) {
 
-            summonGeneration.merge(
-                    playerUUID,
-                    1L,
-                    Long::sum
+            /*
+             * 0.8.4 R17（社区上报）：
+             * 失效即移除——令牌全局单调不会复用，
+             * 移除既杀掉全部在途回调，又不留无界增长。
+             */
+            summonTokens.remove(
+                    playerUUID
             );
         }
     }
@@ -174,7 +199,7 @@ public class CatEntityRestorer {
         if (savedEntityUUID != null) {
 
             Entity entity =
-                    Bukkit.getEntity(savedEntityUUID);
+                    runtime.getEntity(savedEntityUUID);
 
             if (entity instanceof org.bukkit.entity.Cat cat &&
                     !cat.isDead() &&
@@ -232,7 +257,7 @@ public class CatEntityRestorer {
         }
 
         World world =
-                Bukkit.getWorld(worldUUID);
+                runtime.worldByUuid(worldUUID);
 
         if (world == null) {
 
@@ -267,16 +292,15 @@ public class CatEntityRestorer {
         int chunkZ =
                 ((int) Math.floor(z)) >> 4;
 
-        world.getChunkAtAsync(chunkX, chunkZ)
+        runtime.chunkAtAsync(world, chunkX, chunkZ)
                 .thenAccept(chunk -> {
 
-                    if (!plugin.isEnabled()) {
+                    if (!runtime.isPluginEnabled()) {
                         return;
                     }
 
-                    Bukkit.getScheduler()
+                    runtime
                             .runTask(
-                                    plugin,
                                     () -> {
 
                                         try {
@@ -316,7 +340,7 @@ public class CatEntityRestorer {
                                                     .getEntityUuid() != null) {
 
                                                 Entity existing =
-                                                        Bukkit.getEntity(
+                                                        runtime.getEntity(
                                                                 logicalCat
                                                                         .getEntityUuid()
                                                         );
@@ -475,13 +499,12 @@ public class CatEntityRestorer {
 
                 }).exceptionally(exception -> {
 
-                    if (!plugin.isEnabled()) {
+                    if (!runtime.isPluginEnabled()) {
                         return null;
                     }
 
-                    Bukkit.getScheduler()
+                    runtime
                             .runTask(
-                                    plugin,
                                     () -> {
 
                                         try {
@@ -574,9 +597,8 @@ public class CatEntityRestorer {
                 );
 
         org.bukkit.entity.Cat cat =
-                (org.bukkit.entity.Cat) world.spawnEntity(
-                        location,
-                        EntityType.CAT
+                runtime.spawnCat(
+                        location
                 );
 
         binding.updateCat(
@@ -661,9 +683,8 @@ public class CatEntityRestorer {
         }
 
         org.bukkit.entity.Cat cat =
-                (org.bukkit.entity.Cat) world.spawnEntity(
-                        location,
-                        EntityType.CAT
+                runtime.spawnCat(
+                        location
                 );
 
         binding.updateCat(
@@ -712,6 +733,22 @@ public class CatEntityRestorer {
      * 世界加载后重试实体恢复
      * ============================================================
      */
+
+    /*
+     * 0.8.4 R24（审查复核）：
+     * 世界卸载 → 该世界的待恢复记录作废（对称于 retry）。
+     */
+    public void forgetPendingWorldRestores(
+            World world
+    ) {
+
+        if (world != null) {
+
+            pendingWorldRestores.forgetWorld(
+                    world.getUID()
+            );
+        }
+    }
 
     public void retryPendingWorldRestores(World world) {
 
@@ -806,7 +843,7 @@ public class CatEntityRestorer {
         if (savedEntityUUID != null) {
 
             Entity entity =
-                    Bukkit.getEntity(savedEntityUUID);
+                    runtime.getEntity(savedEntityUUID);
 
             /*
              * 0.8.1 修复（R4，社区上报）：
@@ -886,7 +923,7 @@ public class CatEntityRestorer {
         }
 
         World world =
-                Bukkit.getWorld(worldUUID);
+                runtime.worldByUuid(worldUUID);
 
         if (world == null) {
 
@@ -944,16 +981,15 @@ public class CatEntityRestorer {
         int chunkZ =
                 ((int) Math.floor(z)) >> 4;
 
-        world.getChunkAtAsync(chunkX, chunkZ)
+        runtime.chunkAtAsync(world, chunkX, chunkZ)
                 .thenAccept(chunk -> {
 
-                    if (!plugin.isEnabled()) {
+                    if (!runtime.isPluginEnabled()) {
                         return;
                     }
 
-                    Bukkit.getScheduler()
+                    runtime
                             .runTask(
-                                    plugin,
                                     () -> {
 
                                         try {
@@ -1072,13 +1108,12 @@ public class CatEntityRestorer {
 
                 }).exceptionally(exception -> {
 
-                    if (!plugin.isEnabled()) {
+                    if (!runtime.isPluginEnabled()) {
                         return null;
                     }
 
-                    Bukkit.getScheduler()
+                    runtime
                             .runTask(
-                                    plugin,
                                     () -> {
 
                                         try {
@@ -1240,7 +1275,7 @@ public class CatEntityRestorer {
                 entityIndex.entitiesOf(playerUUID)) {
 
             Entity indexed =
-                    Bukkit.getEntity(entityUuid);
+                    runtime.getEntity(entityUuid);
 
             if (indexed instanceof org.bukkit.entity.Cat cat &&
                     !cat.isDead() &&
@@ -1260,15 +1295,13 @@ public class CatEntityRestorer {
          * 第二遍——全图扫描兑底（索引永远不是唯一事实来源）。
          */
         for (World world :
-                Bukkit.getWorlds()) {
+                runtime.worlds()) {
 
             /*
              * 0.8.1 R8（效率）：服务端层过滤（同 cleanupDuplicateCats）。
              */
             for (org.bukkit.entity.Cat cat :
-                    world.getEntitiesByClass(
-                            org.bukkit.entity.Cat.class
-                    )) {
+                    runtime.catsIn(world)) {
 
                 if (cat.isDead() || !cat.isValid()) {
                     continue;
@@ -1332,7 +1365,7 @@ public class CatEntityRestorer {
                 entityIndex.entitiesOf(playerUUID)) {
 
             Entity indexed =
-                    Bukkit.getEntity(entityUuid);
+                    runtime.getEntity(entityUuid);
 
             if (indexed instanceof org.bukkit.entity.Cat cat &&
                     !cat.isDead()) {
@@ -1347,15 +1380,13 @@ public class CatEntityRestorer {
          * 第二遍——全图扫描兑底（索引永远不是唯一事实来源）。
          */
         for (World world :
-                Bukkit.getWorlds()) {
+                runtime.worlds()) {
 
             /*
              * 0.8.1 R8（效率）：服务端层过滤（同 cleanupDuplicateCats）。
              */
             for (org.bukkit.entity.Cat cat :
-                    world.getEntitiesByClass(
-                            org.bukkit.entity.Cat.class
-                    )) {
+                    runtime.catsIn(world)) {
 
                 if (!cat.getPersistentDataContainer()
                         .has(
@@ -1388,7 +1419,7 @@ public class CatEntityRestorer {
         entityIndex.removeOwner(playerUUID);
     }
 
-    private void cleanupDuplicateCats(
+    void cleanupDuplicateCats(
             UUID playerUUID,
             org.bukkit.entity.Cat keepCat
     ) {
@@ -1407,7 +1438,7 @@ public class CatEntityRestorer {
             }
 
             Entity indexed =
-                    Bukkit.getEntity(entityUuid);
+                    runtime.getEntity(entityUuid);
 
             if (indexed instanceof org.bukkit.entity.Cat cat &&
                     !cat.isDead() &&
@@ -1423,7 +1454,7 @@ public class CatEntityRestorer {
          * 第二遍——全图扫描兑底。
          */
         for (World world :
-                Bukkit.getWorlds()) {
+                runtime.worlds()) {
 
             /*
              * 0.8.1 R8（效率）：
@@ -1432,9 +1463,7 @@ public class CatEntityRestorer {
              * 语义与逐实体 instanceof 判定完全一致。
              */
             for (org.bukkit.entity.Cat cat :
-                    world.getEntitiesByClass(
-                            org.bukkit.entity.Cat.class
-                    )) {
+                    runtime.catsIn(world)) {
 
                 if (cat.isDead()) {
                     continue;
@@ -1566,19 +1595,19 @@ public class CatEntityRestorer {
             return;
         }
 
-        targetWorld.getChunkAtAsync(
+        runtime.chunkAtAsync(
+                        targetWorld,
                         target.getBlockX() >> 4,
                         target.getBlockZ() >> 4
                 )
                 .thenAccept(chunk -> {
 
-                    if (!plugin.isEnabled()) {
+                    if (!runtime.isPluginEnabled()) {
                         return;
                     }
 
-                    Bukkit.getScheduler()
+                    runtime
                             .runTask(
-                                    plugin,
                                     () -> {
 
                                         try {
@@ -1690,13 +1719,12 @@ public class CatEntityRestorer {
 
                 }).exceptionally(exception -> {
 
-                    if (!plugin.isEnabled()) {
+                    if (!runtime.isPluginEnabled()) {
                         return null;
                     }
 
-                    Bukkit.getScheduler()
+                    runtime
                             .runTask(
-                                    plugin,
                                     () -> {
 
                                         try {
@@ -1834,11 +1862,9 @@ public class CatEntityRestorer {
          * 新建 Bukkit 猫实体。
          */
         org.bukkit.entity.Cat cat =
-                (org.bukkit.entity.Cat) player.getWorld()
-                        .spawnEntity(
-                                player.getLocation(),
-                                EntityType.CAT
-                        );
+                runtime.spawnCat(
+                        player.getLocation()
+                );
 
         /*
          * 设置基础属性。
@@ -1895,9 +1921,8 @@ public class CatEntityRestorer {
                 cat
         );
 
-        Bukkit.getScheduler()
+        runtime
                 .runTask(
-                        plugin,
                         () -> {
 
                             if (!cat.isDead() &&

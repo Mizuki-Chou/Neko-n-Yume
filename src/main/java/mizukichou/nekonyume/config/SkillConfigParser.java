@@ -62,12 +62,70 @@ final class SkillConfigParser {
                                     valueKey
                             );
 
-                    entry.put(
-                            valueKey,
+                    /*
+                     * 0.8.4 R21（社区上报 M-NEW-08）：
+                     * 数学合法 ≠ 业务合法——按键名钳制业务范围，
+                     * 负持续时间/零半径等不再进入 Bukkit API。
+                     * duration/cooldown ∈ [1, 3600] 秒
+                     * radius ∈ [1, 64] 格
+                     * power ∈ [0, 100000]
+                     */
+                    double finiteValue =
                             ConfigParseSupport.finite(
                                     rawValue,
                                     0.0
-                            )
+                            );
+
+                    String keyLower =
+                            valueKey.toLowerCase(
+                                    Locale.ROOT
+                            );
+
+                    double clampedValue;
+
+                    if (keyLower.contains("duration") ||
+                            keyLower.contains("cooldown")) {
+
+                        clampedValue =
+                                Math.max(
+                                        1.0,
+                                        Math.min(
+                                                3600.0,
+                                                finiteValue
+                                        )
+                                );
+
+                    } else if (keyLower.contains("radius")) {
+
+                        clampedValue =
+                                Math.max(
+                                        1.0,
+                                        Math.min(
+                                                64.0,
+                                                finiteValue
+                                        )
+                                );
+
+                    } else if (keyLower.contains("power")) {
+
+                        clampedValue =
+                                Math.max(
+                                        0.0,
+                                        Math.min(
+                                                100000.0,
+                                                finiteValue
+                                        )
+                                );
+
+                    } else {
+
+                        clampedValue =
+                                finiteValue;
+                    }
+
+                    entry.put(
+                            valueKey,
+                            clampedValue
                     );
                 }
 

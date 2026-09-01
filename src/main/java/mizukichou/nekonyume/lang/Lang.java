@@ -45,7 +45,8 @@ public final class Lang {
 
  private static final String DEFAULT_CODE = "zh_cn";
 
- private final JavaPlugin plugin;
+ private final ClassLoader resourceLoader;
+ private final java.nio.file.Path dataFolder;
  private final ConfigManager configManager;
  private final Logger logger;
 
@@ -65,7 +66,26 @@ public final class Lang {
  ConfigManager configManager,
  Logger logger ) {
 
- this.plugin = plugin;
+ this(
+ plugin.getClass().getClassLoader(),
+ plugin.getDataFolder().toPath(),
+ configManager,
+ logger );
+ }
+
+ /*
+ * 0.8.4：测试入口——资源加载器 + 数据目录 seam。
+ * 集成测试传入测试类加载器（真实 lang/*.yml 在测试类路径上）
+ * 与临时目录，无需真实插件实例。
+ */
+ public Lang(
+ ClassLoader resourceLoader,
+ java.nio.file.Path dataFolder,
+ ConfigManager configManager,
+ Logger logger ) {
+
+ this.resourceLoader = resourceLoader;
+ this.dataFolder = dataFolder;
  this.configManager = configManager;
  this.logger = logger;
 
@@ -312,7 +332,8 @@ public final class Lang {
  return cache.computeIfAbsent(
  code,
  c -> LangMessages.load(
- plugin,
+ resourceLoader,
+ dataFolder,
  c,
  logger ) );
  }

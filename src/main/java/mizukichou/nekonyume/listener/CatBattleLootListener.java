@@ -330,10 +330,24 @@ public class CatBattleLootListener implements Listener {
             return low;
         }
 
-        return low
-                + ThreadLocalRandom.current()
-                .nextInt(
-                        high - low + 1
-                );
+        /*
+         * 0.8.4 R19（社区上报 M-NEW-05）：
+         * long 区间数学——high = Integer.MAX_VALUE 时
+         * high - low + 1 会溢出为负数，nextInt(负界) 直接抛异常。
+         */
+        long range =
+                (long) high - low + 1L;
+
+        long value =
+                low
+                        + ThreadLocalRandom.current()
+                        .nextLong(
+                                range
+                        );
+
+        return (int) Math.min(
+                value,
+                Integer.MAX_VALUE
+        );
     }
 }

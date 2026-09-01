@@ -160,17 +160,27 @@ public final class ConfigLoader {
                         )
                 );
 
-        long hungerIntervalMillis =
+        /*
+         * 0.8.4 R22（社区反馈）：
+         * 先钳制业务上限（≤ 24 小时）再换算毫秒——
+         * 极端配置既不会溢出，行为也可预测。
+         */
+        long hungerIntervalSeconds =
                 config.getLong(
                         "hunger.base-interval-seconds",
                         300
-                ) * 1000L;
+                );
 
-        if (hungerIntervalMillis <= 0) {
+        if (hungerIntervalSeconds <= 0L ||
+                hungerIntervalSeconds > 86400L) {
 
-            hungerIntervalMillis =
-                    300L * 1000L;
+            hungerIntervalSeconds =
+                    300L;
         }
+
+        long hungerIntervalMillis =
+                hungerIntervalSeconds
+                        * 1000L;
 
         ConfigSnapshot.Hunger hunger =
                 new ConfigSnapshot.Hunger(

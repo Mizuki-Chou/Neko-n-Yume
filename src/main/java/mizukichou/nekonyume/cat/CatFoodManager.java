@@ -8,18 +8,15 @@ import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
-import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
-import org.bukkit.Sound;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -55,7 +52,8 @@ public class CatFoodManager {
     private final Map<Material, Integer> foodValues =
             new EnumMap<>(Material.class);
 
-    private final JavaPlugin plugin;
+    private final CatEntityRuntime runtime;
+    private final String namespace;
     private final CatStore store;
     private final CatCache cache;
     private final ConfigManager configManager;
@@ -95,7 +93,8 @@ public class CatFoodManager {
     private final NamespacedKey equipBagKey;
 
     public CatFoodManager(
-            JavaPlugin plugin,
+            CatEntityRuntime runtime,
+            String namespace,
             CatStore store,
             CatCache cache,
             ConfigManager configManager,
@@ -104,7 +103,8 @@ public class CatFoodManager {
             Lang lang
     ) {
 
-        this.plugin = plugin;
+        this.runtime = runtime;
+        this.namespace = namespace;
         this.store = store;
         this.cache = cache;
         this.configManager = configManager;
@@ -114,37 +114,37 @@ public class CatFoodManager {
 
         this.meowDanKey =
                 new NamespacedKey(
-                        plugin,
+                        namespace,
                         "nekonyume_meowdan"
                 );
 
         this.meowDanGenKey =
                 new NamespacedKey(
-                        plugin,
+                        namespace,
                         "nekonyume_meowdan_gen"
                 );
 
         this.xpPillKey =
                 new NamespacedKey(
-                        plugin,
+                        namespace,
                         "nekonyume_xp_pill"
                 );
 
         this.equipKey =
                 new NamespacedKey(
-                        plugin,
+                        namespace,
                         "nekonyume_equip"
                 );
 
         this.equipBonusKey =
                 new NamespacedKey(
-                        plugin,
+                        namespace,
                         "nekonyume_equip_bonus"
                 );
 
         this.equipBagKey =
                 new NamespacedKey(
-                        plugin,
+                        namespace,
                         "nekonyume_equip_bag"
                 );
 
@@ -475,6 +475,25 @@ public class CatFoodManager {
                 cat.getAffection()
                         - oldAffection;
 
+        /*
+         * 0.8.4 R18（社区上报 M-03）：
+         * 消耗先行（与经验丸统一）——发放链路触发可重入
+         * 事件前先扣除物品，杜绝"状态已加、物品未扣"。
+         */
+        if (player.getGameMode() != GameMode.CREATIVE) {
+
+            if (item.getAmount() <= 1) {
+
+                item.setAmount(0);
+
+            } else {
+
+                item.setAmount(
+                        item.getAmount() - 1
+                );
+            }
+        }
+
         store.setCatAffection(
                 playerUUID,
                 cat.getAffection()
@@ -492,25 +511,21 @@ public class CatFoodManager {
                 quality.getMeowPowerGain()
         );
 
-        if (player.getGameMode() != GameMode.CREATIVE) {
+        runtime.playSound(
 
-            if (item.getAmount() <= 1) {
 
-                item.setAmount(0);
-
-            } else {
-
-                item.setAmount(
-                        item.getAmount() - 1
-                );
-            }
-        }
-
-        player.playSound(
                 player.getLocation(),
-                Sound.ENTITY_GENERIC_EAT,
+
+
+                "eat",
+
+
                 1.0f,
+
+
                 1.0f
+
+
         );
 
         player.sendMessage(
@@ -1335,9 +1350,30 @@ public class CatFoodManager {
             CatEquipItem equip
     ) {
 
+        /*
+         * 0.8.4 R18（社区上报 M-NEW-03）：
+         * 快照语义：判定与消费围绕同一个 ItemStack 引用。
+         */
+        return equipCat(
+                player,
+                entity,
+                equip,
+                player.getInventory()
+                        .getItemInMainHand()
+        );
+    }
+
+    public boolean equipCat(
+            Player player,
+            org.bukkit.entity.Cat entity,
+            CatEquipItem equip,
+            ItemStack itemSnapshot
+    ) {
+
         if (player == null ||
                 entity == null ||
-                equip == null) {
+                equip == null ||
+                itemSnapshot == null) {
 
             return false;
         }
@@ -1359,12 +1395,11 @@ public class CatFoodManager {
         }
 
         /*
-         * 附加属性：从手中物品读取（PDC），与装备位绑定。
+         * 附加属性：从判定时的同一快照读取（PDC），与装备位绑定。
          */
         EquipBonusAttribute bonus =
                 getEquipmentBonus(
-                        player.getInventory()
-                                .getItemInMainHand()
+                        itemSnapshot
                 );
 
         if (!applyEquipCore(
@@ -1384,17 +1419,12 @@ public class CatFoodManager {
         if (player.getGameMode()
                 != GameMode.CREATIVE) {
 
-            ItemStack hand =
-                    player.getInventory()
-                            .getItemInMainHand();
+            if (!itemSnapshot.getType().isAir()) {
 
-            if (hand != null &&
-                    !hand.getType().isAir()) {
-
-                hand.setAmount(
-                        hand.getAmount() <= 1
+                itemSnapshot.setAmount(
+                        itemSnapshot.getAmount() <= 1
                                 ? 0
-                                : hand.getAmount() - 1
+                                : itemSnapshot.getAmount() - 1
                 );
             }
         }
@@ -1644,12 +1674,12 @@ public class CatFoodManager {
             return false;
         }
 
-        progression.gainExperience(
-                player,
-                cat,
-                xp
-        );
-
+        /*
+         * 0.8.4 R18（社区上报 M-03）：
+         * 消耗先行——gainExperience 内部会触发可重入事件，
+         * 若物品在经验发放之后才消耗，事件监听器抛异常时
+         * 会出现"经验已加、物品未扣"的重复利用窗口。
+         */
         if (player.getGameMode() != GameMode.CREATIVE) {
 
             if (item.getAmount() <= 1) {
@@ -1666,11 +1696,27 @@ public class CatFoodManager {
             }
         }
 
-        player.playSound(
+        progression.gainExperience(
+                player,
+                cat,
+                xp
+        );
+
+        runtime.playSound(
+
+
                 player.getLocation(),
-                Sound.ENTITY_GENERIC_EAT,
+
+
+                "eat",
+
+
                 1.0f,
+
+
                 1.0f
+
+
         );
 
         /*
@@ -1849,10 +1895,18 @@ public class CatFoodManager {
                 )
         );
 
-        player.playSound(
+        runtime.playSound(
+
+
                 player.getLocation(),
-                Sound.UI_TOAST_CHALLENGE_COMPLETE,
+
+
+                "toast",
+
+
                 1.0f,
+
+
                 1.0f
         );
 
@@ -1862,9 +1916,11 @@ public class CatFoodManager {
         if (entityUuid != null) {
 
             Entity entity =
-                    Bukkit.getEntity(
+                    runtime.getEntity(
                             entityUuid
-                    );
+
+
+        );
 
             if (entity != null &&
                     entity.isValid()) {
@@ -1886,15 +1942,22 @@ public class CatFoodManager {
         /*
          * 事后通知事件：成就系统等第三方监听。
          */
-        Bukkit.getPluginManager()
-                .callEvent(
-                        new CatTierUpgradeEvent(
-                                player,
-                                cat,
-                                fromTier,
-                                newTier
-                        )
-                );
+        runtime.callEvent(
+
+                new CatTierUpgradeEvent(
+
+
+                player,
+
+                cat,
+
+                fromTier,
+
+                newTier
+
+                )
+
+        );
     }
 
     /*
@@ -2194,18 +2257,38 @@ public class CatFoodManager {
                 playerUUID
         );
 
-        Bukkit.getPluginManager()
-                .callEvent(
-                        new CatFedEvent(
-                                player,
-                                cat,
-                                fedSnapshot,
-                                actualHungerGain,
-                                actualAffectionGain,
-                                xpGain,
-                                meowGain
-                        )
-                );
+        runtime.callEvent(
+
+
+                new CatFedEvent(
+
+
+
+                player,
+
+
+                cat,
+
+
+                fedSnapshot,
+
+
+                actualHungerGain,
+
+
+                actualAffectionGain,
+
+
+                xpGain,
+
+
+                meowGain
+
+
+                )
+
+
+        );
 
         player.sendMessage(
                 lang.forPlayer(player).message(

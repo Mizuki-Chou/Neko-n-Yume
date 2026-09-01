@@ -929,11 +929,22 @@ public final class ConfigSnapshot {
                 this.enabled = enabled;
                 this.meowdanChance = meowdanChance;
                 this.meowdanQualityWeights =
-                        meowdanQualityWeights;
+                        meowdanQualityWeights == null
+                                ? new int[0]
+                                : meowdanQualityWeights.clone();
                 this.xpPillChance = xpPillChance;
                 this.eliteXpPillChance =
                         eliteXpPillChance;
                 this.equipBagChance = equipBagChance;
+            }
+
+            /*
+             * 0.8.4 R18（社区上报 L-NEW-02）：
+             * 权重数组返回克隆，快照真正不可变。
+             */
+            public int[] getMeowdanQualityWeights() {
+
+                return meowdanQualityWeights.clone();
             }
         }
     }

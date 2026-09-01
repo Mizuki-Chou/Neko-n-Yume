@@ -27,8 +27,15 @@ public class MumaNightListener implements Listener {
         this.manager = manager;
     }
 
+    /*
+     * 0.8.4 R19（社区上报 L-NEW-07）：
+     * 本处理器会修改实体状态（属性/装备/PDC/生命），
+     * 不应挂在 MONITOR（事件惯例：MONITOR 只观察不改状态，
+     * 同级插件顺序不受契约保证）。
+     * 改为 HIGHEST：在插件修改链的常规末端应用强化。
+     */
     @EventHandler(
-            priority = EventPriority.MONITOR,
+            priority = EventPriority.HIGHEST,
             ignoreCancelled = true
     )
     public void onCreatureSpawn(
@@ -58,8 +65,13 @@ public class MumaNightListener implements Listener {
      * 上一场梦魔夜的强化 PDC；区块重新加载且梦魔夜
      * 未激活时，立即还原该区块内的强化怪物。
      */
+    /*
+     * 0.8.4 R20（全面自查）：
+     * 与 onCreatureSpawn 同类——本处理器会 buff/strip
+     * 区块内怪物（修改实体状态），不应挂在 MONITOR。
+     */
     @EventHandler(
-            priority = EventPriority.MONITOR,
+            priority = EventPriority.HIGHEST,
             ignoreCancelled = true
     )
     public void onChunkLoad(

@@ -135,10 +135,14 @@ public class GiftManager {
         /*
          * 概率：
          * base + per-rank × 喵阶，封顶 max。
+         *
+         * 0.8.4 R19（社区上报 L-NEW-06）：
+         * long 数学——损坏数据（巨大 meowRank）与高倍率相乘
+         * 会 int 溢出为负，让玩家永远拿不到礼物。
          */
-        int chance =
-                giftConfig.getBaseChance()
-                        + giftConfig.getChancePerRank()
+        long chance =
+                (long) giftConfig.getBaseChance()
+                        + (long) giftConfig.getChancePerRank()
                         * cat.getMeowRank();
 
         chance =
@@ -147,16 +151,15 @@ public class GiftManager {
                         giftConfig.getMaxChance()
                 );
 
-        /*
-         * 无论是否命中，
-         * 今天的判定都已经完成。
-         */
-        store.markGiftChecked(
-                playerUUID
-        );
-
         if (chance <= 0 ||
                 random.nextInt(100) >= chance) {
+
+            /*
+             * 未命中：今天的判定已经完成。
+             */
+            store.markGiftChecked(
+                    playerUUID
+            );
 
             return;
         }
@@ -183,6 +186,16 @@ public class GiftManager {
         if (gift == null) {
             return;
         }
+
+        /*
+         * 0.8.4 R18（社区上报 M-02）：
+         * 礼物真正生成成功后才记"已判定"——
+         * 配置无有效礼物等抽奖/生成失败不再白耗当天；
+         * 发放环节仍在标记之后，保持防重语义。
+         */
+        store.markGiftChecked(
+                playerUUID
+        );
 
         /*
          * 发放：

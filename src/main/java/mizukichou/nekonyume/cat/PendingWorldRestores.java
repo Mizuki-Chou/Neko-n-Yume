@@ -62,6 +62,24 @@ public class PendingWorldRestores {
      * 世界加载完成：取走该世界的全部等待玩家。
      * 返回不可变集合（可能为空）。
      */
+    /**
+     * 0.8.4 R24（审查复核）：
+     * 世界卸载：该世界的全部等待记录作废——
+     * 世界不再存在，等待恢复永无结果，必须释放，
+     * 否则动态世界服务器上记录无界增长。
+     */
+    public synchronized void forgetWorld(
+            UUID worldUuid
+    ) {
+
+        if (worldUuid != null) {
+
+            waiting.remove(
+                    worldUuid
+            );
+        }
+    }
+
     public synchronized Set<UUID> consumeForWorld(
             UUID worldUuid
     ) {
