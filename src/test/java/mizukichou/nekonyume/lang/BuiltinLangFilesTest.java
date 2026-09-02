@@ -49,6 +49,62 @@ class BuiltinLangFilesTest {
                     "gui.close"
             );
 
+    /*
+     * 0.8.5 回归：gui 节是「§ 纯字符串」节，
+     * 排行面板键若混入 MiniMessage 标签（<gray> 等），
+     * text() 会原样返回导致界面显示标签文本。
+     */
+    private static final List<String> RANKING_GUI_KEYS =
+            List.of(
+                    "gui.ranking-title",
+                    "gui.ranking-head",
+                    "gui.ranking-lore-rank",
+                    "gui.ranking-lore-owner",
+                    "gui.ranking-lore-meow",
+                    "gui.ranking-lore-level",
+                    "gui.ranking-sort",
+                    "gui.ranking-mode-meow",
+                    "gui.ranking-mode-level",
+                    "gui.ranking-page",
+                    "gui.ranking-prev",
+                    "gui.ranking-next",
+                    "gui.ranking-close",
+                    "gui.ranking-empty"
+            );
+
+    @Test
+    void rankingGuiKeysUseLegacyCodesOnly() {
+
+        for (String code : CODES) {
+
+            YamlConfiguration config =
+                    loadBuiltin(
+                            code
+                    );
+
+            for (String key :
+                    RANKING_GUI_KEYS) {
+
+                String template =
+                        config.getString(
+                                key
+                        );
+
+                assertNotNull(
+                        template,
+                        code + " missing " + key
+                );
+
+                assertFalse(
+                        template.contains("<"),
+                        code + " " + key
+                        + " must use legacy § codes, got: "
+                        + template
+                );
+            }
+        }
+    }
+
     @Test
     void allBuiltinLanguageResourcesParse() {
 

@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class CatMoodTest {
@@ -233,4 +236,87 @@ class CatMoodTest {
                 )
         );
     }
+
+
+    private static final UUID MOOD_CAT_ID =
+            UUID.fromString("22222222-2222-2222-2222-222222222222");
+
+    static Cat moodCat(int affection, int hunger, int health, long lastFedAgo, long lastInteractAgo) {
+        long now = 1_000_000_000L;
+        Cat cat = Cat.createNew(MOOD_CAT_ID, UUID.randomUUID(), "Mood");
+        cat.setAffection(affection);
+        cat.setHunger(hunger);
+        cat.setHealth(health);
+        cat.setLastFedAt(now - lastFedAgo);
+        cat.setLastInteractionAt(now - lastInteractAgo);
+        return cat;
+    }
+
+    @Test
+    void higherAffectionNeverLowersScore() {
+        for (int affection = 0; affection <= 100; affection += 10) {
+            int base = CatMood.calculateScore(moodCat(affection, 100, 100, 0, 0), 1_000_000_000L);
+            for (int higher = affection + 1; higher <= 100; higher += 7) {
+                int score = CatMood.calculateScore(moodCat(higher, 100, 100, 0, 0), 1_000_000_000L);
+                assertTrue(score >= base, "affection " + affection + " -> " + higher);
+            }
+        }
+    }
+
+    @Test
+    void recentFeedingNeverLowersScore() {
+        int fed = CatMood.calculateScore(moodCat(50, 100, 100, 0, 0), 1_000_000_000L);
+        int unfed = CatMood.calculateScore(moodCat(50, 100, 100, 90L * 24 * 3600 * 1000, 0), 1_000_000_000L);
+        assertTrue(fed >= unfed);
+    }
+
+    @Test
+    void recentInteractionNeverLowersScore() {
+        int touched = CatMood.calculateScore(moodCat(50, 100, 100, 0, 0), 1_000_000_000L);
+        int untouched = CatMood.calculateScore(moodCat(50, 100, 100, 0, 90L * 24 * 3600 * 1000), 1_000_000_000L);
+        assertTrue(touched >= untouched);
+    }
+
+    @Test
+    void fromScoreTierBoundaries() {
+        assertEquals(CatMood.SAD, CatMood.fromScore(Integer.MIN_VALUE));
+        assertEquals(CatMood.SAD, CatMood.fromScore(39));
+        assertEquals(CatMood.LOW, CatMood.fromScore(40));
+        assertEquals(CatMood.LOW, CatMood.fromScore(69));
+        assertEquals(CatMood.CALM, CatMood.fromScore(70));
+        assertEquals(CatMood.CALM, CatMood.fromScore(99));
+        assertEquals(CatMood.HAPPY, CatMood.fromScore(100));
+        assertEquals(CatMood.HAPPY, CatMood.fromScore(129));
+        assertEquals(CatMood.ECSTATIC, CatMood.fromScore(130));
+        assertEquals(CatMood.ECSTATIC, CatMood.fromScore(Integer.MAX_VALUE));
+    }
+
+    @Test
+    void fromScoreExhaustiveCoverage() {
+        for (int score = -200; score <= 300; score++) {
+            assertNotNull(CatMood.fromScore(score));
+        }
+    }
+
+    @Test
+    void tierOrderIsFromBadToGood() {
+        assertEquals(CatMood.ECSTATIC, CatMood.values()[0]);
+        assertEquals(CatMood.SAD, CatMood.values()[CatMood.values().length - 1]);
+    }
+
+    @Test
+    void allTiersExposeIcons() {
+        for (CatMood mood : CatMood.values()) {
+            assertNotNull(mood.getIcon());
+            assertFalse(mood.getIcon().isEmpty());
+            assertNotNull(mood.getHeadIcon());
+        }
+    }
+
+    @Test
+    void clockRollbackDoesNotCrash() {
+        int score = CatMood.calculateScore(moodCat(50, 50, 50, 0, 0), 1L);
+        assertNotNull(CatMood.fromScore(score));
+    }
+
 }

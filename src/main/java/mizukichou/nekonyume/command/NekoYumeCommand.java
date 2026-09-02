@@ -1,6 +1,7 @@
 package mizukichou.nekonyume.command;
 
 import mizukichou.nekonyume.gui.AchievementGuiManager;
+import mizukichou.nekonyume.gui.RankingGuiManager;
 import mizukichou.nekonyume.achievement.AchievementService;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatBehaviorMode;
@@ -48,6 +49,7 @@ public class NekoYumeCommand
     private final SkillGuiManager skillGuiManager;
     private final AchievementGuiManager achievementGuiManager;
     private final AchievementService achievementService;
+    private final RankingGuiManager rankingGuiManager;
     private final NamespacedKey toolKey;
     private final Lang lang;
 
@@ -60,6 +62,7 @@ public class NekoYumeCommand
             SkillGuiManager skillGuiManager,
             AchievementGuiManager achievementGuiManager,
             AchievementService achievementService,
+            RankingGuiManager rankingGuiManager,
             NamespacedKey toolKey,
             Lang lang
     ) {
@@ -71,6 +74,7 @@ public class NekoYumeCommand
         this.guiManager = guiManager;
         this.skillGuiManager = skillGuiManager;
         this.achievementGuiManager = achievementGuiManager;
+        this.rankingGuiManager = rankingGuiManager;
         this.achievementService = achievementService;
         this.toolKey = toolKey;
         this.lang = lang;
@@ -696,6 +700,40 @@ public class NekoYumeCommand
         }
 
         /*
+         * /nekoyume ranking
+         *
+         * 全服猫咪排行（只读，含离线玩家的猫）。
+         */
+        if (args.length > 0 &&
+                args[0].equalsIgnoreCase("ranking")) {
+
+            if (!(sender instanceof Player player)) {
+
+                sender.sendMessage(
+                        "Only players can use this command."
+                );
+
+                return true;
+            }
+
+            if (rankingGuiManager == null) {
+
+                sender.sendMessage(
+                        "Ranking is not available yet."
+                );
+
+                return true;
+            }
+
+            rankingGuiManager.open(
+                    player,
+                    false
+            );
+
+            return true;
+        }
+
+        /*
          * /nekoyume language <auto|zh_cn|en_us|ja_jp>
          *
          * 个人语言覆盖（仅内存，重启后回到 auto）。
@@ -1102,7 +1140,8 @@ public class NekoYumeCommand
                     "skill",
                     "tool",
                     "language",
-                    "achievements"
+                    "achievements",
+                    "ranking"
             );
         }
 

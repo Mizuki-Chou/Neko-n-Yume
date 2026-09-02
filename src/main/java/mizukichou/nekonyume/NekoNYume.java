@@ -15,6 +15,9 @@ Sora 2026-今 - 不懂事的猫咪，只能笼养呜呜
  */
 
 import mizukichou.nekonyume.gui.AchievementGuiManager;
+import mizukichou.nekonyume.gui.RankingGuiManager;
+import mizukichou.nekonyume.listener.RankingGuiListener;
+import mizukichou.nekonyume.ranking.CatRankingService;
 import mizukichou.nekonyume.achievement.AchievementService;
 import mizukichou.nekonyume.cat.BukkitCatEntityRuntime;
 import mizukichou.nekonyume.cat.CatCache;
@@ -35,6 +38,7 @@ import mizukichou.nekonyume.data.PlayerDataManager;
 import mizukichou.nekonyume.gift.GiftManager;
 import mizukichou.nekonyume.gui.CatGuiManager;
 import mizukichou.nekonyume.gui.AdminGiveGuiManager;
+import mizukichou.nekonyume.gui.CatDetailGuiManager;
 import mizukichou.nekonyume.gui.EquipGuiManager;
 import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.listener.AchievementListener;
@@ -148,6 +152,9 @@ public final class NekoNYume extends JavaPlugin {
     private CatFoodManager catFoodManager;
     private CatGuiManager catGuiManager;
     private AdminGiveGuiManager adminGiveGuiManager;
+    private RankingGuiManager rankingGuiManager;
+    private CatDetailGuiManager catDetailGuiManager;
+    private mizukichou.nekonyume.ranking.CatRankingService rankingService;
     private EquipGuiManager equipGuiManager;
     private GiftManager giftManager;
     private PlayerJoinListener playerJoinListener;
@@ -616,6 +623,31 @@ public final class NekoNYume extends JavaPlugin {
                 );
 
         /*
+         * 0.8.5：全服排行三件套。
+         *
+         * 必须在命令注册之前完成装配——
+         * NekoYumeCommand / NekoYumeAdminCommand 都会持有它。
+         */
+        rankingService =
+                new CatRankingService(
+                        catStore
+                );
+
+        catDetailGuiManager =
+                new CatDetailGuiManager(
+                        catStore,
+                        catEntityService,
+                        lang
+                );
+
+        rankingGuiManager =
+                new RankingGuiManager(
+                        rankingService,
+                        catDetailGuiManager,
+                        lang
+                );
+
+        /*
          * ========================================================
          * 命令
          * ========================================================
@@ -635,6 +667,7 @@ public final class NekoNYume extends JavaPlugin {
                         skillGuiManager,
                         achievementGuiManager,
                         achievementService,
+                        rankingGuiManager,
                         toolKey,
                         lang
                 )
@@ -660,6 +693,12 @@ public final class NekoNYume extends JavaPlugin {
                         lang
                 );
 
+        /*
+         * ========================================================
+         * 全服猫咪排行面板（0.8.5，/nya ranking）
+         * ========================================================
+         */
+
         if (!registerCommand(
                 "nekoyumeadmin",
                 new NekoYumeAdminCommand(
@@ -671,6 +710,7 @@ public final class NekoNYume extends JavaPlugin {
                         catFoodManager,
                         mumaNightManager,
                         adminGiveGuiManager,
+                        rankingGuiManager,
                         lang
                 )
         )) {
@@ -707,7 +747,9 @@ public final class NekoNYume extends JavaPlugin {
                         catEntityService,
                         catSkillManager,
                         battleState,
-                        lang
+                        lang,
+                        rankingGuiManager,
+                        catDetailGuiManager
                 ),
                 new AchievementListener(
                         achievementService,
@@ -726,6 +768,10 @@ public final class NekoNYume extends JavaPlugin {
                 ),
                 new AdminGiveGuiListener(
                         adminGiveGuiManager
+                ),
+                new RankingGuiListener(
+                        rankingGuiManager,
+                        catDetailGuiManager
                 ),
                 new CatBattleLootListener(
                         configManager,

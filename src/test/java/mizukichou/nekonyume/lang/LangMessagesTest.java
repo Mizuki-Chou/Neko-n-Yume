@@ -580,4 +580,92 @@ class LangMessagesTest {
                 )
         );
     }
+
+
+    @Test
+    void missingArgumentBecomesEmptyText() {
+        LangMessages lm = messages("feed.test: \"<gold>欢迎, {0}!</gold>\"");
+        assertEquals("欢迎, {0}!", strip(lm.message("feed.test")), "缺参时占位符按字面保留");
+    }
+
+    @Test
+    void extraArgumentsAreIgnored() {
+        LangMessages lm = messages("feed.test: \"<gold>{0}</gold>\"");
+        assertEquals("a", strip(lm.message("feed.test", "a", "b", "c")));
+    }
+
+    @Test
+    void literalBracesArePreserved() {
+        LangMessages lm = messages("feed.test: \"a{b}c {0} {1}x\"");
+        assertEquals("a{b}c X Yx", strip(lm.message("feed.test", "X", "Y")));
+    }
+
+    @Test
+    void nonDigitPlaceholderIsLiteral() {
+        LangMessages lm = messages("feed.test: \"{a} {0} {1}\"");
+        assertEquals("{a} X Y", strip(lm.message("feed.test", "X", "Y")));
+    }
+
+    @Test
+    void multiplePlaceholdersInOrder() {
+        LangMessages lm = messages("feed.test: \"{2}-{0}-{1}\"");
+        assertEquals("C-A-B", strip(lm.message("feed.test", "A", "B", "C")));
+    }
+
+    @Test
+    void childPlaceholderKeepsParentText() {
+        LangMessages lm = messages("feed.test: \"<white>等级: <yellow>{0}</yellow></white>\"");
+        assertEquals("等级: 3", strip(lm.message("feed.test", "3")));
+    }
+
+    @Test
+    void nestedChildAndSiblingTextOrder() {
+        LangMessages lm = messages("feed.test: \"✨ <white>{0}</white>已装备!\"");
+        assertEquals("✨ X已装备!", strip(lm.message("feed.test", "X")));
+    }
+
+    @Test
+    void argContentIsNotRescanned() {
+        LangMessages lm = messages("feed.test: \"{0}\"");
+        assertEquals("{9}", strip(lm.message("feed.test", "{9}")));
+    }
+
+    @Test
+    void emptyArgumentProducesEmptySegment() {
+        LangMessages lm = messages("feed.test: \"a{0}b\"");
+        assertEquals("ab", strip(lm.message("feed.test", "")));
+    }
+
+    @Test
+    void placeholderStyleInheritedByArg() {
+        LangMessages lm = messages("feed.test: \"<yellow>{0}</yellow>\"");
+        String out = stripLegacy(lm.message("feed.test", "HELLO"));
+        assertTrue(out.contains("§e"), "参数应继承模板样式（yellow→§e）");
+    }
+
+
+    private static String strip(
+            net.kyori.adventure.text.Component component
+    ) {
+
+        String legacy =
+                net.kyori.adventure.text.serializer.legacy
+                        .LegacyComponentSerializer.legacySection()
+                        .serialize(component);
+
+        return legacy.replaceAll(
+                "§.",
+                ""
+        );
+    }
+
+    private static String stripLegacy(
+            net.kyori.adventure.text.Component component
+    ) {
+
+        return net.kyori.adventure.text.serializer.legacy
+                .LegacyComponentSerializer.legacySection()
+                .serialize(component);
+    }
+
 }

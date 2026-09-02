@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -570,4 +571,77 @@ class CareMathTest {
                 1e-9
         );
     }
+
+
+    @Test
+    void applyExperienceSaturationMatrix() {
+        assertEquals(0, CareMath.applyExperience(0, 1.0));
+        assertEquals(0, CareMath.applyExperience(-10, 1.0));
+        assertEquals(0, CareMath.applyExperience(Integer.MIN_VALUE, 1.0));
+        assertEquals(50, CareMath.applyExperience(100, -5.0), "负倍率钳到 0.5");
+        assertEquals(100, CareMath.applyExperience(100, 1.0));
+        assertEquals(300, CareMath.applyExperience(100, 99.0), "大倍率钳到 3.0");
+        assertEquals(Integer.MAX_VALUE, CareMath.applyExperience(Integer.MAX_VALUE, 3.0));
+        assertEquals(Integer.MAX_VALUE, CareMath.applyExperience(1_500_000_000, 2.0));
+        assertEquals(1, CareMath.applyExperience(1, 0.0));
+    }
+
+    @Test
+    void applyDamageSaturationMatrix() {
+        assertEquals(0, CareMath.applyDamage(0, 1.0));
+        assertEquals(0, CareMath.applyDamage(-5, 1.0));
+        assertEquals(1, CareMath.applyDamage(1, 0.0));
+        assertEquals(Integer.MAX_VALUE, CareMath.applyDamage(Integer.MAX_VALUE, 3.0));
+        assertEquals(Integer.MAX_VALUE, CareMath.applyDamage(1_200_000_000, 2.0));
+    }
+
+    @Test
+    void applyCooldownReductionBoundaries() {
+        assertEquals(1.0, CareMath.applyCooldownReduction(1.0, 0), 1e-9);
+        assertEquals(0.5, CareMath.applyCooldownReduction(1.0, 50), 1e-9);
+        assertEquals(1.0, CareMath.applyCooldownReduction(1.0, -10), 1e-9);
+        assertEquals(0.5, CareMath.applyCooldownReduction(1.0, 150), 1e-9, "150 钳到 90 后结果被下限 0.5 兜住");
+        assertEquals(0.7, CareMath.applyCooldownReduction(1.0, 30), 1e-9);
+    }
+
+    @Test
+    void applyCooldownReductionPreservesFactorRange() {
+        for (int percent = 0; percent <= 100; percent++) {
+            double result = CareMath.applyCooldownReduction(2.4, percent);
+            assertTrue(result >= 0.5 - 1e-9 && result <= 3.0 + 1e-9, "percent=" + percent + " -> " + result);
+        }
+    }
+
+    @Test
+    void applyExperienceRoundingStability() {
+        assertEquals(3, CareMath.applyExperience(2, 1.5));
+        assertEquals(5, CareMath.applyExperience(3, 1.5), "Math.round 半上取整");
+        assertEquals(3, CareMath.applyExperience(5, 0.4), "0.4 先钳到下限 0.5，2.5 半上取整为 3");
+    }
+
+    @Test
+    void applyDamageRoundingStability() {
+        assertEquals(3, CareMath.applyDamage(2, 1.5));
+        assertEquals(2, CareMath.applyDamage(5, 0.4), "applyDamage 不钳倍率（与 applyExperience 的钳制语义区分）");
+    }
+
+    @Test
+    void multiplierClampLowerAndUpperBounds() {
+        assertEquals(1.5, CareMath.applyExperience(100, 1.5) / 100.0, 1e-9);
+        assertEquals(3.0, CareMath.applyExperience(100, 3.0) / 100.0, 1e-9);
+        assertEquals(0.5, CareMath.applyExperience(100, 0.5) / 100.0, 1e-9);
+    }
+
+    @Test
+    void healingMultiplierRequiresConfigOrFallsBack() {
+        double plain = CareMath.healingMultiplier(CatMood.HAPPY, null);
+        assertEquals(1.0, plain, 1e-9);
+    }
+
+    @Test
+    void cooldownFactorRequiresConfigOrFallsBack() {
+        double plain = CareMath.cooldownFactor(BondTier.SOULMATE, null);
+        assertEquals(1.0, plain, 1e-9);
+    }
+
 }

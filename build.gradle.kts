@@ -1,5 +1,6 @@
 plugins {
     id("java-library")
+    id("jacoco")
     id("xyz.jpenilla.run-paper") version "3.1.0"
 }
 
@@ -35,7 +36,7 @@ dependencies {
 }
 
 group = "mizukichou"
-version = "0.8.4-alpha"
+version = "0.8.5-alpha"
 
 base {
     archivesName.set("NekoNYume")
@@ -65,5 +66,18 @@ tasks {
         testLogging {
             events("passed", "skipped", "failed")
         }
+    }
+
+    jacocoTestReport {
+        dependsOn(test)
+
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+        }
+    }
+
+    check {
+        dependsOn(jacocoTestReport)
     }
 }

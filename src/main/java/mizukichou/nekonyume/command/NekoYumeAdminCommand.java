@@ -6,6 +6,7 @@ import mizukichou.nekonyume.cat.CatProgressionService;
 import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.MeowDanQuality;
 import mizukichou.nekonyume.gui.AdminGiveGuiManager;
+import mizukichou.nekonyume.gui.RankingGuiManager;
 import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.muma.MumaNightManager;
 import mizukichou.nekonyume.storage.CatStore;
@@ -54,6 +55,7 @@ public class NekoYumeAdminCommand
     private final CatFoodManager foodManager;
     private final MumaNightManager mumaNightManager;
     private final AdminGiveGuiManager giveGuiManager;
+    private final RankingGuiManager rankingGuiManager;
     private final Lang lang;
 
     /*
@@ -72,6 +74,7 @@ public class NekoYumeAdminCommand
             CatFoodManager foodManager,
             MumaNightManager mumaNightManager,
             AdminGiveGuiManager giveGuiManager,
+            RankingGuiManager rankingGuiManager,
             Lang lang
     ) {
 
@@ -83,6 +86,7 @@ public class NekoYumeAdminCommand
         this.foodManager = foodManager;
         this.mumaNightManager = mumaNightManager;
         this.giveGuiManager = giveGuiManager;
+        this.rankingGuiManager = rankingGuiManager;
         this.lang = lang;
     }
 
@@ -200,6 +204,40 @@ public class NekoYumeAdminCommand
 
             giveGuiManager.open(
                     player
+            );
+
+            return true;
+        }
+
+        /*
+         * /nekoyumeadmin ranking（0.8.5）
+         * 打开全服猫咪排行面板（Splay 树分页）。
+         */
+        if (args[0].equalsIgnoreCase("ranking")) {
+
+            if (!(sender instanceof Player player)) {
+
+                sender.sendMessage(
+                        lang.forSender(sender).message(
+                                "admin.player-only"
+                        )
+                );
+
+                return true;
+            }
+
+            if (rankingGuiManager == null) {
+
+                sender.sendMessage(
+                        "Ranking is not available yet."
+                );
+
+                return true;
+            }
+
+            rankingGuiManager.open(
+                    player,
+                    true
             );
 
             return true;
@@ -823,7 +861,8 @@ public class NekoYumeAdminCommand
                     "skill",
                     "mumanight",
                     "give",
-                    "reload"
+                    "reload",
+                    "ranking"
             );
         }
 

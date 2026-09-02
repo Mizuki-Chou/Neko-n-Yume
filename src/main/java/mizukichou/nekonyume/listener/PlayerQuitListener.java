@@ -20,13 +20,18 @@ public class PlayerQuitListener implements Listener {
     private final mizukichou.nekonyume.skill.CatBattleState battleState;
     private final Lang lang;
 
+    private final mizukichou.nekonyume.gui.RankingGuiManager rankingGuiManager;
+    private final mizukichou.nekonyume.gui.CatDetailGuiManager detailGuiManager;
+
     public PlayerQuitListener(
             CatCache cache,
             CatStore store,
             CatEntityService entityService,
             CatSkillManager skillManager,
             mizukichou.nekonyume.skill.CatBattleState battleState,
-            Lang lang
+            Lang lang,
+            mizukichou.nekonyume.gui.RankingGuiManager rankingGuiManager,
+            mizukichou.nekonyume.gui.CatDetailGuiManager detailGuiManager
     ) {
 
         this.cache = cache;
@@ -35,6 +40,8 @@ public class PlayerQuitListener implements Listener {
         this.skillManager = skillManager;
         this.battleState = battleState;
         this.lang = lang;
+        this.rankingGuiManager = rankingGuiManager;
+        this.detailGuiManager = detailGuiManager;
     }
 
     @EventHandler
@@ -125,6 +132,18 @@ public class PlayerQuitListener implements Listener {
              * 协助目标属于会话态——退出即失效。
              */
             battleState.clearAssistTarget(
+                    playerUUID
+            );
+
+            /*
+             * 0.8.5：排行面板状态（排序模式 / 页码）
+             * 属于会话态，退出即清理，防止状态表单调增长。
+             */
+            rankingGuiManager.clearState(
+                    playerUUID
+            );
+
+            detailGuiManager.clearState(
                     playerUUID
             );
         }
