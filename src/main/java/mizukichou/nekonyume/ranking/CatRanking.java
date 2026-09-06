@@ -2,7 +2,10 @@ package mizukichou.nekonyume.ranking;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * 一次排行快照：Splay 树持有全量数据，按 1 基排名切页。
@@ -21,7 +24,12 @@ public final class CatRanking {
 
     /**
      * 以给定条目集合构建排行快照。
-     * 重复 UUID 条目按比较器稳定性排序（调用方应保证唯一）。
+     *
+     * <p>
+     * 0.9.0更新：排行榜业务语义是"每个主人
+     * 一只猫"——构造期按 ownerUuid 去重（首现保留），
+     * total 以去重后的数量为准，杜绝同一主人占两个名次。
+     * </p>
      */
     public CatRanking(
             SortMode mode,
@@ -33,11 +41,24 @@ public final class CatRanking {
                 mode.comparator()
         );
 
+        Map<UUID, CatRankEntry> deduped =
+                new LinkedHashMap<>();
+
         for (CatRankEntry entry : entries) {
+
+            deduped.putIfAbsent(
+                    entry.ownerUuid(),
+                    entry
+            );
+        }
+
+        for (CatRankEntry entry :
+                deduped.values()) {
+
             tree.insert(entry);
         }
 
-        this.total = entries.size();
+        this.total = deduped.size();
     }
 
     public SortMode mode() {
@@ -110,3 +131,4 @@ public final class CatRanking {
         return tree.toList();
     }
 }
+

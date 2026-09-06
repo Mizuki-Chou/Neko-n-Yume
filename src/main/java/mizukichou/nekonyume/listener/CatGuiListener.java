@@ -26,7 +26,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.List;
 
 /**
- * GUI 点击处理。
+ * GUI 点击处理捏。
  *
  * <p>
  * 0.7.0：玩家文案改走 Lang（gui-click.* 节）。
@@ -80,7 +80,7 @@ public class CatGuiListener implements Listener {
     ) {
 
         /*
-         * 0.8.1 修复（P0）：删除冗余的
+         * 删除冗余的
          * event.getInventory().getHolder() 判定。
          *
          * 1. 它与下方的 holder 模式变量同名，导致编译错误
@@ -413,7 +413,7 @@ public class CatGuiListener implements Listener {
         }
 
         /*
-         * 槽位区：18 ~ 35（0.8.1 扩展到 18 槽）。
+         * 槽位区：18 ~ 35（扩展到 18 槽）。
          */
         if (slot < 18 ||
                 slot > 35) {
@@ -549,3 +549,4 @@ public class CatGuiListener implements Listener {
         }
     }
 }
+

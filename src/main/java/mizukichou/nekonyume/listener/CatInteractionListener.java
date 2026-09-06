@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.listener;
 
+import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEquipItem;
 import mizukichou.nekonyume.cat.CatProgressionService;
@@ -28,7 +29,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * 抚摸交互监听。
+ * 抚摸交互监听捏。
  *
  * <p>
  * 0.7.0：配置改走 ConfigManager 快照；文案改走 Lang（pet.* 节）。
@@ -44,7 +45,7 @@ public class CatInteractionListener implements Listener {
 
     /*
      * 基础抚摸冷却（毫秒）。
-     * 实际冷却由性格决定。
+     * 实际冷却由性格决定啦。
      */
     private static final long DEFAULT_PET_COOLDOWN =
             1000L;
@@ -335,6 +336,26 @@ public class CatInteractionListener implements Listener {
                 config.getGrowth()
                         .getPetXpMax();
 
+        /*
+         * 0.9.0更新：运行时再次校验范围——
+         * 配置热重载/异常 provider 造成 min > max 时，
+         * 在修改状态之后抛 nextInt(负数) 会留下
+         * “好感已加、XP 未给”的不完整交互。
+         */
+        if (petXpMin < 0 ||
+                petXpMax < 0 ||
+                petXpMin > petXpMax) {
+
+            org.bukkit.Bukkit.getLogger().warning(
+                    "Invalid pet-xp range [" + petXpMin
+                            + ", " + petXpMax
+                            + "] — falling back to zero XP."
+            );
+
+            petXpMin = 0;
+            petXpMax = 0;
+        }
+
         int xpGain =
                 petXpMin
                         + random.nextInt(
@@ -388,6 +409,18 @@ public class CatInteractionListener implements Listener {
 
             chance +=
                     equipBonus.getMeowBonus();
+        }
+
+        /*
+         * 0.9.0更新：灵光一现（抚摸/喂食的
+         * 喵力概率 +5）——技能此前仅有枚举与描述。
+         */
+        if (logicalCat.hasSkill(
+                CatSkill.FLASH_OF_SPIRIT
+        )) {
+
+            chance +=
+                    5;
         }
 
         if (chance > 0 &&
@@ -637,3 +670,4 @@ public class CatInteractionListener implements Listener {
         return closestCat;
     }
 }
+

@@ -20,7 +20,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
 /**
- * 右键喂食监听。
+ * 右键喂食监听喵。
  *
  * <p>
  * 0.7.0：文案改走 Lang（feed.not-your-cat / feed.meowdan-expired）。
@@ -33,22 +33,33 @@ public class CatFoodListener implements Listener {
 
     private final NamespacedKey catKey;
     private final NamespacedKey ownerKey;
+    private final NamespacedKey catIdKey;
+
+    /**
+     * 0.9.0更新：交互转发的坐姿切换需要
+     * 逻辑 Cat（behaviorMode 联动）喵。
+     */
+    private final mizukichou.nekonyume.cat.CatCache catCache;
 
     public CatFoodListener(
             CatFoodManager foodManager,
             NamespacedKey catKey,
             NamespacedKey ownerKey,
-            Lang lang
+            NamespacedKey catIdKey,
+            Lang lang,
+            mizukichou.nekonyume.cat.CatCache catCache
     ) {
 
         this.foodManager = foodManager;
         this.catKey = catKey;
         this.ownerKey = ownerKey;
+        this.catIdKey = catIdKey;
         this.lang = lang;
+        this.catCache = catCache;
     }
 
     /*
-     * 0.8.1 R5（社区上报）：
+     * 
      * ignoreCancelled = true——区域保护/交互限制插件取消事件时，
      * 本插件绝不再继续喂食/消耗物品，遵守跨插件事件契约。
      */
@@ -56,15 +67,9 @@ public class CatFoodListener implements Listener {
             priority = EventPriority.NORMAL,
             ignoreCancelled = true
     )
-    public void onCatFeed(
+        public void onCatFeed(
             PlayerInteractAtEntityEvent event
     ) {
-
-        /*
-         * ============================================================
-         * 1. 只处理 Bukkit 猫
-         * ============================================================
-         */
 
         if (!(event.getRightClicked()
                 instanceof Cat cat)) {
@@ -72,8 +77,30 @@ public class CatFoodListener implements Listener {
             return;
         }
 
-        Player player =
-                event.getPlayer();
+        if (processCatInteract(
+                event.getPlayer(),
+                cat,
+                event.getHand()
+        )) {
+
+            event.setCancelled(
+                    true
+            );
+        }
+    }
+
+    public boolean processCatInteract(
+            Player player,
+            Cat cat,
+            EquipmentSlot hand
+    ) {
+
+        /*
+         * 0.9.0更新：从 AtEntity 事件提取的公共
+         * 交互处理——原事件路径与 Display/Interaction 转发路径
+         * 共用（hideEntity 后客户端不再对猫发 AtEntity 包）。
+         */
+        boolean cancelOriginal = false;
 
         /*
          * ============================================================
@@ -87,7 +114,7 @@ public class CatFoodListener implements Listener {
                         PersistentDataType.BYTE
                 )) {
 
-            return;
+            return cancelOriginal;
         }
 
         /*
@@ -120,9 +147,7 @@ public class CatFoodListener implements Listener {
 
         if (!isOwner) {
 
-            event.setCancelled(
-                    true
-            );
+            cancelOriginal = true;
 
             player.sendMessage(
                     lang.forPlayer(player).message(
@@ -130,7 +155,36 @@ public class CatFoodListener implements Listener {
                     )
             );
 
-            return;
+            return cancelOriginal;
+        }
+
+        /*
+         * 0.9.0更新：owner 一致还不够——必须验证
+         * 实体 PDC 的 cat-id 与实体索引中的逻辑猫一致，
+         * 否则绑定损坏时玩家会通过 B 实体操作 A 的逻辑猫。
+         */
+        String pdcCatId =
+                cat.getPersistentDataContainer()
+                        .get(
+                                catIdKey,
+                                PersistentDataType.STRING
+                        );
+
+        mizukichou.nekonyume.cat.Cat indexedCat =
+                catCache.getCatByEntity(
+                        cat.getUniqueId()
+                );
+
+        if (pdcCatId == null ||
+                indexedCat == null ||
+                !pdcCatId.equals(
+                        indexedCat.getId().toString()
+                ) ||
+                !indexedCat.getOwnerUuid().equals(
+                        player.getUniqueId()
+                )) {
+
+            return cancelOriginal;
         }
 
         /*
@@ -141,10 +195,17 @@ public class CatFoodListener implements Listener {
          * 副手持食物不触发，避免双持时重复处理。
          */
 
-        if (event.getHand()
+        if (hand
                 != EquipmentSlot.HAND) {
 
-            return;
+            /*
+             * 0.9.0更新：副手同样取消原版
+             * 行为——副手鱼会触发原版喂食/恋爱模式，
+             * 两只猫可繁殖出没有 PDC 的幽灵小猫；
+             * 副手装备（拴绳/名牌/铃铛）会被原版消耗，
+             * PDC 与觉醒属性永久丢失。
+             */
+            return true;
         }
 
         ItemStack item =
@@ -159,7 +220,7 @@ public class CatFoodListener implements Listener {
              * 不取消事件，
              * 保留原版「空手右键切换坐姿」。
              */
-            return;
+            return cancelOriginal;
         }
 
         /*
@@ -172,7 +233,7 @@ public class CatFoodListener implements Listener {
 
         if (foodManager.isEquipment(item)) {
 
-            event.setCancelled(true);
+            cancelOriginal = true;
 
             CatEquipItem equip =
                     foodManager.getEquipment(
@@ -195,7 +256,7 @@ public class CatFoodListener implements Listener {
                         );
             }
 
-            return;
+            return cancelOriginal;
         }
 
         /*
@@ -212,7 +273,7 @@ public class CatFoodListener implements Listener {
             /*
              * 阻止原版右键默认行为。
              */
-            event.setCancelled(true);
+            cancelOriginal = true;
 
             boolean used =
                     foodManager.feedMeowDan(
@@ -231,7 +292,7 @@ public class CatFoodListener implements Listener {
                         );
             }
 
-            return;
+            return cancelOriginal;
         }
 
         /*
@@ -245,7 +306,7 @@ public class CatFoodListener implements Listener {
 
         if (foodManager.isXpPill(item)) {
 
-            event.setCancelled(true);
+            cancelOriginal = true;
 
             boolean used =
                     foodManager.feedXpPill(
@@ -264,7 +325,7 @@ public class CatFoodListener implements Listener {
                         );
             }
 
-            return;
+            return cancelOriginal;
         }
 
         /*
@@ -275,7 +336,7 @@ public class CatFoodListener implements Listener {
 
         if (foodManager.isLegacyMeowDan(item)) {
 
-            event.setCancelled(true);
+            cancelOriginal = true;
 
             player.sendMessage(
                     lang.forPlayer(player).message(
@@ -283,7 +344,7 @@ public class CatFoodListener implements Listener {
                     )
             );
 
-            return;
+            return cancelOriginal;
         }
 
         /*
@@ -300,7 +361,7 @@ public class CatFoodListener implements Listener {
              * 非食物：
              * 不取消事件（保留原版交互）。
              */
-            return;
+            return cancelOriginal;
         }
 
         /*
@@ -313,7 +374,7 @@ public class CatFoodListener implements Listener {
          * 原版会尝试喂食并消耗物品，
          * 与"已经吃饱"提示相互矛盾。
          */
-        event.setCancelled(true);
+        cancelOriginal = true;
 
         boolean success =
                 foodManager.feedCat(
@@ -340,6 +401,8 @@ public class CatFoodListener implements Listener {
                             1.0f
                     );
         }
+
+        return cancelOriginal;
     }
 
     /*
@@ -363,7 +426,86 @@ public class CatFoodListener implements Listener {
      * 方块放置（铃铛/围巾等）。
      * LOWEST 优先取消，阻止方块进入世界。
      */
-    @EventHandler(
+    
+    /**
+     * 0.9.0更新：交互代理转发入口——
+     * hideEntity 后玩家右键命中 Interaction 实体，
+     * 由 ModelVisualListener 转发到本方法。
+     * 空手 = 手动切换坐姿（原版路径已不可用）；
+     * 非空手 = 完整喂食/装备/喵丹流程。
+     */
+    public void handleProxyInteract(
+            Player player,
+            Cat cat,
+            EquipmentSlot hand
+    ) {
+
+        if (hand != EquipmentSlot.HAND) {
+
+            return;
+        }
+
+        ItemStack item =
+                player.getInventory()
+                        .getItemInMainHand();
+
+        if (item == null ||
+                item.getType().isAir()) {
+
+            /*
+             * 空手右键：手动切换坐姿（原版行为的手动替代）。
+             */
+            /*
+             * 0.9.0更新：绑定损坏时绝不按玩家名
+             * 找猫回退——那样会用 A 的逻辑猫去改玩家实际
+             * 点击的 B 实体（identity split）。
+             */
+            mizukichou.nekonyume.cat.Cat logicalCat =
+                    catCache.getCatByEntity(
+                            cat.getUniqueId()
+                    );
+
+            if (logicalCat == null ||
+                    !logicalCat.getOwnerUuid().equals(
+                            player.getUniqueId()
+                    )) {
+
+                return;
+            }
+
+            if (logicalCat.getBehaviorMode()
+                        == mizukichou.nekonyume.cat.CatBehaviorMode.SIT) {
+
+                    logicalCat.setBehaviorMode(
+                            mizukichou.nekonyume.cat.CatBehaviorMode.FOLLOW
+                    );
+
+                    cat.setSitting(
+                            false
+                    );
+
+                } else {
+
+                    logicalCat.setBehaviorMode(
+                            mizukichou.nekonyume.cat.CatBehaviorMode.SIT
+                    );
+
+                    cat.setSitting(
+                            true
+                    );
+                }
+
+            return;
+        }
+
+        processCatInteract(
+                player,
+                cat,
+                hand
+        );
+    }
+
+@EventHandler(
             priority = EventPriority.LOWEST,
             ignoreCancelled = true
     )
@@ -392,6 +534,45 @@ public class CatFoodListener implements Listener {
     }
 
     /*
+     * 0.9.0更新：经验丸（附魔之瓶材质）右键空气
+     * 会被原版投掷——阻止（防玩家无意损耗 PDC 物品）。
+     */
+    @EventHandler(
+            priority = EventPriority.LOWEST,
+            ignoreCancelled = true
+    )
+    public void onXpPillUseAir(
+            PlayerInteractEvent event
+    ) {
+
+        if (event.getAction()
+                != Action.RIGHT_CLICK_AIR) {
+
+            return;
+        }
+
+        if (event.getHand()
+                != EquipmentSlot.HAND) {
+
+            return;
+        }
+
+        ItemStack item =
+                event.getPlayer()
+                        .getInventory()
+                        .getItemInMainHand();
+
+        if (foodManager.isXpPill(
+                item
+        )) {
+
+            event.setCancelled(
+                    true
+            );
+        }
+    }
+
+    /*
      * 右键方块（拴绳拴栅栏、毛线球拉绊线等）。
      */
     @EventHandler(
@@ -410,6 +591,24 @@ public class CatFoodListener implements Listener {
 
         if (event.getHand()
                 != EquipmentSlot.HAND) {
+
+            /*
+             * 0.9.0更新：副手持装备右键猫时
+             * 同样取消（原版会消耗副手物品——名牌命名等）。
+             */
+            ItemStack offHand =
+                    event.getPlayer()
+                            .getInventory()
+                            .getItemInOffHand();
+
+            if (foodManager.isEquipment(
+                    offHand
+            )) {
+
+                event.setCancelled(
+                        true
+                );
+            }
 
             return;
         }
@@ -441,7 +640,7 @@ public class CatFoodListener implements Listener {
      * 右键实体（名牌命名、拴绳拴生物等）。
      * 只拦截主手；对自己猫的穿戴流程不受影响。
      *
-     * 0.8.1 修复（P0）：
+     * 
      * PlayerInteractEntityEvent 先于 PlayerInteractAtEntityEvent 触发，
      * 且取消前者会让 Paper 不再触发后者——若这里无差别取消，
      * onCatFeed 中的装备穿戴流程（equipCat）将永远无法执行。
@@ -514,3 +713,4 @@ public class CatFoodListener implements Listener {
                 );
     }
 }
+

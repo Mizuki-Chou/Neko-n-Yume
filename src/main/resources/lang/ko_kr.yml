@@ -1,0 +1,650 @@
+#
+# Neko n' Yume 언어 파일 (한국어)
+#
+# 채팅 메시지는 MiniMessage 템플릿을 사용합니다.
+# {0} {1} … 은 매개변수 자리표시자입니다 (파싱 후 안전하게 치환되며,
+# 플레이어 텍스트는 태그로 해석되지 않습니다).
+# 순수 문자열(GUI 아이템 이름 / lore / title)은 § 색상 코드를 사용합니다.
+# 서버측 재정의 파일: plugins/NekoNYume/lang/ko_kr.yml
+# /nekoyumeadmin reload 로 핫 리로드됩니다.
+
+#
+# ---------- 명령어 ----------
+#
+command:
+  no-cat: "<red>🐱 아직 고양이가 없어요!</red>"
+  unknown: "<yellow>사용법: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|language|achievements></yellow>"
+
+  model-no-cat: "<yellow>아직 고양이가 없네요.</yellow>"
+  model-current: "<aqua>당신 고양이의 모델: </aqua><gray>{0}</gray>"
+  model-default: "<aqua>당신 고양이의 모델: </aqua><gray>기본값 (미지정)</gray>"
+  help: |
+    <gradient:#ff9de2:#a78bfa>
+    🐱 Neko n' Yume 명령어
+    </gradient>
+
+    <gray>/nekoyume claim</gray> - 첫 고양이 입양하기
+    <gray>/nekoyume cat</gray> - 고양이 정보 보기
+    <gray>/nekoyume rename &lt;이름&gt;</gray> - 고양이 이름 바꾸기
+    <gray>/nekoyume summon</gray> - 고양이 소환하기
+    <gray>/nekoyume mode &lt;follow|sit|free&gt;</gray> - 행동 모드 설정
+    <gray>/nekoyume gui</gray> - 고양이 패널 열기
+    <gray>/nekoyume skill</gray> - 스킬 패널 열기
+    <gray>/nekoyume tool</gray> - 고양이 낚싯대 받기
+    <gray>/nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp|ko_kr|fr_fr|de_de|es_es&gt;</gray> - 플러그인 언어 설정
+    <gray>/nekoyume achievements</gray> - 업적 전당 보기
+    <gray>/nekoyume help</gray> - 도움말 보기
+
+  claim:
+    already-has: "<red>🐱 이미 고양이가 있어요!</red>"
+    first-cat: "<gradient:#ff9de2:#a78bfa>🐱 축하해요! 첫 고양이 </gradient>{0}!"
+    here: "<gradient:#ff9de2:#a78bfa>🐱 </gradient>{0}이(가) 곁에 찾아왔어요!"
+
+  cat:
+    data-error: "<red>🐱 고양이 데이터에 문제가 있습니다. 관리자에게 문의하세요.</red>"
+    header: "<gradient:#ff9de2:#a78bfa>🐱 당신의 고양이</gradient>"
+    name: "이름: {0}"
+    days: "<white>함께한 지: <aqua>{0}일째</aqua>"
+    level: "<white>레벨: <yellow>{0}</yellow> <gray>(경험치 {1}/{2})</gray>"
+    meow: "<white>냥 계급: <light_purple>{0}</light_purple> <gray>(냥력 {1}/{2})</gray>"
+    mood: "<white>기분: <yellow>{0} {1}</yellow>"
+    personality: "<white>성격: <aqua>{0}</aqua>"
+    tier: "<white>품격: <aqua>{0}</aqua>"
+    behavior: "<white>행동: <aqua>{0}</aqua>"
+    bond: "<white>유대: <light_purple>{0}</light_purple> <gray>({1}/100)</gray>"
+    combat-bonus: "<white>전투 보너스: <red>{0}%</red></white>"
+    equipment: "<white>장비: <gold>{0}</gold></white>"
+
+  mode:
+    usage: "<yellow>사용법: /nekoyume mode <follow|sit|free></yellow>"
+    unknown: "<red>❌ 알 수 없는 모드: {0}</red>"
+    changed: "<gradient:#ff9de2:#a78bfa>🐱 행동 모드를 </gradient>{0}(으)로 바꿨어요"
+
+  rename:
+    usage: "<yellow>사용법: /nekoyume rename <이름></yellow>"
+    empty: "<red>❌ 고양이 이름은 비워둘 수 없어요!</red>"
+    too-long: "<red>❌ 고양이 이름은 16자를 넘을 수 없어요!</red>"
+    done: "<gradient:#ff9de2:#a78bfa>🐱 이제 고양이 이름은 </gradient>{0}!"
+
+  summon:
+    spawned: "<gradient:#ff9de2:#a78bfa>🐱 </gradient>{0}이(가) 곁에 나타났어요!"
+    here: "<gradient:#ff9de2:#a78bfa>🐱 </gradient>{0}이(가) 곁으로 왔어요!"
+
+  tool:
+    received: "<gradient:#ff9de2:#a78bfa>🐱 고양이 낚싯대를 받았어요. 우클릭으로 사용하세요!</gradient>"
+    inventory-full: "<yellow>🐱 인벤토리가 가득 차서 낚싯대가 발밑에 떨어졌어요.</yellow>"
+
+  language:
+    usage: "<yellow>사용법: /nekoyume language <auto|zh_cn|zh_tw|en_us|ja_jp|ko_kr|fr_fr|de_de|es_es></yellow>"
+    set: "<gradient:#ff9de2:#a78bfa>🐱 플러그인 언어를 </gradient>{0}(으)로 바꿨어요!"
+    reset: "<gradient:#ff9de2:#a78bfa>🐱 이제 플러그인 언어가 마인크래프트 언어 설정을 따라갑니다.</gradient>"
+    unknown: "<red>❌ 알 수 없는 언어: {0}</red>"
+
+  achievements:
+    disabled: "<red>🏆 업적 시스템이 꺼져 있어요.</red>"
+
+#
+# ---------- 관리자 명령어 ----------
+#
+admin:
+  ranking-delete-done: "<green>✔ {0}의 고양이 {1}을(를) 삭제했습니다.</green>"
+  ranking-delete-failed: "<red>❌ {0}의 고양이 삭제에 실패했습니다.</red>"
+  ranking-delete-notify: "<red>당신의 고양이 {0}이(가) 관리자에 의해 삭제되었습니다.</red>"
+  ranking-target-missing: "<yellow>이 고양이는 더 이상 존재하지 않습니다.</yellow>"
+  no-permission: "<red>❌ 이 명령어를 실행할 권한이 없어요!</red>"
+  usage: "<yellow>사용법: /nekoyumeadmin <meowdan|cat|skill|mumanight|model|reload></yellow>"
+  reload-done: "<gradient:#a7f3d0:#60a5fa>✔ Neko n' Yume 설정을 다시 불러왔어요!</gradient>"
+  reload-failed: "<red>설정 핫 리로드에 실패했습니다 — 기존 설정이 유지됩니다.</red>"
+  player-only: "<red>❌ 이 명령어는 플레이어만 사용할 수 있어요.</red>"
+
+  model-usage: "<yellow>사용법: /nekoyumeadmin model <reload|list|set <플레이어> <모델ID>|clear <플레이어>></yellow>"
+  model-reload-started: "<gray>모델을 다시 불러오는 중입니다 (비동기)…</gray>"
+  model-reload-done: "<gradient:#a7f3d0:#60a5fa>✔ 모델 리로드가 끝났습니다.</gradient>"
+  model-reload-superseded: "<yellow>모델 리로드가 더 새로운 요청으로 대체되었습니다.</yellow>"
+  model-reload-shutdown: "<yellow>플러그인이 종료 중이라 모델 리로드가 실행되지 않았습니다.</yellow>"
+  model-reload-failed: "<red>모델 리로드 실패 (리소스팩 빌드 실패) — 기존 모델이 유지됩니다.</red>"
+  model-list-empty: "<yellow>로드된 모델이 없습니다 (models 폴더를 확인하세요).</yellow>"
+  model-list: "<aqua>로드된 모델: </aqua><gray>{0}</gray>"
+  model-set-done: "<gradient:#a7f3d0:#60a5fa>✔ {0}의 고양이 모델을 {1}(으)로 설정했습니다.</gradient>"
+  model-clear-done: "<gradient:#a7f3d0:#60a5fa>✔ {0}의 고양이 모델을 초기화했습니다 (기본값으로 복귀).</gradient>"
+  model-set-failed: "<red>❌ 설정 실패: 플레이어에게 고양이가 없거나 모델 ID가 올바르지 않습니다.</red>"
+
+  meowdan-usage: "<yellow>사용법: /nekoyumeadmin meowdan give <플레이어> <품질> [수량]</yellow>"
+  meowdan-quality-hint: "<gray>품질: 평범 / 정밀 / 고유 / 탁월 / 지극</gray>"
+  player-offline: "<red>❌ 플레이어가 접속 중이 아니에요!</red>"
+  unknown-quality: "<red>❌ 알 수 없는 품질: {0}</red>"
+  invalid-amount: "<red>❌ 올바르지 않은 수량이에요!</red>"
+  amount-positive: "<red>❌ 수량은 0보다 커야 해요!</red>"
+  give-cap: "<yellow>⚠ 한 번에 최대 {0}개까지만 지급할 수 있어 상한에 맞춰 처리했습니다.</yellow>"
+  give-sender: "<gradient:#a7f3d0:#60a5fa>✔ </gradient>{0}에게 {1} {2}개를 지급했습니다"
+  give-target: "<gradient:#c4b5fd:#a78bfa>✨ </gradient>{0}을(를) 받았어요"
+
+  cat-usage: "<yellow>사용법: /nekoyumeadmin cat <remove> <플레이어> [confirm]</yellow>"
+  player-not-found: "<red>❌ 플레이어를 찾을 수 없습니다.</red>"
+  no-cat-data: "<red>❌ 이 플레이어에게 고양이 데이터가 없습니다.</red>"
+  remove-warning: "<red>⚠ 이 작업은 고양이의 모든 데이터를 삭제하며 되돌릴 수 없어요!</red>"
+  remove-confirm: "<yellow>확인하려면 실행하세요: /nekoyumeadmin cat remove {0} confirm</yellow>"
+  remove-done: "<red>✔ {0}의 고양이 데이터를 삭제했습니다.</red>"
+  remove-fail: "<red>❌ 삭제 실패: 이 플레이어에게 고양이 데이터가 없습니다.</red>"
+
+  skill-usage: "<yellow>사용법: /nekoyumeadmin skill give <플레이어> <스킬ID></yellow>"
+  skill-hint: "<gray>사용 가능한 스킬: SHARP_CLAW LIGHT_STEP LIGHT_FUR ALERT WARMTH SMALL_APPETITE IRON_WALL HUNTER_SENSE GUARDIAN FORAGER HEALING_PURR SWIFT_PAWS HUNTING_INSTINCT SPIRIT_SHOT SHADOW_STRIKE DRAIN STAR_DUST NINE_LIVES MEOW_GUARD FLASH_OF_SPIRIT DREAM_AWAKEN STARFALL MOONLIGHT ETERNITY TIME_ECHO RESONANCE DREAM_WEAVER</gray>"
+  unknown-skill: "<red>❌ 알 수 없는 스킬: {0}</red>"
+  skill-granted: "<green>✔ </green>{0}에게 스킬 {1}을(를) 부여했습니다"
+  skill-granted-target: "<gradient:#fde68a:#f59e0b>🎉 당신의 고양이가 새로운 스킬을 배웠어요: </gradient>{0}"
+  skill-grant-fail: "<red>❌ 이 플레이어는 이미 이 스킬을 가지고 있어요.</red>"
+
+  mumanight-player-only: "<red>❌ 이 명령어는 플레이어만 사용할 수 있어요.</red>"
+  mumanight-status: "<yellow>🌑 악몽의 밤 (현재 월드): </yellow> {0} <gray>사용법: /nekoyumeadmin mumanight <on|off></gray>"
+  mumanight-on: "<dark_red>✔ 악몽의 밤을 켰습니다.</dark_red>"
+  mumanight-off: "<gold>✔ 악몽의 밤을 껐습니다.</gold>"
+  mumanight-state-on: "켜짐"
+  mumanight-state-off: "꺼짐"
+  mumanight-usage: "<yellow>사용법: /nekoyumeadmin mumanight <on|off></yellow>"
+
+#
+# ---------- 먹이 ----------
+#
+feed:
+  full: "<yellow>🐱 고양이가 이미 배불러요!</yellow>"
+  ate-food: "<light_purple>🐱 </light_purple>{0}이(가) <yellow>{1}</yellow>을(를) 먹었어요!"
+  hunger-up: "<gold>🍖 포만감 <green>+{0} <gray>({1}/100)</gray>"
+  affection-up: "<red>❤ 호감도 <green>+{0} <gray>({1}/100)</gray>"
+  hungry-bonus: "<red>❤ </red>{0}이(가) 몹시 배고파서 유난히 맛있게 먹었어요. 호감도가 크게 올랐어요!"
+  meowdan-eat: "<gradient:#c4b5fd:#a78bfa>✨ </gradient>{0}이(가) {1}을(를) 먹었어요!"
+  meowdan-affection: "<red>❤ 호감도 <green>+{0} <gray>({1}/100)</gray>"
+  meowdan-lore-use: "고양이에게 우클릭해서 사용"
+  meowdan-lore-values: "냥력 +{0} · 호감 +{1} · 경험치 +{2}"
+  tier-upgrade: "<gradient:#c4b5fd:#a78bfa>🌟 품격 승화!</gradient> {0}의 품격이 {1}(으)로 올랐어요"
+  tier-upgrade-invalid: "<yellow>⚠ 이 고양이의 현재 품격으로는 {0}이(가) 더 이상 승화될 수 없어요.</yellow>"
+  tier-upgrade-fail: "<gray>냥단의 힘이 몸속에서 흘렀지만 품격에는 변화가 없었어요…</gray>"
+  not-your-cat: "<red>🐱 이건 당신의 고양이가 아니에요.</red>"
+  meowdan-expired: "<red>🐱 이 냥단은 유효기간이 지나 사용할 수 없어요.</red>"
+  xp-pill-eat: "<gradient:#a7f3d0:#60a5fa>🍀 </gradient>{0}이(가) {1}을(를) 먹고 <green>{2}</green> 경험치를 얻었어요!"
+
+#
+# ---------- 쓰다듬기 ----------
+#
+pet:
+  limit-reached: "<yellow>🐱 오늘은 이미 고양이를 {0}번 쓰다듬었어요!</yellow>"
+  petted: "<light_purple>🐱 </light_purple>{0}<white>이(가) 당신에게 몸을 비볐어요!</white>"
+  affection-up: "<red>❤ 호감도 <green>+{0} <gray>({1}/100)</gray>"
+  affection-max: "<red>❤ 호감도 <gray>이미 최대치예요 ({0}/100)</gray>"
+  progress: "<yellow>🐾 오늘 쓰다듬기: {0}/{1} <gray>| {2}회 남음</gray>"
+
+#
+# ---------- 성장 ----------
+#
+progression:
+  level-up: "<gradient:#fde68a:#f59e0b>🎉 </gradient>{0}이(가) <yellow>{1}레벨</yellow>이 되었어요!"
+  meow-power: "<gradient:#c4b5fd:#a78bfa>✨ 냥빛이 번뜩!</gradient>{0}이(가) <light_purple>{1} 냥력</light_purple>을 얻었어요!"
+  meow-rank-up: "<gradient:#c4b5fd:#a78bfa>🌟 냥 계급 상승!</gradient>{0}이(가) <light_purple>냥 계급 {1}</light_purple>(으)로 올랐어요!"
+  new-skill: "<gradient:#fde68a:#f59e0b>🎉 </gradient>{0}이(가) 새로운 스킬을 배웠어요: {1}"
+  refresh-cant-afford: "<red>❌ {0}이(가) 부족해서 새로 뽑을 수 없어요.</red>"
+  refresh-no-pool: "<yellow>새로 뽑을 수 있는 스킬이 없어요.</yellow>"
+  refresh-charge-fail: "<red>❌ {0} 차감에 실패했어요.</red>"
+  refresh-done: "<gradient:#c4b5fd:#a78bfa>✨ 스킬 슬롯을 새로 뽑았어요: </gradient>{0} → {1}"
+
+#
+# ---------- 선물 ----------
+#
+gift:
+  received: "<gradient:#fde68a:#f59e0b>🎁 </gradient>{0}이(가) 선물을 물어다 가방에 넣어줬어요!"
+  content: "<gray>선물 내용: <white>{0} × {1}</white></gray>"
+
+#
+# ---------- 장비 (0.8.0) ----------
+#
+equip:
+  done: "✨ <white>{0}</white>을(를) 장착했어요!"
+  same: "……{0}은(는) 이미 장착되어 있어요."
+  replaced: "기존 {0}을(를) 돌려받았어요."
+  unequipped: "{0}을(를) 벗었고 장비를 돌려받았어요."
+  no-place: "❌고양이 장비는 설치하거나 사용할 수 없어요. 자신의 고양이에게 우클릭하면 입힐 수 있어요."
+
+#
+# ---------- 관리자 지급 패널 (0.8.0) ----------
+#
+give-gui:
+  title: "§6관리자 지급 패널"
+  close: "§c닫기"
+  received: "{0}을(를) 받았어요"
+
+equip-gui:
+  title: "§b🛡 장비 화면"
+  close: "§c닫기"
+  unequip: "§c현재 장비 벗기"
+  none: "§7아직 장비가 없어요"
+  equipped-mark: "§a✔ 장착됨"
+  busy: "❌이미 장비를 착용 중이에요. 먼저 벗고 갈아입으세요."
+
+#
+# ---------- 스킬 ----------
+#
+skill:
+  missing: "<red>🐱 고양이가 이 스킬을 배우지 않았어요.</red>"
+  recovering: "<red>🐱 고양이가 다쳐서 스킬을 쓸 수 없어요.</red>"
+  hungry: "<yellow>🐱 </yellow>{0}이(가) 너무 배고파서 스킬을 쓸 힘이 없어요. 먼저 먹이를 주세요."
+  cooldown: "<yellow>⏳ 스킬 재사용 대기 중, <white>{0}초</white> 남음</yellow>"
+  effect-healing: "<green>❤ 「힐링 가르릉」발동, 체력을 {0} 회복했어요.</green>"
+  effect-swift: "<aqua>💨 「재빠른 고양이」발동, 속도가 올랐어요.</aqua>"
+  effect-hunting: "<red>⚔ 「사냥 각성」발동, 공격력이 올랐어요.</red>"
+  effect-guard: "<light_purple>🛡 「냥 수호」발동, 저항이 올랐어요.</light_purple>"
+  effect-dream: "<gradient:#c4b5fd:#a78bfa>🌙 「꿈에서 깨어나다」강림, 적들이 그대로 쓰러졌어요.</gradient>"
+  effect-starfall: "<gradient:#fde68a:#f59e0b>⭐ 「별무리」발동, 별들이 쏟아져 내려요!</gradient>"
+  effect-time-echo: "<gradient:#c4b5fd:#f59e0b>⏳ 「시간의 메아리」발동, 시간이 이 순간 당신들을 위해 되감겨요.</gradient>"
+
+#
+# ---------- 전투 ----------
+#
+battle:
+  recovering: "<red>🐱 </red>{0}이(가) 다쳤어요. <red>{1}초 동안 움직일 수 없어요…</red>"
+  boss-xp: "<gold>🏆 </gold>{0}이(가) {1}을(를) 쓰러뜨리고 <green>{2}</green> 경험치를 얻었어요!"
+  starving: "<yellow>🐱 </yellow>{0}이(가) 너무 배고파 걸을 수 없어 출전을 거부했어요. 먹이를 주세요."
+  dream-weaver-rescue: "<aqua>🌙 </aqua>{0}의 꿈이 빛이 되어 당신을 지켰어요 — 체력이 회복됐어요!"
+
+#
+# ---------- 엔티티 ----------
+#
+entity:
+  summoning: "<yellow>🐱 고양이를 찾고 있어요. 잠시만요!</yellow>"
+  summon-failed: "<red>❌ 소환에 실패했어요. 잠시 후 다시 시도하세요.</red>"
+  summon-error: "<red>🐱 고양이 소환 중 오류가 발생했어요. 서버 로그를 확인하세요.</red>"
+  teleport-fail: "<red>🐱 고양이가 지금 순간이동할 수 없어요. 잠시 후 다시 시도하세요.</red>"
+  chunk-fail: "<red>🐱 고양이 대상 청크 로딩에 실패했어요. 잠시 후 다시 시도하세요.</red>"
+  restored-new: "<yellow>🐱 기존 고양이 엔티티를 찾을 수 없어 <gray>똑같은 고양이를 복구했어요.</gray></yellow>"
+
+#
+# ---------- 악몽의 밤 ----------
+#
+muma:
+  night-start-1: "<dark_red><bold>🌑 악몽의 밤이 찾아왔습니다……</bold></dark_red>"
+  night-start-2: "<red>야생 몬스터가 극도로 위험해집니다 — 하지만 처치하면 냥단을 얻을 기회가 있어요!</red>"
+  dawn: "<gold><bold>☀ 새벽이 밝아 악몽의 밤이 끝났습니다.</bold></gold>"
+
+#
+# ---------- 고양이 낚싯대 ----------
+#
+tool:
+  already: "<yellow>이미 고양이 낚싯대를 가지고 있어요.</yellow>"
+  wand-name: "§d🐱 고양이 낚싯대"
+  wand-lore: "§7우클릭으로 고양이 패널 열기"
+  claim-title: "§d🎉 고양이를 얻었어요!"
+  claim-subtitle: "§7§o네코토 유메 · Neko n' Yume에 오신 것을 환영해요"
+
+#
+# ---------- 입문서 ----------
+#
+book:
+  title: "§d🐱 네코토 유메 입문 가이드"
+  author: "Mizuki Chou"
+  page-1: "§l§1🐱 네코토 유메에 오신 것을 환영해요!\n\n§r§7이곳은 당신과 고양이의 작은 세계예요.\n§7이 작은 고양이는 언제나 당신 곁에 있을 거예요."
+  page-2: "§l§2🐾 기본 조작\n\n§r§7낚싯대 우클릭으로 고양이 패널을 열어요.\n§7패널에서 고양이 상태를 확인하고\n§7스킬 화면으로 전환할 수 있어요.\n§7고양이 곁에서 웅크리면 쓰다듬을 수 있어요."
+  page-3: "§l§3🍖 먹이 주기\n\n§r§7음식을 들고 고양이를 우클릭하면 먹이를 줘요.\n§7먹이는 포만감과 호감도를 올려줘요.\n§7배고프면 고양이가 야위어요.\n§7맛있는 걸 자주 챙겨주세요."
+  page-4: "§l§4💖 호감도\n\n§r§7쓰다듬기와 먹이가 호감을 올려요.\n§7호감도는 오라와 선물에 영향을 줘요.\n§7하루 첫 3번의 상호작용이 가장 효과적이에요."
+  page-5: "§l§5📈 성장\n\n§r§7상호작용으로 경험치를 얻어 레벨업하고\n§7먹이를 주면 일정 확률로 냥력을 얻어요.\n§7냥력은 냥 계급을 올리고 스킬 슬롯을 열어줘요.\n§7전투에서 고양이가 당신을 지켜줄 거예요."
+  page-6: "§l§6⚔ 전투\n\n§r§7따라오기 모드에서 고양이는\n§7주인 근처의 적대적 몹을 공격해요.\n§7다치면 90초 동안 쉬며 회복하고\n§7죽지 않아요."
+  page-7: "§l§8🏆 업적\n\n§r§7고양이와의 모든 상호작용이\n§7업적을 열 수 있어요.\n§7/nekoyume achievements 로\n§7업적 전당을 확인하세요."
+  page-8: "§l§d🌙 악몽의 밤\n\n§r§7매일 밤 일정 확률로 찾아와요.\n§7악몽의 밤에는 몬스터가 더 강해지지만\n§7처치하면 냥단을 얻을 수 있어요.\n§7🐱 고양이와 즐거운 모험 되세요!"
+
+#
+# ---------- 고양이 패널 (§ 순수 문자열) ----------
+#
+gui:
+  ranking-detail-title: "§6§l🐱 고양이 상세"
+  ranking-detail-head: "§e플레이어: {0} ({1})"
+  ranking-detail-owner: "§7주인: {0}"
+  ranking-detail-name: "§e이름: {0}"
+  ranking-detail-level: "§b레벨 {0} (경험치 {1})"
+  ranking-detail-meow: "§d냥 계급 {0} (냥력 {1})"
+  ranking-detail-tier: "§6품격: {0}"
+  ranking-detail-personality: "§a성격: {0}"
+  ranking-detail-hunger: "§6포만감: {0}/100"
+  ranking-detail-affection: "§c호감도: {0}/100"
+  ranking-detail-health: "§c체력: {0}/100"
+  ranking-detail-behavior: "§9행동: {0}"
+  ranking-detail-variant: "§3무늬: {0}"
+  ranking-detail-created: "§7만난 날: {0}"
+  ranking-detail-skills-header: "§e스킬"
+  ranking-detail-skill-locked: "§8잠긴 스킬 슬롯"
+  ranking-detail-skill-tag: "§7{0}"
+  ranking-detail-delete: "§c§l⚠ 이 고양이 삭제"
+  ranking-detail-delete-lore: "§7{0}의 {1}§7 — 이 작업은 되돌릴 수 없어요!"
+  ranking-detail-back: "§7⬅ 순위로 돌아가기"
+  ranking-detail-close: "§7✖ 닫기"
+  ranking-confirm-title: "§c§l⚠ 삭제 확인"
+  ranking-confirm-question: "§e{0}의 고양이 {1}을(를) 삭제할까요?"
+  ranking-confirm-warning: "§c이 작업은 되돌릴 수 없어요!"
+  ranking-confirm-yes: "§c§l삭제 확인"
+  ranking-confirm-no: "§a취소"
+
+  ranking-title: "§6§l🏆 서버 고양이 순위"
+  ranking-head: "§6{0}의 고양이 §f{1}"
+  ranking-lore-rank: "§6{0}위"
+  ranking-lore-owner: "§7주인: {0}"
+  ranking-lore-meow: "§d냥 계급 {0} · 냥력 {1}"
+  ranking-lore-level: "§b레벨 {0} · 경험치 {1}"
+  ranking-sort: "§e정렬: {0}"
+  ranking-mode-meow: "§d냥 계급"
+  ranking-mode-level: "§b레벨"
+  ranking-page: "§7{0}/{1}페이지"
+  ranking-prev: "§f◀ 이전"
+  ranking-next: "§f다음 ▶"
+  ranking-close: "§c✖ 닫기"
+  ranking-empty: "§7순위표가 아직 비어 있어요……"
+  title: "🐱 Neko n' Yume"
+  close: "§c닫기"
+  head-mood: "§7기분: {0} {1}"
+  head-days: "§7함께한 지: {0}일째"
+  head-enter-skill: "§9✦ 클릭해서 스킬 화면 열기"
+  head-bond: "§d유대: {0} §7({1}/100)"
+  head-combat-bonus: "§c전투 보너스: {0}%"
+  head-equipment: "§6장비: {0}"
+  entry-skill: "§9✦ 스킬 화면"
+  entry-equipment: "§b🛡 장비 화면"
+  entry-achievements: "§6🏆 업적 전당"
+  level-name: "§e레벨"
+  level-value: "§7레벨: §f{0}"
+  level-xp: "§7경험치: §f{0} / {1}"
+  meow-name: "§d냥 계급"
+  meow-value: "§7냥 계급: §f{0}"
+  meow-power: "§7냥력: §f{0} / {1}"
+  personality-name: "§b성격"
+  personality-value: "§7{0}"
+  hunger-name: "§6포만감"
+  hunger-value: "§7{0} /100"
+  affection-name: "§c호감"
+  affection-value: "§7{0} /100"
+  health-name: "§a건강"
+  health-value: "§7{0} /100"
+  mode-follow: "§a🐾 따라오기"
+  mode-sit: "§e🪑 앉기"
+  mode-free: "§7🌿 자유"
+  mode-current: "§7✔ 현재 모드"
+  click-passive: "<yellow>「{0}」은(는) 패시브 스킬이라 자동으로 발동돼요.</yellow>"
+
+#
+# ---------- 스킬 패널 (§ 순수 문자열) ----------
+#
+skill-gui:
+  title: "🐱 스킬 패널"
+  close: "§c닫기"
+  head-lore: "§7스킬 패널"
+  tier-name: "§e품격: {0}"
+  tier-lore: "§7스킬 슬롯은 품격에 따라 늘어나요"
+  growth-name: "§a성장"
+  growth-level: "§7레벨: {0}"
+  growth-rank: "§7냥 계급: {0}"
+  progress-name: "§d스킬 슬롯"
+  progress-count: "§7{0} / {1} 슬롯"
+  hint-name: "§6조작 설명"
+  hint-cast: "§7좌클릭: 액티브 스킬 시전"
+  hint-refresh: "§7우클릭: 스킬 새로 뽑기 ({0} 소모)"
+  hint-dream-multiplier: "§7꿈 슬롯 새로 뽑기 비용 ×{0}"
+  slot-empty: "§7빈 슬롯"
+  slot-index: "§8슬롯 #{0}"
+  quality: "§7품질: {0}"
+  type-active: "§7유형: §e액티브"
+  type-passive: "§7유형: §b패시브"
+  cooldown: "§c⏳ 쿨다운: {0}초"
+  ready: "§a✔ 준비됨"
+  dream-slot: "§d✦ 꿈 슬롯 ✦"
+  cast-refresh: "§8좌클릭 시전 · 우클릭 새로 뽑기 ({0})"
+  passive-refresh: "§8패시브 자동 발동 · 우클릭 새로 뽑기 ({0})"
+  max-reached: "§c상한 도달"
+  max-reached-tier: "§7{0} 품격의 고양이"
+  max-reached-slots: "§7최대 {0}개의 스킬 슬롯 보유"
+  locked-name: "§8잠긴 스킬 슬롯"
+  locked-hint: "§7해금 조건:"
+
+#
+# ---------- 업적 ----------
+#
+achievement:
+  unlock-title: "§e🏆 업적 달성!"
+  unlock-subtitle: "§6§l{0}"
+  unlocked: "<gradient:#fde68a:#f59e0b>🏆 업적 달성: </gradient>{0} · {1}"
+  reward: "<gold>🎁 업적 보상: </gold>{0}"
+
+achievement-gui:
+  title: "🏆 업적 전당"
+  close: "§c닫기"
+  info-name: "§e업적 전당"
+  info-lore-1: "§7고양이와의 모든 상호작용이"
+  info-lore-2: "§7기념할 만한 업적이 돼요."
+  info-count: "§7달성: §f{0} / {1}"
+  head-days: "§7함께한 지: {0}일째"
+  unlocked-name: "§e🏆 §6{0}"
+  unlocked-mark: "§a✔ 달성"
+  reward-label: "§7보상: {0}"
+  locked-name: "§8🏆 {0}"
+  progress: "§7진행도: §f{0} / {1}"
+  locked-reward: "§8보상: {0}"
+  reward-xp: "+{0} 경험치"
+  reward-meow: "+{0} 냥력"
+  reward-both: "+{0} 경험치, +{1} 냥력"
+
+#
+# ---------- 열거형 이름 현지화 (0.7.1) ----------
+#
+achievement-name.first-claim: "만남은 인연"
+achievement-desc.first-claim: "첫 고양이 입양하기"
+achievement-name.companion-days-3: "3일의 약속"
+achievement-desc.companion-days-3: "고양이와 3일 함께하기"
+achievement-name.companion-days-100: "100일 동행"
+achievement-desc.companion-days-100: "고양이와 100일 함께하기"
+achievement-name.pet-total-10: "머리 쓰다듬기"
+achievement-desc.pet-total-10: "고양이를 누적 10회 쓰다듬기"
+achievement-name.pet-total-200: "고양이 마스터"
+achievement-desc.pet-total-200: "고양이를 누적 200회 쓰다듬기"
+achievement-name.feed-total-10: "먹이 주는 사람"
+achievement-desc.feed-total-10: "고양이에게 누적 10회 먹이 주기"
+achievement-name.feed-total-100: "먹보 왕"
+achievement-desc.feed-total-100: "고양이에게 누적 100회 먹이 주기"
+achievement-name.level-10: "첫 발돋움"
+achievement-desc.level-10: "고양이 10레벨 달성"
+achievement-name.level-60: "최고 경지"
+achievement-desc.level-60: "고양이 60레벨 달성"
+achievement-name.meow-rank-5: "냥빛의 시작"
+achievement-desc.meow-rank-5: "고양이 냥 계급 5 달성"
+achievement-name.meow-rank-30: "냥력 만개"
+achievement-desc.meow-rank-30: "고양이 냥 계급 30 달성"
+achievement-name.skill-activate-20: "실력 발휘"
+achievement-desc.skill-activate-20: "액티브 스킬 누적 20회 시전"
+achievement-name.skill-refresh-10: "새로 뽑기 중독"
+achievement-desc.skill-refresh-10: "스킬 슬롯 누적 10회 새로 뽑기"
+achievement-name.tier-upgrade-1: "변화의 날"
+achievement-desc.tier-upgrade-1: "고양이 품격 1회 승급"
+achievement-name.gift-1: "작은 깜짝 선물"
+achievement-desc.gift-1: "고양이의 선물 1회 받기"
+achievement-name.monster-kill-50: "주인 수호 기사"
+achievement-desc.monster-kill-50: "고양이가 몬스터 50마리 처치"
+achievement-name.affection-60: "다정한 사이"
+achievement-desc.affection-60: "고양이 호감도 60 달성"
+achievement-name.affection-100: "영혼의 유대"
+achievement-desc.affection-100: "고양이 호감도 100 달성"
+skill-name.sharp_claw: "날카로운 발톱"
+skill-desc.sharp_claw: "고양이 근접 피해 +2"
+skill-name.light_step: "가벼운 발걸음"
+skill-desc.light_step: "고양이 공격 간격 -20%"
+skill-name.light_fur: "가벼운 털"
+skill-desc.light_fur: "고양이가 받는 피해 -10%"
+skill-name.alert: "경계"
+skill-desc.alert: "오라 범위 12칸으로 확대"
+skill-name.warmth: "온기"
+skill-desc.warmth: "오라가 추가로 신속 I 부여"
+skill-name.small_appetite: "작은 식욕"
+skill-desc.small_appetite: "포만감 감소 -10%"
+skill-name.iron_wall: "철벽"
+skill-desc.iron_wall: "고양이가 받는 피해 -25%"
+skill-name.hunter_sense: "사냥꾼의 직감"
+skill-desc.hunter_sense: "오라 범위 15칸으로 확대"
+skill-name.guardian: "수호자"
+skill-desc.guardian: "주인이 다치면 고양이가 20% 분담"
+skill-name.forager: "먹이 찾기"
+skill-desc.forager: "선물 판정 확률 +10%"
+skill-name.healing_purr: "힐링 가르릉"
+skill-desc.healing_purr: "즉시 주인의 체력 회복"
+skill-name.swift_paws: "재빠른 고양이"
+skill-desc.swift_paws: "주인이 신속 II 20초 획득"
+skill-name.hunting_instinct: "사냥 각성"
+skill-desc.hunting_instinct: "주인이 힘 II 30초 획득"
+skill-name.spirit_shot: "영탄"
+skill-desc.spirit_shot: "고양이가 원거리 마법탄으로 공격"
+skill-name.shadow_strike: "그림자 습격"
+skill-desc.shadow_strike: "고양이 5번째 공격마다 확정 3배 치명타"
+skill-name.drain: "흡수"
+skill-desc.drain: "고양이 피해의 20%로 주인 치료"
+skill-name.star_dust: "별가루"
+skill-desc.star_dust: "고양이 공격 20% 확률로 50% 범위 피해"
+skill-name.nine_lives: "아홉 목숨"
+skill-desc.nine_lives: "치명적 보호 후 회복이 더 빠르고 약화가 짧음"
+skill-name.meow_guard: "냥 수호"
+skill-desc.meow_guard: "주인이 저항 II 10초 획득"
+skill-name.flash_of_spirit: "번뜩이는 영감"
+skill-desc.flash_of_spirit: "쓰다듬기·먹이의 냥력 확률 +5%"
+skill-name.dream_awaken: "꿈에서 깨어나다"
+skill-desc.dream_awaken: "꿈 깨는 순간: 광범위 피해와 적 둔화"
+skill-name.starfall: "별무리"
+skill-desc.starfall: "별이 쏟아짐: 초광범위 막대한 피해"
+skill-name.moonlight: "달빛"
+skill-desc.moonlight: "해와 달의 교차: 밤엔 공격 강화, 낮엔 지속 재생"
+skill-name.eternity: "영원"
+skill-desc.eternity: "치명적 보호가 만피 부활로 강화"
+skill-name.time_echo: "시간의 메아리"
+skill-desc.time_echo: "시간 역행: 주인과 고양이가 동시에 강력한 버프 획득"
+skill-name.resonance: "공명"
+skill-desc.resonance: "마음이 통함: 오라 안에서 쌍방 공격력 상승"
+skill-name.dream_weaver: "꿈의 직조"
+skill-desc.dream_weaver: "꿈이 당신을 지킴: 빈사 시 자동 구조"
+tier-name.common: "평범"
+tier-name.rare: "희귀"
+tier-name.unique: "고유"
+tier-name.dream: "환상"
+mood-name.ecstatic: "매우 행복"
+mood-name.happy: "행복"
+mood-name.calm: "평온"
+mood-name.low: "풀죽음"
+mood-name.sad: "슬픔"
+personality-name.gourmand: "먹보"
+personality-name.lazy: "느긋함"
+personality-name.clingy: "애교쟁이"
+personality-name.independent: "독립적"
+personality-name.picky: "편식"
+personality-name.sunny: "쾌활"
+behavior-name.follow: "따라오기"
+behavior-name.sit: "앉기"
+behavior-name.free: "자유"
+meowdan-name.common: "§7✨ 평범 냥단"
+meowdan-name.uncommon: "§a✨ 정밀 냥단"
+meowdan-name.rare: "§9✨ 고유 냥단"
+meowdan-name.epic: "§5✨ 탁월 냥단"
+meowdan-name.legendary: "§6✨ 지극 냥단"
+item.xp-pill.normal-name: "§a✨ 초급 경험 알약"
+item.xp-pill.elite-name: "§b✨ 고급 경험 알약"
+item.xp-pill.lore: "고양이에게 먹이면 +{0} 경험치"
+bond-name.stranger: "낯섦"
+bond-name.acquaintance: "아는 사이"
+bond-name.friend: "친함"
+bond-name.intimate: "다정함"
+bond-name.trusted: "신뢰"
+bond-name.soulmate: "영혼의 유대"
+entity-name.ender-dragon: "엔더 드래곤"
+entity-name.wither: "위더"
+
+#장비 (0.8.0)
+equip-name.collar-common: "평범 목걸이"
+equip-name.collar-uncommon: "정밀 목걸이"
+equip-name.collar-rare: "고유 목걸이"
+equip-name.collar-epic: "탁월 목걸이"
+equip-name.collar-legendary: "지극 목걸이"
+equip-name.bell-common: "평범 방울"
+equip-name.bell-uncommon: "정밀 방울"
+equip-name.bell-rare: "고유 방울"
+equip-name.bell-epic: "탁월 방울"
+equip-name.bell-legendary: "지극 방울"
+equip-name.scarf-common: "평범 목도리"
+equip-name.scarf-uncommon: "정밀 목도리"
+equip-name.scarf-rare: "고유 목도리"
+equip-name.scarf-epic: "탁월 목도리"
+equip-name.scarf-legendary: "지극 목도리"
+equip-name.name-tag-common: "평범 이름표"
+equip-name.name-tag-uncommon: "정밀 이름표"
+equip-name.name-tag-rare: "고유 이름표"
+equip-name.name-tag-epic: "탁월 이름표"
+equip-name.name-tag-legendary: "지극 이름표"
+equip-name.yarn-ball-common: "평범 털실공"
+equip-name.yarn-ball-uncommon: "정밀 털실공"
+equip-name.yarn-ball-rare: "고유 털실공"
+equip-name.yarn-ball-epic: "탁월 털실공"
+equip-name.yarn-ball-legendary: "지극 털실공"
+equip-none: "미장착"
+equip-lore.collar: "고양이의 목걸이, 전투 능력 향상"
+equip-lore.bell: "고양이의 방울, 오라 보조 확장"
+equip-lore.scarf: "고양이의 목도리, 포만감 감소를 늦추고 곁을 지켜줌"
+equip-lore.name-tag: "고양이의 이름표, 성장 가속"
+equip-lore.yarn-ball: "고양이의 털실공, 전투 리듬 가속"
+equip-lore.damage: "근접 피해 +{0}"
+equip-lore.aura: "오라 반경 +{0}"
+equip-lore.meow: "냥력 확률 +{0}%"
+equip-lore.health: "고양이 최대 체력 +{0}"
+equip-lore.reduction: "피해 감소 {0}%"
+equip-lore.lifesteal: "흡혈 {0}% (고양이 자신 치료)"
+equip-lore.aura-speed: "오라 안 주인 신속 I"
+equip-lore.feed-affection: "먹이마다 호감 +{0}"
+equip-lore.hunger-slow: "포만감 감소 {0}% 둔화"
+equip-lore.xp: "경험치 획득 +{0}%"
+equip-lore.cooldown: "스킬 쿨다운 -{0}%"
+equip-lore.attack-speed: "공격 간격 -{0} tick"
+equip-lore.decay-reduce: "매일 호감 감소 -{0}"
+equip-lore.regen: "완만한 회복 +{0}%"
+equip-bonus-name.starlight: "별빛"
+equip-bonus-name.bloodmoon: "핏빛 달"
+equip-bonus-name.unyielding: "불굴"
+equip-bonus-name.timeflow: "시간의 흐름"
+equip-bonus-name.avarice: "탐욕"
+equip-bonus-name.resonance: "공명"
+equip-bonus-name.hearth: "난로"
+equip-bonus-name.shadowstep: "그림자 걸음"
+equip-bonus-desc.starlight: "근접 피해 +{0}"
+equip-bonus-desc.bloodmoon: "흡혈 {0}% (고양이 자신 치료)"
+equip-bonus-desc.unyielding: "피해 감소 {0}%"
+equip-bonus-desc.timeflow: "스킬 쿨다운 -{0}%"
+equip-bonus-desc.avarice: "경험치 획득 +{0}%"
+equip-bonus-desc.resonance: "냥력 확률 +{0}%"
+equip-bonus-desc.hearth: "포만감 감소 {0}% 둔화"
+equip-bonus-desc.shadowstep: "공격 간격 -{0} tick"
+equip-bonus.obtained: "✦ 지보 강림! 이 장비에 추가 속성이 깨어났어요: {0}"
+equip-bag.name: "고양이 장비 주머니"
+equip-bag.lore-1: "우클릭으로 열어 고양이 장비를 랜덤으로 뽑기"
+equip-bag.lore-2: "품질 확률: 평범40%·정밀30%·고유20%·탁월7.5%·지극2.5%"
+hand-changed: "<yellow>주로 드는 손의 아이템이 바뀌어 열기가 취소됐어요.</yellow>"
+not-empty: "<yellow>주머니에 아직 물건이 있어요. 먼저 비우고 열어주세요.</yellow>"
+equip-bag.open: "고양이 장비 주머니를 열어 {0}을(를) 얻었어요:"
+food-name.cod: "생대구"
+food-name.salmon: "생연어"
+food-name.cooked_cod: "익힌 대구"
+food-name.cooked_salmon: "익힌 연어"
+food-name.chicken: "생닭고기"
+food-name.cooked_chicken: "익힌 닭고기"
+food-name.beef: "생소고기"
+food-name.cooked_beef: "스테이크"
+food-name.porkchop: "생돼지고기"
+food-name.cooked_porkchop: "익힌 돼지고기"
+food-name.mutton: "생양고기"
+food-name.cooked_mutton: "익힌 양고기"
+food-name.rabbit: "생토끼고기"
+food-name.cooked_rabbit: "익힌 토끼고기"
+food-name.golden_carrot: "황금 당근"
+food-name.apple: "사과"
+food-name.bread: "빵"
+food-name.cake: "케이크"
+checkpoint.hint-0: "타고난 꿈 슬롯"
+checkpoint.hint-1: "냥 계급 1"
+checkpoint.hint-2: "냥 계급 10 및 레벨 30"
+checkpoint.hint-3: "냥 계급 30 및 레벨 60"
+checkpoint.unknown: "알 수 없음"
+entity.name-normal: "§d🐱 {0} {1}"
+entity.name-recovering: "§c❤ {0}이(가) 다쳤어요 · {1}초 후 회복"
+cost.meow-power: "냥력"
+cost.player-points: "포인트"

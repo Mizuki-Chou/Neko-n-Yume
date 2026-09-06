@@ -198,7 +198,7 @@ final class CatStoreInteractions {
         }
 
         String today =
-                LocalDate.now().toString();
+                LocalDate.now(java.time.ZoneOffset.UTC).toString();
 
         String saved =
                 store.getString(
@@ -232,7 +232,7 @@ final class CatStoreInteractions {
             return true;
         }
 
-        return LocalDate.now()
+        return LocalDate.now(java.time.ZoneOffset.UTC)
                 .toString()
                 .equals(
                         store.getString(
@@ -254,7 +254,7 @@ final class CatStoreInteractions {
         store.setRaw(
                 playerUUID,
                 AbstractCatStore.FIELD_GIFT_DATE,
-                LocalDate.now().toString()
+                LocalDate.now(java.time.ZoneOffset.UTC).toString()
         );
     }
 
@@ -295,3 +295,4 @@ final class CatStoreInteractions {
         );
     }
 }
+

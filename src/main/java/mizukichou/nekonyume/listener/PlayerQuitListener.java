@@ -54,17 +54,17 @@ public class PlayerQuitListener implements Listener {
                         .getUniqueId();
 
         /*
-         * 0.8.4 R18（社区上报 L-NEW-04 + M-NEW-02）：
+         * 
          * 退出清理整体 finally 化——保存环节任何一步抛异常，
          * 运行时状态清理都必须全部执行；并顺带清理
-         * 协助目标（会话态，退出即失效）。
+         * 协助目标（会话态，退出即失效）啦。
          */
         try {
 
             /*
-             * 0.8.1 修复（R3，社区上报）：
+             * 
              * 退出前先从实体捕获最新位置/花色/世界，
-             * 否则刚移动就退出会回写 30 秒前的旧位置。
+             * 否则刚移动就退出会回写 30 秒前的旧位置捏。
              */
             entityService.captureEntityState(
                     cache.getCat(
@@ -128,7 +128,7 @@ public class PlayerQuitListener implements Listener {
             );
 
             /*
-             * 0.8.4 R18（社区上报 M-NEW-02）：
+             * 
              * 协助目标属于会话态——退出即失效。
              */
             battleState.clearAssistTarget(
@@ -149,3 +149,4 @@ public class PlayerQuitListener implements Listener {
         }
     }
 }
+

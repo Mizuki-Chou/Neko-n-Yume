@@ -20,11 +20,11 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 技能面板（54 格）。
+ * 技能面板（54 格）哒。
  *
  * <p>
  * 布局：
- * 顶部信息行（底蕴 / 成长 / 槽位进度 / 操作说明 / 猫头 / 关闭）
+ * 顶部信息行（底蕴 / 成长 / 槽位进度 / 操作说明 / 猫头 / 关闭）啦
  * 槽位区（第 18 格起，最多 18 个槽，0.8.1 扩展）
  * </p>
  *
@@ -47,7 +47,6 @@ public class SkillGuiManager {
     private static final int SLOT_FIRST_SKILL = 18;
 
     /*
-     * 0.8.1（P2 修复）：槽位区扩到 18 格（第 18~35 格）。
      *
      * 管理命令授予的超槽技能（skill give 无视槽位上限）
      * 不再被错误显示为“锁定”，最多可展示 18 个。
@@ -111,6 +110,8 @@ public class SkillGuiManager {
                                 "skill-gui.title"
                         )
                 );
+
+        ((GuiHolder) inventory.getHolder()).bind(inventory);
 
         ItemStack filler =
                 item(
@@ -703,3 +704,4 @@ public class SkillGuiManager {
         return item;
     }
 }
+

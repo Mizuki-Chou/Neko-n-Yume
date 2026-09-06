@@ -12,7 +12,7 @@ import org.bukkit.event.HandlerList;
  *
  * <p>
  * 成就已持久化、奖励已发放后触发。
- * 属于事后通知，不可取消。
+ * 属于事后通知，不可取消啦。
  * </p>
  */
 @Getter
@@ -26,7 +26,7 @@ public class CatAchievementUnlockedEvent extends Event {
     private final CatAchievement achievement;
 
     /*
-     * 本次实际发放的奖励数值。
+     * 本次实际发放的奖励数值捏。
      */
     private final int rewardXp;
     private final int rewardMeowPower;
@@ -55,3 +55,4 @@ public class CatAchievementUnlockedEvent extends Event {
         return handlers;
     }
 }
+

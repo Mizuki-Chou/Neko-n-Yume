@@ -161,7 +161,7 @@ public final class ConfigLoader {
                 );
 
         /*
-         * 0.8.4 R22（社区反馈）：
+         * 
          * 先钳制业务上限（≤ 24 小时）再换算毫秒——
          * 极端配置既不会溢出，行为也可预测。
          */
@@ -416,22 +416,27 @@ public final class ConfigLoader {
                                 )
                         ),
                         /*
-                         * 0.8.1 修复（R3）：NaN/Infinity 倍率守卫，
+                         * NaN/Infinity 倍率守卫，
                          * 非有限值回退内置默认，绝不流入属性 API。
+                         * 额外钳制上限，
+                         * 极端倍率与属性相乘浮点溢出为 Infinity 时
+                         * 行为可预测而非扫描期持续报错。
                          */
-                        ConfigParseSupport.positiveDouble(
+                        ConfigParseSupport.cappedPositiveDouble(
                                 config.getDouble(
                                         "muma-night.health-multiplier",
                                         4.0
                                 ),
-                                4.0
+                                4.0,
+                                100.0
                         ),
-                        ConfigParseSupport.positiveDouble(
+                        ConfigParseSupport.cappedPositiveDouble(
                                 config.getDouble(
                                         "muma-night.damage-multiplier",
                                         2.5
                                 ),
-                                2.5
+                                2.5,
+                                100.0
                         )
                 );
 
@@ -468,6 +473,39 @@ public final class ConfigLoader {
                         logger
                 );
 
+        /*
+         * 视觉模型（Generic Model 系统，预留）：
+         * 目录名必须为单层目录（拒绝路径穿越），
+         * 非法值回退默认并告警。
+         */
+        ConfigSnapshot.Models models =
+                new ConfigSnapshot.Models(
+                        parseModelsDirectory(
+                                config.getString(
+                                        "models.directory",
+                                        "models"
+                                ),
+                                logger
+                        ),
+                        normalizeModelId(
+                                config.getString(
+                                        "models.default-model",
+                                        ""
+                                )
+                        ),
+                        parseResourcePackUrl(
+                                config.getString(
+                                        "models.resource-pack.url",
+                                        ""
+                                ),
+                                logger
+                        ),
+                        config.getBoolean(
+                                "models.resource-pack.auto-send",
+                                false
+                        )
+                );
+
         return new ConfigSnapshot(
                 language,
                 storage,
@@ -487,7 +525,117 @@ public final class ConfigLoader {
                 mumaNight,
                 xpPill,
                 care,
-                drops
+                drops,
+                models
         );
     }
+
+    /*
+     * ============================================================
+     * 视觉模型节解析（Generic Model 系统，预留）
+     * ============================================================
+     */
+
+    /**
+     * 模型目录名：只允许单层目录名。
+     *
+     * <p>
+     * 拒绝路径分隔符与 {@code ..}（目录穿越），
+     * 拒绝超长名称；非法值回退默认 {@code "models"} 并告警。
+     * </p>
+     */
+    private static String parseModelsDirectory(
+            String raw,
+            Logger logger
+    ) {
+
+        if (raw == null ||
+                raw.isBlank()) {
+
+            return "models";
+        }
+
+        String trimmed =
+                raw.trim();
+
+        if (trimmed.contains("/") ||
+                trimmed.contains("\\") ||
+                trimmed.contains("..") ||
+                trimmed.length() > 64) {
+
+            logger.warning(
+                    "[NekoNYume] Invalid models.directory '"
+                            + raw
+                            + "' — falling back to 'models'."
+            );
+
+            return "models";
+        }
+
+        return trimmed;
+    }
+
+    /**
+     * 资源包 URL：空白归一为空串（不发送）；超长拒绝（防御）。
+     */
+    private static String parseResourcePackUrl(
+            String raw,
+            Logger logger
+    ) {
+
+        if (raw == null ||
+                raw.isBlank()) {
+
+            return "";
+        }
+
+        String trimmed =
+                raw.trim();
+
+        if (trimmed.length() > 512) {
+
+            logger.warning(
+                    "[NekoNYume] models.resource-pack.url is too long"
+                            + " — ignored."
+            );
+
+            return "";
+        }
+
+        /*
+         * 0.9.0更新：只允许 https / http——
+         * 拒绝 file://、ftp:// 等 scheme（客户端侧 SSRF /
+         * 未定义行为）。
+         */
+        if (!trimmed.startsWith("https://") &&
+                !trimmed.startsWith("http://")) {
+
+            logger.warning(
+                    "[NekoNYume] models.resource-pack.url scheme must be"
+                            + " https:// or http:// — ignored."
+            );
+
+            return "";
+        }
+
+        return trimmed;
+    }
+
+    /**
+     * 默认模型 ID：空串 / null 归一化为空串（未指定）。
+     */
+    private static String normalizeModelId(
+            String raw
+    ) {
+
+        if (raw == null ||
+                raw.isBlank()) {
+
+            return "";
+        }
+
+        return raw.trim();
+    }
+
 }
+

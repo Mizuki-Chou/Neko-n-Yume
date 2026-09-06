@@ -53,9 +53,21 @@ final class CatStoreVitals {
             int amount
     ) {
 
+        /*
+         * 0.9.0更新：long 域加法后钳制。
+         */
+        long next =
+                (long) getCatAffection(playerUUID) + amount;
+
         setCatAffection(
                 playerUUID,
-                getCatAffection(playerUUID) + amount
+                (int) Math.min(
+                        100L,
+                        Math.max(
+                                0L,
+                                next
+                        )
+                )
         );
     }
 
@@ -93,9 +105,21 @@ final class CatStoreVitals {
             int amount
     ) {
 
+        /*
+         * 0.9.0更新：long 域加法后钳制。
+         */
+        long next =
+                (long) getCatHealth(playerUUID) + amount;
+
         setCatHealth(
                 playerUUID,
-                getCatHealth(playerUUID) + amount
+                (int) Math.min(
+                        100L,
+                        Math.max(
+                                0L,
+                                next
+                        )
+                )
         );
     }
 
@@ -138,9 +162,21 @@ final class CatStoreVitals {
             int amount
     ) {
 
+        /*
+         * 0.9.0更新：long 域加法后钳制。
+         */
+        long next =
+                (long) getCatHunger(playerUUID) + amount;
+
         setCatHunger(
                 playerUUID,
-                getCatHunger(playerUUID) + amount
+                (int) Math.min(
+                        100L,
+                        Math.max(
+                                0L,
+                                next
+                        )
+                )
         );
     }
 
@@ -193,3 +229,4 @@ final class CatStoreVitals {
         );
     }
 }
+

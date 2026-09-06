@@ -140,3 +140,4 @@ class CatCacheTest {
         assertNull(cache.getCatByEntity(entity));
     }
 }
+

@@ -250,3 +250,4 @@ class CatEntityPipelineTest {
         assertNotNull(h.store.getCatEntityUUID(h.playerUuid));
     }
 }
+

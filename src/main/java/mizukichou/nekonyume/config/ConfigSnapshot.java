@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.config;
 
+import java.util.LinkedHashMap;
 import lombok.Getter;
 import mizukichou.nekonyume.achievement.CatAchievement;
 import mizukichou.nekonyume.cat.CatMood;
@@ -72,6 +73,8 @@ public final class ConfigSnapshot {
 
     private final Drops drops;
 
+    private final Models models;
+
     public ConfigSnapshot(
             String language,
             Storage storage,
@@ -91,7 +94,8 @@ public final class ConfigSnapshot {
             MumaNight mumaNight,
             XpPill xpPill,
             Care care,
-            Drops drops
+            Drops drops,
+            Models models
     ) {
 
         this.language = language;
@@ -113,6 +117,7 @@ public final class ConfigSnapshot {
         this.xpPill = xpPill;
         this.care = care;
         this.drops = drops;
+        this.models = models;
     }
 
     /*
@@ -162,8 +167,10 @@ public final class ConfigSnapshot {
             this.meowdanGeneration = meowdanGeneration;
             this.meowdanCustomModelData =
                     Collections.unmodifiableMap(
-                            meowdanCustomModelData
-                    );
+                        new LinkedHashMap<>(
+                                meowdanCustomModelData
+                        )
+                );
         }
 
         public int meowdanCustomModelData(
@@ -318,8 +325,10 @@ public final class ConfigSnapshot {
 
             this.values =
                     Collections.unmodifiableMap(
-                            values
-                    );
+                        new LinkedHashMap<>(
+                                values
+                        )
+                );
         }
     }
 
@@ -366,7 +375,7 @@ public final class ConfigSnapshot {
             this.maxChance = maxChance;
 
             /*
-             * 0.8.1 修复（R3，社区上报：深不可变加固）：
+             * 
              * 外层与内层列表全部包装为不可变，
              * 外部 API 使用者无法篡改运行时配置。
              */
@@ -393,8 +402,10 @@ public final class ConfigSnapshot {
 
             this.tiers =
                     Collections.unmodifiableMap(
-                            wrapped
-                    );
+                        new LinkedHashMap<>(
+                                wrapped
+                        )
+                );
             this.maxTier = maxTier;
         }
 
@@ -435,8 +446,10 @@ public final class ConfigSnapshot {
             }
 
             return Collections.unmodifiableList(
-                    entries
-            );
+                        new java.util.ArrayList<>(
+                                entries
+                        )
+                );
         }
     }
 
@@ -469,12 +482,16 @@ public final class ConfigSnapshot {
             this.enabled = enabled;
             this.rewardXp =
                     Collections.unmodifiableMap(
-                            rewardXp
-                    );
+                        new LinkedHashMap<>(
+                                rewardXp
+                        )
+                );
             this.rewardMeowPower =
                     Collections.unmodifiableMap(
-                            rewardMeowPower
-                    );
+                        new LinkedHashMap<>(
+                                rewardMeowPower
+                        )
+                );
         }
 
         public int rewardXp(
@@ -541,7 +558,7 @@ public final class ConfigSnapshot {
             this.dreamSlotCostMultiplier = dreamSlotCostMultiplier;
 
             /*
-             * 0.8.1 修复（R3，社区上报：深不可变加固）：
+             * 
              * 外层 values 表也包装为不可变（内层 map 已由
              * parser 用 unmodifiableMap 包装），
              * 外部 API 使用者无法篡改运行时配置。
@@ -549,8 +566,10 @@ public final class ConfigSnapshot {
             this.values = values == null
                     ? java.util.Collections.emptyMap()
                     : java.util.Collections.unmodifiableMap(
-                            values
-                    );
+                        new LinkedHashMap<>(
+                                values
+                        )
+                );
         }
 
         public double value(
@@ -582,7 +601,7 @@ public final class ConfigSnapshot {
                     );
 
             /*
-             * 0.8.1 修复（R3）：读取层纵深防御——
+             * 读取层纵深防御——
              * 即使解析层漏过非有限值（未来改动/外部构建），
              * 消费端也绝不把 NaN/Infinity 送进伤害与属性计算。
              */
@@ -597,10 +616,29 @@ public final class ConfigSnapshot {
                 int defaultValue
         ) {
 
-            return (int) value(
-                    skill,
-                    key,
-                    defaultValue
+            /*
+             * 0.9.0更新：非整数配置不再静默截断——
+             * 四舍五入消除截断方向性（19.9 不再变 19），
+             * 并在 long 域钳制防止极端值回绕。
+             */
+            double raw =
+                    value(
+                            skill,
+                            key,
+                            defaultValue
+                    );
+
+            long rounded =
+                    Math.round(
+                            raw
+                    );
+
+            return (int) Math.max(
+                    Integer.MIN_VALUE,
+                    Math.min(
+                            Integer.MAX_VALUE,
+                            rounded
+                    )
             );
         }
     }
@@ -739,8 +777,10 @@ public final class ConfigSnapshot {
             this.enabled = enabled;
             this.messages =
                     Collections.unmodifiableList(
-                            messages
-                    );
+                        new java.util.ArrayList<>(
+                                messages
+                        )
+                );
         }
     }
 
@@ -939,7 +979,7 @@ public final class ConfigSnapshot {
             }
 
             /*
-             * 0.8.4 R18（社区上报 L-NEW-02）：
+             * 
              * 权重数组返回克隆，快照真正不可变。
              */
             public int[] getMeowdanQualityWeights() {
@@ -948,4 +988,48 @@ public final class ConfigSnapshot {
             }
         }
     }
+
+    /*
+     * ============================================================
+     * 视觉模型（Generic Model 系统，预留）
+     * ============================================================
+     */
+
+    @Getter
+    public static final class Models {
+
+        /*
+         * 模型目录名（相对插件数据目录，单层目录，不含路径分隔符）。
+         */
+        private final String directory;
+
+        /*
+         * 默认模型 ID；空串 = 未指定（原版视觉）。
+         */
+        private final String defaultModelId;
+
+        /*
+         * 资源包分发 URL；空串 = 不发送（Phase 6）。
+         */
+        private final String resourcePackUrl;
+
+        /*
+         * 玩家登录时是否自动推送资源包。
+         */
+        private final boolean resourcePackAutoSend;
+
+        public Models(
+                String directory,
+                String defaultModelId,
+                String resourcePackUrl,
+                boolean resourcePackAutoSend
+        ) {
+
+            this.directory = directory;
+            this.defaultModelId = defaultModelId;
+            this.resourcePackUrl = resourcePackUrl;
+            this.resourcePackAutoSend = resourcePackAutoSend;
+        }
+    }
 }
+

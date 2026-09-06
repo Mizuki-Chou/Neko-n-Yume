@@ -10,6 +10,10 @@
 command:
   no-cat: "<red>🐱 You don't have a cat yet!</red>"
   unknown: "<yellow>Usage: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|language|achievements></yellow>"
+
+  model-no-cat: "<yellow>You don't have a cat yet.</yellow>"
+  model-current: "<aqua>Your cat's model: </aqua><gray>{0}</gray>"
+  model-default: "<aqua>Your cat's model: </aqua><gray>Default (unspecified)</gray>"
   help: |
     <gradient:#ff9de2:#a78bfa>
     🐱 Neko n' Yume Commands
@@ -23,7 +27,7 @@ command:
     <gray>/nekoyume gui</gray> - Open the cat panel
     <gray>/nekoyume skill</gray> - Open the skill panel
     <gray>/nekoyume tool</gray> - Get a quick-access cat wand
-    <gray>/nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp&gt;</gray> - Set your language
+    <gray>/nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp|ko_kr|fr_fr|de_de|es_es&gt;</gray> - Set your language
     <gray>/nekoyume achievements</gray> - View the achievement hall
     <gray>/nekoyume help</gray> - Show this help
   claim:
@@ -60,7 +64,7 @@ command:
     received: "<gradient:#ff9de2:#a78bfa>🐱 You received a cat wand. Right-click to use it!</gradient>"
     inventory-full: "<yellow>🐱 Your inventory is full, so the wand dropped at your feet.</yellow>"
   language:
-    usage: "<yellow>Usage: /nekoyume language <auto|zh_cn|zh_tw|en_us|ja_jp></yellow>"
+    usage: "<yellow>Usage: /nekoyume language <auto|zh_cn|zh_tw|en_us|ja_jp|ko_kr|fr_fr|de_de|es_es></yellow>"
     set: "<gradient:#ff9de2:#a78bfa>🐱 Plugin language set to </gradient>{0}!"
     reset: "<gradient:#ff9de2:#a78bfa>🐱 Plugin language will now follow your Minecraft language.</gradient>"
     unknown: "<red>❌ Unknown language: {0}</red>"
@@ -73,9 +77,22 @@ admin:
   ranking-delete-notify: "<red>Your cat {0} was removed by an admin.</red>"
   ranking-target-missing: "<yellow>This cat no longer exists.</yellow>"
   no-permission: "<red>❌ You don't have permission to run this command!</red>"
-  usage: "<yellow>Usage: /nekoyumeadmin <meowdan|cat|skill|mumanight|reload></yellow>"
+  usage: "<yellow>Usage: /nekoyumeadmin <meowdan|cat|skill|mumanight|model|reload></yellow>"
   reload-done: "<gradient:#a7f3d0:#60a5fa>✔ Neko n' Yume configuration reloaded!</gradient>"
+  reload-failed: "<red>Config reload failed — the previous configuration remains in effect.</red>"
   player-only: "<red>❌ This command can only be run by players.</red>"
+
+  model-usage: "<yellow>Usage: /nekoyumeadmin model <reload|list|set <player> <modelId>|clear <player>></yellow>"
+  model-reload-started: "<gray>Reloading models (async)…</gray>"
+  model-reload-done: "<gradient:#a7f3d0:#60a5fa>✔ Models reloaded.</gradient>"
+  model-reload-superseded: "<yellow>Model reload was superseded by a newer request.</yellow>"
+  model-reload-shutdown: "<yellow>Plugin is shutting down; reload was not executed.</yellow>"
+  model-reload-failed: "<red>Model reload failed (resource pack build failed); the previous models remain in use.</red>"
+  model-list-empty: "<yellow>No models loaded (check the models directory).</yellow>"
+  model-list: "<aqua>Loaded models: </aqua><gray>{0}</gray>"
+  model-set-done: "<gradient:#a7f3d0:#60a5fa>✔ Set the cat model of {0} to {1}.</gradient>"
+  model-clear-done: "<gradient:#a7f3d0:#60a5fa>✔ Cleared the cat model of {0} (back to default).</gradient>"
+  model-set-failed: "<red>❌ Failed: player has no cat, or invalid model id.</red>"
   meowdan-usage: "<yellow>Usage: /nekoyumeadmin meowdan give <player> <quality> [amount]</yellow>"
   meowdan-quality-hint: "<gray>Qualities: COMMON / UNCOMMON / RARE / EPIC / LEGENDARY</gray>"
   player-offline: "<red>❌ The player is offline!</red>"
@@ -187,6 +204,7 @@ battle:
   recovering: "<red>🐱 </red>{0} is injured and can't move for <red>{1} seconds</red>…"
   boss-xp: "<gold>🏆 </gold>{0} defeated {1} and gained <green>{2}</green> experience!"
   starving: "<yellow>🐱 </yellow>{0} is too hungry to fight. Feed it something."
+  dream-weaver-rescue: '<aqua>🌙 </aqua>{0}''s dream became light and protected you — health restored!'
 
 entity:
   summoning: "<yellow>🐱 Looking for your cat, please wait a moment!</yellow>"
@@ -202,6 +220,7 @@ muma:
   dawn: "<gold><bold>☀ Dawn breaks, and the Muma's Night comes to an end.</bold></gold>"
 
 tool:
+  already: "<yellow>You already have a cat wand.</yellow>"
   wand-name: "§d🐱 Cat Wand"
   wand-lore: "§7Right-click to open the cat panel"
   claim-title: "§d🎉 You got a cat!"
@@ -536,6 +555,8 @@ equip-bonus.obtained: "✦ A legendary boon! This equipment awakened an extra at
 equip-bag.name: "Cat Equipment Bag"
 equip-bag.lore-1: "Right-click to draw a random cat equipment"
 equip-bag.lore-2: "Quality odds: Common 40% - Uncommon 30% - Rare 20% - Epic 7.5% - Legendary 2.5%"
+hand-changed: "<yellow>Your main hand changed; opening cancelled.</yellow>"
+not-empty: "<yellow>The bag is not empty; empty it first.</yellow>"
 equip-bag.open: "You opened the cat equipment bag and got: {0}"
 meowdan-name.epic: "§5✨ Epic Meow Dan"
 meowdan-name.legendary: "§6✨ Legendary Meow Dan"
@@ -567,3 +588,4 @@ entity.name-recovering: "§c❤ {0} is injured · recovers in {1}s"
 
 cost.meow-power: "Meow Power"
 cost.player-points: "points"
+

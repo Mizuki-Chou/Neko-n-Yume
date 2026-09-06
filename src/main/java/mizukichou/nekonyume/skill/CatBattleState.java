@@ -8,21 +8,44 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 猫咪战斗运行状态。
+ * 猫咪战斗运行状态捏。
  *
  * <p>
  * 不持久化，重启重置：
- * 攻击间隔 / 攻击计数 / 重生冷却 / 协助目标 /
- * 追击状态 / 扑击冷却 / 追击收势 /
+ * 攻击间隔 / 攻击计数 / 重生冷却 / 协助目标 / 啦
+ * 追击状态 / 扑击冷却 / 追击收势 / 捏
  * 受伤恢复期 / 缓慢回血 / 恢复期清扫节流。
  * </p>
  */
 public class CatBattleState {
 
     /*
+     * 0.9.0更新：主线程契约的运行时断言基准——
+     * 构造于组合根（主线程），测试同样在主线程构造，
+     * 不依赖 Bukkit 静态（测试环境无 server）。
+     */
+    private final Thread mainThread =
+            Thread.currentThread();
+
+    /*
      * 实体 UUID → 上次攻击时间（毫秒）。
      */
     private final Map<UUID, Long> lastAttackTimes =
+            new HashMap<>();
+
+    /**
+     * 最近受伤时间（动画信号 hurt 的动作窗口，知识包 P1-24）。
+     */
+    private final Map<UUID, Long> lastHurtTimes =
+            new HashMap<>();
+
+    /*
+     * 动画信号用的单调时间戳（nanoTime，0.9.0更新）。
+     */
+    private final Map<UUID, Long> lastAttackNanos =
+            new HashMap<>();
+
+    private final Map<UUID, Long> lastHurtNanos =
             new HashMap<>();
 
     /*
@@ -135,6 +158,12 @@ public class CatBattleState {
             UUID entityUuid
     ) {
 
+        assert Thread.currentThread() == mainThread
+                : "CatBattleState is main-thread only";
+
+        assert Thread.currentThread() == mainThread
+                : "CatBattleState is main-thread only";
+
         if (entityUuid == null) {
             return;
         }
@@ -142,6 +171,105 @@ public class CatBattleState {
         lastAttackTimes.put(
                 entityUuid,
                 System.currentTimeMillis()
+        );
+
+        /*
+         * 0.9.0更新：动画信号层统一单调时钟
+         * （nanoTime）——与 AnimationController 同一时间线。
+         */
+        lastAttackNanos.put(
+                entityUuid,
+                System.nanoTime()
+        );
+    }
+
+    /**
+     * 最近一次攻击时间戳（无记录返回 null）。
+     */
+    public Long getLastAttackMillis(
+            UUID entityUuid
+    ) {
+
+        if (entityUuid == null) {
+            return null;
+        }
+
+        return lastAttackTimes.get(
+                entityUuid
+        );
+    }
+
+    /**
+     * 记录受伤时刻（动画信号 hurt 动作窗口）。
+     */
+    public void markHurt(
+            UUID entityUuid
+    ) {
+
+        assert Thread.currentThread() == mainThread
+                : "CatBattleState is main-thread only";
+
+        if (entityUuid == null) {
+            return;
+        }
+
+        lastHurtTimes.put(
+                entityUuid,
+                System.currentTimeMillis()
+        );
+
+        lastHurtNanos.put(
+                entityUuid,
+                System.nanoTime()
+        );
+    }
+
+    /**
+     * 最近一次受伤时间戳（无记录返回 null）。
+     */
+    public Long getLastHurtMillis(
+            UUID entityUuid
+    ) {
+
+        if (entityUuid == null) {
+            return null;
+        }
+
+        return lastHurtTimes.get(
+                entityUuid
+        );
+    }
+
+    /**
+     * 最近攻击的单调时间戳（nanoTime；无记录返回 null）。
+     * 动画信号专用（0.9.0更新）。
+     */
+    public Long getLastAttackNanos(
+            UUID entityUuid
+    ) {
+
+        if (entityUuid == null) {
+            return null;
+        }
+
+        return lastAttackNanos.get(
+                entityUuid
+        );
+    }
+
+    /**
+     * 最近受伤的单调时间戳（nanoTime；无记录返回 null）。
+     */
+    public Long getLastHurtNanos(
+            UUID entityUuid
+    ) {
+
+        if (entityUuid == null) {
+            return null;
+        }
+
+        return lastHurtNanos.get(
+                entityUuid
         );
     }
 
@@ -159,11 +287,16 @@ public class CatBattleState {
             return 0;
         }
 
+        /*
+         * 0.9.0更新：模 5 计数——影袭只需要
+         * 0..4 周期，无限增长的 int 最终溢出回绕；
+         * 1..5 返回便于调用方 count % 5 == 0 判定。
+         */
         int count =
-                attackCounts.getOrDefault(
+                (attackCounts.getOrDefault(
                         entityUuid,
                         0
-                ) + 1;
+                ) % 5) + 1;
 
         attackCounts.put(
                 entityUuid,
@@ -397,6 +530,9 @@ public class CatBattleState {
             UUID entityUuid
     ) {
 
+        assert Thread.currentThread() == mainThread
+                : "CatBattleState is main-thread only";
+
         if (entityUuid == null) {
             return;
         }
@@ -418,6 +554,14 @@ public class CatBattleState {
             long recoveryMillis
     ) {
 
+        /*
+         * 0.9.0更新：主线程契约的运行时断言——
+         * assert 仅在启用 -ea 时生效，生产零成本；
+         * 未来任何异步接入都会在开发期立即暴露。
+         */
+        assert Thread.currentThread() == mainThread
+                : "CatBattleState is main-thread only";
+
         if (entityUuid == null) {
             return;
         }
@@ -426,6 +570,58 @@ public class CatBattleState {
                 entityUuid,
                 System.currentTimeMillis()
                         + recoveryMillis
+        );
+    }
+
+    public void recordRecoveryEntryState(
+            UUID entityUuid,
+            boolean hadAi,
+            org.bukkit.potion.PotionEffect hadInvisibility
+    ) {
+
+        if (entityUuid == null) {
+            return;
+        }
+
+        aiBeforeRecovery.put(
+                entityUuid,
+                hadAi
+        );
+
+        if (hadInvisibility != null) {
+
+            invisBeforeRecovery.put(
+                    entityUuid,
+                    hadInvisibility
+            );
+
+        } else {
+
+            invisBeforeRecovery.remove(
+                    entityUuid
+            );
+        }
+    }
+
+    public boolean consumeAiState(
+            UUID entityUuid
+    ) {
+
+        Boolean previous =
+                aiBeforeRecovery.remove(
+                        entityUuid
+                );
+
+        return previous == null ||
+                previous;
+    }
+
+    public org.bukkit.potion.PotionEffect consumeInvisibilityState(
+            UUID entityUuid
+    ) {
+
+        return invisBeforeRecovery.remove(
+                entityUuid
         );
     }
 
@@ -629,6 +825,91 @@ public class CatBattleState {
      * 防止长跑服务器上各 Map 无限膨胀。
      */
 
+    /*
+     * ============================================================
+     * 梦境编织（0.9.0更新）：濒死救援冷却
+     * ============================================================
+     *
+     * 单调时钟（0.9.0更新）：60 秒冷却，
+     * 防止 BOSS 战反复触发。
+     */
+
+    private static final long DREAM_RESCUE_COOLDOWN_NANOS =
+            60_000_000_000L;
+
+    /*
+     * 0.9.0更新：恢复前的 AI 与隐身状态——
+     * 结束恢复时按原值还原，而不是强制 true / 永久删隐身
+     * （其它系统设置的 AI=false 或隐身不能被恢复副作用抹掉）。
+     */
+    private final Map<UUID, Boolean> aiBeforeRecovery =
+            new java.util.HashMap<>();
+
+    private final Map<UUID, org.bukkit.potion.PotionEffect> invisBeforeRecovery =
+            new java.util.HashMap<>();
+
+    private final Map<UUID, Long> dreamRescueLast =
+            new HashMap<>();
+
+    public boolean canDreamRescue(
+            UUID entityUuid
+    ) {
+
+        if (entityUuid == null) {
+            return false;
+        }
+
+        Long last =
+                dreamRescueLast.get(
+                        entityUuid
+                );
+
+        if (last == null) {
+            return true;
+        }
+
+        long elapsed =
+                System.nanoTime() - last;
+
+        if (elapsed < 0) {
+
+            /*
+             * 时钟异常：保守放行（恢复一次无害）。
+             */
+            return true;
+        }
+
+        return elapsed >=
+                DREAM_RESCUE_COOLDOWN_NANOS;
+    }
+
+    public void markDreamRescue(
+            UUID entityUuid
+    ) {
+
+        if (entityUuid == null) {
+            return;
+        }
+
+        dreamRescueLast.put(
+                entityUuid,
+                System.nanoTime()
+        );
+    }
+
+    /**
+     * 实体失效时清理救援冷却（与 retainOnly 同口径）。
+     */
+    public void retainOnlyDreamRescue(
+            java.util.Collection<UUID> entities
+    ) {
+
+        dreamRescueLast.keySet()
+                .retainAll(
+                        entities
+                );
+    }
+
     public void retainOnly(
             Collection<UUID> activeEntityUuids,
             Collection<UUID> activeOwnerUuids
@@ -648,7 +929,27 @@ public class CatBattleState {
                         activeOwnerUuids
                 );
 
+        /*
+         * 0.9.0更新：lastHurtTimes 与第八轮新增的
+         * lastAttackNanos / lastHurtNanos 此前未纳入清理清单——
+         * 每代猫实体 UUID 都会在这三张表中永久残留（泄漏）。
+         */
         lastAttackTimes.keySet()
+                .retainAll(entities);
+
+        aiBeforeRecovery.keySet()
+                .retainAll(entities);
+
+        invisBeforeRecovery.keySet()
+                .retainAll(entities);
+
+        lastHurtTimes.keySet()
+                .retainAll(entities);
+
+        lastAttackNanos.keySet()
+                .retainAll(entities);
+
+        lastHurtNanos.keySet()
                 .retainAll(entities);
 
         attackCounts.keySet()
@@ -681,5 +982,14 @@ public class CatBattleState {
 
         assistTargets.keySet()
                 .retainAll(owners);
+
+        /*
+         * 0.9.0更新：dreamRescueLast 此前只有独立
+         * 清理方法、未被 retainOnly 调用——每代猫实体 UUID 泄漏。
+         */
+        retainOnlyDreamRescue(
+                entities
+        );
     }
 }
+

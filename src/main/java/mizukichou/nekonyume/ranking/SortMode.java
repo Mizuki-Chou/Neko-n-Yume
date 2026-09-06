@@ -3,10 +3,10 @@ package mizukichou.nekonyume.ranking;
 import java.util.Comparator;
 
 /**
- * 排行排序模式。
+ * 排行排序模式哒。
  *
  * <p>
- * 0.8.5：/nya ranking 面板的两种排序。
+ * 0.8.5：/nya ranking 面板的两种排序啦。
  * </p>
  */
 public enum SortMode {
@@ -46,3 +46,4 @@ public enum SortMode {
                 ? LEVEL : MEOW_RANK;
     }
 }
+

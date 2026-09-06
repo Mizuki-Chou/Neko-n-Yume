@@ -25,8 +25,8 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 /*
  * /nekonyumeadmin give 管理发放面板（0.8.0）。
  *
- * 集中发放本插件全部特殊物品：
- * 逗猫棒、喵丹 ×5、经验丸 ×2、装备 ×25。
+ * 集中发放本插件全部特殊物品捏：
+ * 逗猫棒、喵丹 ×5、经验丸 ×2、装备 ×25 啦。
  *
  * 至极装备在发放瞬间有 20% 概率觉醒附加属性
  * （掷出后捡回不会重roll）。
@@ -80,6 +80,8 @@ public final class AdminGiveGuiManager {
                                 "give-gui.title"
                         )
                 );
+
+        ((GuiHolder) inventory.getHolder()).bind(inventory);
 
         int slot = 0;
 
@@ -208,6 +210,37 @@ public final class AdminGiveGuiManager {
             return;
         }
 
+        /*
+         * 0.9.0更新：每次敏感操作回查权限——
+         * GUI 打开期间被撤权的玩家不能继续发物品
+         * （GUI 状态不是授权凭证）。
+         */
+        if (!player.hasPermission(
+                "nekoyume.admin"
+        )) {
+
+            player.closeInventory();
+
+            return;
+        }
+
+        /*
+         * 防御性拒绝底部背包槽位——
+         * 即使未来有新的调用方绕过监听器，
+         * 业务层也不会把玩家自己的物品复制发放。
+         */
+        int rawSlot =
+                event.getRawSlot();
+
+        if (rawSlot < 0 ||
+                rawSlot >=
+                        event.getView()
+                                .getTopInventory()
+                                .getSize()) {
+
+            return;
+        }
+
         ItemStack clicked =
                 event.getCurrentItem();
 
@@ -323,3 +356,4 @@ public final class AdminGiveGuiManager {
                 .name();
     }
 }
+

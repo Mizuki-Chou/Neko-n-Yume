@@ -65,7 +65,7 @@ public class CatEntityRestorer {
      * 实现真正的异步取消语义（退出清标记不再重新打开竞争窗口）。
      */
     /*
-     * 0.8.4 R17（社区上报）：
+     * 
      * 全局单调令牌序列 + 每玩家"当前令牌"——
      * 令牌永不重复（AtomicLong），退出/删除时移除条目，
      * 不再随玩家数量无界增长；
@@ -75,6 +75,17 @@ public class CatEntityRestorer {
             new AtomicLong();
 
     private final ConcurrentHashMap<UUID, Long> summonTokens =
+
+            new ConcurrentHashMap<>();
+
+    /*
+     * 0.9.0更新：恢复与主动召唤的令牌 namespace
+     * 分离——此前 restore 复用 summonTokens，会把在途的
+     * 主动召唤令牌覆盖失效，导致 summoning 集合永久残留、
+     * 玩家再也无法召唤。
+     */
+    private final ConcurrentHashMap<UUID, Long> restoreTokens =
+
             new ConcurrentHashMap<>();
 
     public CatEntityRestorer(
@@ -122,6 +133,26 @@ public class CatEntityRestorer {
         return token;
     }
 
+    long beginRestore(
+            UUID playerUUID
+    ) {
+
+        long token =
+                summonTokenSequence.incrementAndGet();
+
+        if (playerUUID != null) {
+
+            restoreTokens.put(
+                    playerUUID,
+                    token
+            );
+        }
+
+        return token;
+    }
+
+
+
     boolean isCurrentSummon(
             UUID playerUUID,
             long token
@@ -136,8 +167,23 @@ public class CatEntityRestorer {
                         playerUUID
                 );
 
-        return current != null &&
-                current == token;
+        if (current != null &&
+                current == token) {
+
+            return true;
+        }
+
+        /*
+         * 恢复令牌同样视为当前（#3 分离 namespace 后，
+         * 恢复流水线的异步回调沿用本校验）。
+         */
+        Long restoring =
+                restoreTokens.get(
+                        playerUUID
+                );
+
+        return restoring != null &&
+                restoring == token;
     }
 
     void invalidateSummons(
@@ -147,11 +193,15 @@ public class CatEntityRestorer {
         if (playerUUID != null) {
 
             /*
-             * 0.8.4 R17（社区上报）：
+             * 
              * 失效即移除——令牌全局单调不会复用，
              * 移除既杀掉全部在途回调，又不留无界增长。
              */
             summonTokens.remove(
+                    playerUUID
+            );
+
+            restoreTokens.remove(
                     playerUUID
             );
         }
@@ -180,13 +230,13 @@ public class CatEntityRestorer {
         }
 
         /*
-         * 0.8.1 修复（R5，社区上报）：
+         * 
          * 登录恢复同样领取生命周期令牌。
          * 删除 →重新领取（generation++）后，在途异步回调
          * 立即失效——旧逻辑猫对象 A 绝不污染新一代猫 B。
          */
         long restoreToken =
-                beginSummon(
+                beginRestore(
                         playerUUID
                 );
 
@@ -234,6 +284,16 @@ public class CatEntityRestorer {
                 cleanupDuplicateCats(
                         playerUUID,
                         cat
+                );
+
+                /*
+                 * 0.9.0更新：同步完成的恢复必须消费
+                 * 自己的生命周期令牌——令牌语义是"在途流水线"，
+                 * 完成后仍留在 current 状态会让未来新增逻辑
+                 * 误判"该流水线仍在进行"。
+                 */
+                invalidateSummons(
+                        playerUUID
                 );
 
                 return;
@@ -310,7 +370,7 @@ public class CatEntityRestorer {
                                             }
 
                                             /*
-                                             * 0.8.1 修复（R3）：
+                                             * 
                                              * 登录恢复的异步窗口内数据可能被删除——
                                              * 无数据即中止，不重建实体。
                                              */
@@ -322,7 +382,7 @@ public class CatEntityRestorer {
                                             }
 
                                             /*
-                                             * 0.8.1 修复（R5，社区上报）：
+                                             * 
                                              * 代际校验：删除 +重新领取后旧回调失效。
                                              */
                                             if (!isCurrentSummon(
@@ -482,7 +542,8 @@ public class CatEntityRestorer {
                                             restoreCatEntityAtSavedLocation(
                                                     player,
                                                     logicalCat,
-                                                    world
+                                                    world,
+                                                    restoreToken
                                             );
 
                                         } catch (Exception exception) {
@@ -532,7 +593,7 @@ public class CatEntityRestorer {
                                             );
 
                                             /*
-                                             * 0.8.1 修复（P2）：
+                                             * 
                                              * 区块加载失败不能静默丢猫。
                                              * 降级到“玩家位置兜底重建”，
                                              * 与“无存档位置”的兜底语义一致，
@@ -570,11 +631,12 @@ public class CatEntityRestorer {
     private void restoreCatEntityAtSavedLocation(
             Player player,
             Cat logicalCat,
-            World world
+            World world,
+            long restoreToken
     ) {
 
         /*
-         * 0.8.1 修复（R4，社区上报）：
+         * 
          * 恢复入口必须自证玩家数据仍存在——
          * 管理员删除猫咪后，任何重建入口都立即中止，
          * 不依赖调用方提前检查。
@@ -600,6 +662,31 @@ public class CatEntityRestorer {
                 runtime.spawnCat(
                         location
                 );
+
+        /*
+         * 0.9.0更新：恢复流程同样绑定代际——
+         * spawn 期间的新召唤/恢复/删除都可能让本次
+         * 请求失效，提交前必须重做后置校验。
+         */
+        if (cat == null ||
+                !cat.isValid() ||
+                cat.isDead() ||
+                !player.isOnline() ||
+                !store.hasCat(
+                        player.getUniqueId()
+                ) ||
+                (restoreToken >= 0 &&
+                        !isCurrentSummon(
+                                player.getUniqueId(),
+                                restoreToken
+                        ))) {
+
+            if (cat != null) {
+                cat.remove();
+            }
+
+            return;
+        }
 
         binding.updateCat(
                 cat,
@@ -652,7 +739,7 @@ public class CatEntityRestorer {
     ) {
 
         /*
-         * 0.8.1 修复（R4，社区上报）：
+         * 
          * 与 restoreCatEntityAtSavedLocation 同口径——
          * 数据已被删除时绝不重建实体。
          */
@@ -735,7 +822,7 @@ public class CatEntityRestorer {
      */
 
     /*
-     * 0.8.4 R24（审查复核）：
+     * 
      * 世界卸载 → 该世界的待恢复记录作废（对称于 retry）。
      */
     public void forgetPendingWorldRestores(
@@ -796,7 +883,7 @@ public class CatEntityRestorer {
      */
 
     /*
-     * 0.8.1 修复（R4，社区上报）：
+     * 
      * PDC 归属校验——猫标记与主人 UUID 必须同时匹配，
      * 防止把其他插件/原版/回档实体“收编”成本插件猫。
      */
@@ -835,6 +922,23 @@ public class CatEntityRestorer {
         UUID playerUUID =
                 player.getUniqueId();
 
+        /*
+         * 0.9.0更新：loadCat 是状态创建操作
+         * （加载/修复/写缓存），过期请求连它都不能执行。
+         */
+        if (summonToken >= 0 &&
+                !isCurrentSummon(
+                        playerUUID,
+                        summonToken
+                )) {
+
+            callback.accept(
+                    SummonResult.FAILED
+            );
+
+            return;
+        }
+
         cache.loadCat(player);
 
         UUID savedEntityUUID =
@@ -846,7 +950,7 @@ public class CatEntityRestorer {
                     runtime.getEntity(savedEntityUUID);
 
             /*
-             * 0.8.1 修复（R4，社区上报）：
+             * 
              * Entity UUID 分支必须验证 PDC 归属——
              * 只有“猫标记 + 主人一致”的实体才允许收编。
              * 存档损坏 / 其他插件实体 / 世界回档
@@ -1298,7 +1402,6 @@ public class CatEntityRestorer {
                 runtime.worlds()) {
 
             /*
-             * 0.8.1 R8（效率）：服务端层过滤（同 cleanupDuplicateCats）。
              */
             for (org.bukkit.entity.Cat cat :
                     runtime.catsIn(world)) {
@@ -1343,7 +1446,7 @@ public class CatEntityRestorer {
      */
 
     /*
-     * 0.8.1 修复（R3，社区上报）：
+     * 
      * 删除玩家猫咪时清理全部已加载世界中属于该玩家的
      * 所有猫实体——包括游离的重复实体，而不仅是
      * 存档登记的 Entity UUID。防止残留实体被后续绑定
@@ -1360,6 +1463,11 @@ public class CatEntityRestorer {
 
         /*
          * 0.8.3：第一遍——实体索引 O(1) 清理。
+         *
+         * 0.9.0更新：索引命中也必须验证 PDC
+         * 归属——索引污染时“删除 A 却命中 B 的实体”
+         * 会误删别人的猫；第二遍扫描只能防漏删、防不了
+         * 已经执行的误删。
          */
         for (UUID entityUuid :
                 entityIndex.entitiesOf(playerUUID)) {
@@ -1368,7 +1476,11 @@ public class CatEntityRestorer {
                     runtime.getEntity(entityUuid);
 
             if (indexed instanceof org.bukkit.entity.Cat cat &&
-                    !cat.isDead()) {
+                    !cat.isDead() &&
+                    isOwnedCat(
+                            cat,
+                            playerUUID
+                    )) {
 
                 cat.remove();
             }
@@ -1383,7 +1495,7 @@ public class CatEntityRestorer {
                 runtime.worlds()) {
 
             /*
-             * 0.8.1 R8（效率）：服务端层过滤（同 cleanupDuplicateCats）。
+     * 服务端层过滤（同 cleanupDuplicateCats），比逐个实体遍历省事多啦。
              */
             for (org.bukkit.entity.Cat cat :
                     runtime.catsIn(world)) {
@@ -1457,7 +1569,7 @@ public class CatEntityRestorer {
                 runtime.worlds()) {
 
             /*
-             * 0.8.1 R8（效率）：
+             * 
              * getEntitiesByClass(Cat.class)由服务端在实体切片层过滤，
              * 避免遍历世界中全部实体类型；
              * 语义与逐实体 instanceof 判定完全一致。
@@ -1528,6 +1640,24 @@ public class CatEntityRestorer {
             long summonToken
     ) {
 
+        /*
+         * 0.9.0更新：token 校验必须先于一切副作用——
+         * 过期召唤连实体 PDC / variant / location 都不能碰，
+         * 而不仅仅是"最终不 commit"。
+         */
+        if (summonToken >= 0 &&
+                !isCurrentSummon(
+                        player.getUniqueId(),
+                        summonToken
+                )) {
+
+            callback.accept(
+                    SummonResult.FAILED
+            );
+
+            return;
+        }
+
         if (cat.isDead() || !cat.isValid()) {
 
             restoreNewCat(
@@ -1557,7 +1687,7 @@ public class CatEntityRestorer {
                 );
 
         /*
-         * 0.8.1 修复（R3）：玩家数据已被删除时中止流水线，
+         * 玩家数据已被删除时中止流水线，
          * 绝不把已删除的猫重新绑回实体。
          */
         if (logicalCat == null) {
@@ -1613,7 +1743,7 @@ public class CatEntityRestorer {
                                         try {
 
                                             /*
-                                             * 0.8.1 修复（R4，社区上报）：
+                                             * 
                                              * 异步回调回归主线程后必须重新验证：
                                              * 1. 召唤代际未失效（退出/删除/新召唤）
                                              * 2. 玩家仍在线
@@ -1729,6 +1859,19 @@ public class CatEntityRestorer {
 
                                         try {
 
+                                            /*
+                                             * 0.9.0更新：失败路径同样
+                                             * 必须验证代际——旧召唤的迟到失败
+                                             * 不得污染新召唤的结果。
+                                             */
+                                            if (!isCurrentSummon(
+                                                    playerUUID,
+                                                    summonToken
+                                            )) {
+
+                                                return;
+                                            }
+
                                             player.sendMessage(
                                                     lang.forPlayer(player).message(
                                                             "entity.chunk-fail"
@@ -1783,7 +1926,7 @@ public class CatEntityRestorer {
                 player.getUniqueId();
 
         /*
-         * 0.8.1 修复（R3）：
+         * 
          * 异步窗口内玩家数据可能已被管理员删除——
          * 无数据即中止，绝不“复活”已删除的猫。
          */
@@ -1797,7 +1940,7 @@ public class CatEntityRestorer {
         }
 
         /*
-         * 0.8.1 修复（R4，社区上报）：
+         * 
          * 同步重建入口同样自证代际未失效，
          * 旧召唤不得把新建实体写回新一代猫的存档。
          */
@@ -1865,6 +2008,33 @@ public class CatEntityRestorer {
                 runtime.spawnCat(
                         player.getLocation()
                 );
+
+        /*
+         * 0.9.0更新：spawn 会触发同步事件（CreatureSpawn /
+         * 其它插件监听器），期间状态可能被重入破坏——
+         * 提交绑定前必须重做后置校验。
+         */
+        if (cat == null ||
+                !cat.isValid() ||
+                cat.isDead() ||
+                !player.isOnline() ||
+                !store.hasCat(playerUUID) ||
+                (summonToken >= 0 &&
+                        !isCurrentSummon(
+                                playerUUID,
+                                summonToken
+                        ))) {
+
+            if (cat != null) {
+                cat.remove();
+            }
+
+            callback.accept(
+                    SummonResult.FAILED
+            );
+
+            return;
+        }
 
         /*
          * 设置基础属性。
@@ -1952,3 +2122,4 @@ public class CatEntityRestorer {
         );
     }
 }
+

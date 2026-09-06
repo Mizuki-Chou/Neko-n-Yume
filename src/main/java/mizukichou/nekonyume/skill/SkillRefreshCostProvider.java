@@ -3,12 +3,12 @@ package mizukichou.nekonyume.skill;
 import org.bukkit.entity.Player;
 
 /**
- * 技能刷新消耗提供者。
+ * 技能刷新消耗提供者啦。
  *
  * <p>
  * 默认实现消耗喵力；
  * 服务器主可通过 config 的 skills.refresh.cost-type
- * 切换到其他经济系统（如 PlayerPoints points）。
+ * 切换到其他经济系统（如 PlayerPoints points）捏。
  * </p>
  *
  * <p>
@@ -58,3 +58,4 @@ public interface SkillRefreshCostProvider {
          */
     }
 }
+

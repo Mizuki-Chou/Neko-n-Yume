@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * 0.8.1 修复（R3，社区上报）：
+ * 
  * 配置 double 的有限性守卫——NaN / Infinity 必须回退，
  * 合法低倍率（如 0.5）不被强制最小值破坏。
  */
@@ -112,4 +112,65 @@ class ConfigParseSupportTest {
                 0.0001
         );
     }
+    /*
+     * 正数倍率上限钳制。
+     */
+    @Test
+    void cappedPositiveDoubleClampsToUpperBound() {
+
+        assertEquals(
+                100.0,
+                ConfigParseSupport.cappedPositiveDouble(
+                        1.0e308,
+                        4.0,
+                        100.0
+                )
+        );
+
+        assertEquals(
+                100.0,
+                ConfigParseSupport.cappedPositiveDouble(
+                        Double.MAX_VALUE,
+                        4.0,
+                        100.0
+                )
+        );
+
+        assertEquals(
+                4.0,
+                ConfigParseSupport.cappedPositiveDouble(
+                        Double.POSITIVE_INFINITY,
+                        4.0,
+                        100.0
+                )
+        );
+
+        assertEquals(
+                4.0,
+                ConfigParseSupport.cappedPositiveDouble(
+                        Double.NaN,
+                        4.0,
+                        100.0
+                )
+        );
+
+        assertEquals(
+                0.0,
+                ConfigParseSupport.cappedPositiveDouble(
+                        -3.0,
+                        4.0,
+                        100.0
+                )
+        );
+
+        assertEquals(
+                2.5,
+                ConfigParseSupport.cappedPositiveDouble(
+                        2.5,
+                        4.0,
+                        100.0
+                )
+        );
+    }
 }
+

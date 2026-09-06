@@ -677,7 +677,7 @@ class MemoryCatStoreLifecycleTest {
          * 建档当天不重复结算衰减。
          */
         assertEquals(
-                java.time.LocalDate.now()
+                java.time.LocalDate.now(java.time.ZoneOffset.UTC)
                         .toString(),
                 store.getAffectionDecayDate(player)
         );
@@ -714,4 +714,78 @@ class MemoryCatStoreLifecycleTest {
                 store.getAffectionDecayDate(player)
         );
     }
+
+    /*
+     * 视觉模型 ID（Generic Model 系统，预留）生命周期：
+     * 读写、覆盖、清除（空串/null 等价）、写不复活。
+     */
+    @Test
+    void modelIdLifecycle() {
+
+        UUID player = UUID.randomUUID();
+
+        store.createCat(player);
+
+        /*
+         * 新建猫咪未指定模型。
+         */
+        assertEquals(
+                "",
+                store.getCatModelId(player)
+        );
+
+        /*
+         * 指定与覆盖。
+         */
+        store.setCatModelId(player, "cats:black_cat");
+
+        assertEquals(
+                "cats:black_cat",
+                store.getCatModelId(player)
+        );
+
+        store.setCatModelId(player, "cats:siamese");
+
+        assertEquals(
+                "cats:siamese",
+                store.getCatModelId(player)
+        );
+
+        /*
+         * 清除（空串与 null 等价）。
+         */
+        store.setCatModelId(player, "");
+
+        assertEquals(
+                "",
+                store.getCatModelId(player)
+        );
+
+        store.setCatModelId(player, "cats:black_cat");
+        store.setCatModelId(player, null);
+
+        assertEquals(
+                "",
+                store.getCatModelId(player)
+        );
+
+        /*
+         * 写不复活：删档后写入静默 no-op。
+         */
+        store.flush();
+
+        assertTrue(
+                store.removeCat(player)
+        );
+
+        store.setCatModelId(player, "cats:black_cat");
+
+        assertFalse(store.hasCat(player));
+
+        assertEquals(
+                "",
+                store.getCatModelId(player)
+        );
+    }
 }
+

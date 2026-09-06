@@ -53,7 +53,7 @@ final class SkillConfigParser {
                         skillSection.getKeys(false)) {
 
                     /*
-                     * 0.8.1 修复（R3）：
+                     * 
                      * NaN / Infinity 技能数值守卫，
                      * 非有限值统一回退 0.0（等效于未配置）。
                      */
@@ -63,7 +63,7 @@ final class SkillConfigParser {
                             );
 
                     /*
-                     * 0.8.4 R21（社区上报 M-NEW-08）：
+                     * 
                      * 数学合法 ≠ 业务合法——按键名钳制业务范围，
                      * 负持续时间/零半径等不再进入 Bukkit API。
                      * duration/cooldown ∈ [1, 3600] 秒
@@ -163,3 +163,4 @@ final class SkillConfigParser {
         );
     }
 }
+

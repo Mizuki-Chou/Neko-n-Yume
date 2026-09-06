@@ -8,6 +8,7 @@ import mizukichou.nekonyume.cat.MeowDanQuality;
 import mizukichou.nekonyume.gui.AdminGiveGuiManager;
 import mizukichou.nekonyume.gui.RankingGuiManager;
 import mizukichou.nekonyume.lang.Lang;
+import mizukichou.nekonyume.model.ModelManager;
 import mizukichou.nekonyume.muma.MumaNightManager;
 import mizukichou.nekonyume.storage.CatStore;
 import net.kyori.adventure.text.Component;
@@ -38,7 +39,7 @@ public class NekoYumeAdminCommand
         implements CommandExecutor, TabCompleter {
 
     /*
-     * 喵丹单次发放上限（100 组 × 64）。
+     * 喵丹单次发放上限（100 组 × 64）捏。
      * 防止超大数量导致发放循环冻结主线程。
      */
     private static final int MAX_MEOW_DAN_GIVE = 6400;
@@ -56,6 +57,9 @@ public class NekoYumeAdminCommand
     private final MumaNightManager mumaNightManager;
     private final AdminGiveGuiManager giveGuiManager;
     private final RankingGuiManager rankingGuiManager;
+
+    private final ModelManager modelManager;
+
     private final Lang lang;
 
     /*
@@ -75,6 +79,7 @@ public class NekoYumeAdminCommand
             MumaNightManager mumaNightManager,
             AdminGiveGuiManager giveGuiManager,
             RankingGuiManager rankingGuiManager,
+            ModelManager modelManager,
             Lang lang
     ) {
 
@@ -87,6 +92,7 @@ public class NekoYumeAdminCommand
         this.mumaNightManager = mumaNightManager;
         this.giveGuiManager = giveGuiManager;
         this.rankingGuiManager = rankingGuiManager;
+        this.modelManager = modelManager;
         this.lang = lang;
     }
 
@@ -174,15 +180,44 @@ public class NekoYumeAdminCommand
          */
         if (args[0].equalsIgnoreCase("reload")) {
 
-            reloadAction.run();
+            try {
 
-            sender.sendMessage(
-                    lang.forSender(sender).message(
-                            "admin.reload-done"
-                    )
-            );
+                reloadAction.run();
+
+                sender.sendMessage(
+                        lang.forSender(sender).message(
+                                "admin.reload-done"
+                        )
+                );
+
+            } catch (Exception exception) {
+
+                /*
+                 * 0.9.0更新：配置热重载失败
+                 * 时给出明确语义——旧配置保持生效，
+                 * 而不是让管理员只看到一条命令异常。
+                 */
+                sender.sendMessage(
+                        lang.forSender(sender).message(
+                                "admin.reload-failed"
+                        )
+                );
+
+                return true;
+            }
 
             return true;
+        }
+
+        /*
+         * /nekoyumeadmin model <reload|list|set|clear>（Phase 7/8）
+         */
+        if (args[0].equalsIgnoreCase("model")) {
+
+            return handleModel(
+                    sender,
+                    args
+            );
         }
 
         /*
@@ -288,7 +323,7 @@ public class NekoYumeAdminCommand
          * 目标玩家。
          */
         Player target =
-                Bukkit.getPlayer(
+                Bukkit.getPlayerExact(
                         args[2]
                 );
 
@@ -608,6 +643,190 @@ public class NekoYumeAdminCommand
      * 无视槽位上限，追加到技能列表末尾。
      */
 
+    /*
+     * ============================================================
+     * /nekoyumeadmin model <reload|list|set|clear>（Phase 7/8）
+     * ============================================================
+     */
+
+    private boolean handleModel(
+            CommandSender sender,
+            String[] args
+    ) {
+
+        if (args.length < 2) {
+
+            sender.sendMessage(
+                    lang.forSender(sender).message(
+                            "admin.model-usage"
+                    )
+            );
+
+            return true;
+        }
+
+        if (args[1].equalsIgnoreCase("reload")) {
+
+            sender.sendMessage(
+                    lang.forSender(sender).message(
+                            "admin.model-reload-started"
+                    )
+            );
+
+            modelManager.reloadAsync(
+                    outcome -> {
+
+                        String key =
+                                switch (outcome) {
+
+                                    case SUCCESS ->
+                                            "admin.model-reload-done";
+
+                                    case SUPERSEDED ->
+                                            "admin.model-reload-superseded";
+
+                                    case SHUTDOWN ->
+                                            "admin.model-reload-shutdown";
+
+                                    case FAILED ->
+                                            "admin.model-reload-failed";
+                                };
+
+                        sender.sendMessage(
+                                lang.forSender(sender).message(
+                                        key
+                                )
+                        );
+                    }
+            );
+
+            return true;
+        }
+
+        if (args[1].equalsIgnoreCase("list")) {
+
+            List<String> models =
+                    modelManager.listModels();
+
+            if (models.isEmpty()) {
+
+                sender.sendMessage(
+                        lang.forSender(sender).message(
+                                "admin.model-list-empty"
+                        )
+                );
+
+                return true;
+            }
+
+            sender.sendMessage(
+                    lang.forSender(sender).message(
+                            "admin.model-list",
+                            String.join(
+                                    ", ",
+                                    models
+                            )
+                    )
+            );
+
+            return true;
+        }
+
+        if (args[1].equalsIgnoreCase("set") ||
+                args[1].equalsIgnoreCase("clear")) {
+
+            boolean clear =
+                    args[1].equalsIgnoreCase(
+                            "clear"
+                    );
+
+            if (args.length < 3 ||
+                    (!clear && args.length < 4)) {
+
+                sender.sendMessage(
+                        lang.forSender(sender).message(
+                                "admin.model-usage"
+                        )
+                );
+
+                return true;
+            }
+
+            Player target =
+                    Bukkit.getPlayerExact(
+                            args[2]
+                    );
+
+            if (target == null ||
+                    !target.isOnline()) {
+
+                sender.sendMessage(
+                        lang.forSender(sender).message(
+                                "admin.player-offline"
+                        )
+                );
+
+                return true;
+            }
+
+            String modelId =
+                    clear
+                            ? ""
+                            : args[3];
+
+            boolean ok =
+                    modelManager.setModel(
+                            target.getUniqueId(),
+                            modelId
+                    );
+
+            if (!ok) {
+
+                sender.sendMessage(
+                        lang.forSender(sender).message(
+                                "admin.model-set-failed"
+                        )
+                );
+
+                return true;
+            }
+
+            /*
+             * set 模板含两个占位符（玩家 + 模型 ID），
+             * clear 模板仅一个——分支分别传参。
+             */
+            if (clear) {
+
+                sender.sendMessage(
+                        lang.forSender(sender).message(
+                                "admin.model-clear-done",
+                                target.getName()
+                        )
+                );
+
+            } else {
+
+                sender.sendMessage(
+                        lang.forSender(sender).message(
+                                "admin.model-set-done",
+                                target.getName(),
+                                modelId
+                        )
+                );
+            }
+
+            return true;
+        }
+
+        sender.sendMessage(
+                lang.forSender(sender).message(
+                        "admin.model-usage"
+                )
+        );
+
+        return true;
+    }
+
     private boolean handleSkill(
             CommandSender sender,
             String[] args
@@ -632,7 +851,7 @@ public class NekoYumeAdminCommand
         }
 
         Player target =
-                Bukkit.getPlayer(
+                Bukkit.getPlayerExact(
                         args[2]
                 );
 
@@ -861,6 +1080,7 @@ public class NekoYumeAdminCommand
                     "skill",
                     "mumanight",
                     "give",
+                    "model",
                     "reload",
                     "ranking"
             );
@@ -878,6 +1098,15 @@ public class NekoYumeAdminCommand
 
                 case "mumanight" ->
                         filter(args[1], "on", "off");
+
+                case "model" ->
+                        filter(
+                                args[1],
+                                "reload",
+                                "list",
+                                "set",
+                                "clear"
+                        );
 
                 default -> List.of();
             };
@@ -988,3 +1217,4 @@ public class NekoYumeAdminCommand
                 .toList();
     }
 }
+

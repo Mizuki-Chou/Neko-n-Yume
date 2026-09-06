@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.logging.Logger;
 
 /**
- * 玩家登录监听。
+ * 玩家登录监听啦。
  *
  * <p>
  * 0.7.0：入服欢迎消息改从 ConfigManager 快照读取。
@@ -29,7 +29,7 @@ import java.util.logging.Logger;
 public class PlayerJoinListener implements Listener {
 
     /*
-     * 登录后延迟多久判定礼物（tick）。
+     * 登录后延迟多久判定礼物（tick）捏。
      * 让玩家先看到自己的猫，再收到猫咪的礼物。
      */
     private static final long GIFT_CHECK_DELAY_TICKS =
@@ -197,3 +197,4 @@ public class PlayerJoinListener implements Listener {
                 );
     }
 }
+

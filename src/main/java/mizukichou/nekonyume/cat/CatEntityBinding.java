@@ -17,7 +17,7 @@ import java.util.UUID;
  * 逻辑猫与 Bukkit 实体的绑定层。
  *
  * <p>
- * 职责（从 CatEntityService 拆分）：
+ * 职责（从 CatEntityService 拆分）捏：
  * 1. PDC Keys（catKey / ownerKey，由组合根注入）；
  * 2. bindLogicalCat / updateCat：实体绑定与基础属性刷写；
  * 3. 名称 / 行为模式 / 头顶名称；
@@ -40,6 +40,7 @@ public class CatEntityBinding {
 
     private final NamespacedKey catKey;
     private final NamespacedKey ownerKey;
+    private final NamespacedKey catIdKey;
 
     /*
      * 0.8.3：实体索引（恢复/清理路径的 O(1) 加速器）。
@@ -47,7 +48,7 @@ public class CatEntityBinding {
     private final CatEntityIndex entityIndex;
 
     /*
-     * 0.8.4：实体运行时 seam（生产委托 Bukkit，测试用 fake）。
+     * 实体运行时 seam（生产委托 Bukkit，测试用 fake）。
      */
     private final CatEntityRuntime runtime;
 
@@ -60,6 +61,7 @@ public class CatEntityBinding {
             Lang lang,
             NamespacedKey catKey,
             NamespacedKey ownerKey,
+            NamespacedKey catIdKey,
             CatEntityIndex entityIndex,
             CatEntityRuntime runtime
     ) {
@@ -72,6 +74,7 @@ public class CatEntityBinding {
         this.lang = lang;
         this.catKey = catKey;
         this.ownerKey = ownerKey;
+        this.catIdKey = catIdKey;
         this.entityIndex = entityIndex;
         this.runtime = runtime;
     }
@@ -118,6 +121,27 @@ public class CatEntityBinding {
         if (!(entity instanceof org.bukkit.entity.Cat bukkitCat) ||
                 bukkitCat.isDead() ||
                 !bukkitCat.isValid()) {
+
+            return;
+        }
+
+        /*
+         * 0.9.0更新：不信任逻辑猫的 entityUuid——
+         * 必须验证实体 PDC 的 owner 与逻辑猫一致，否则损坏
+         * 的绑定会把别人猫的花色/位置污染进自己的逻辑猫。
+         */
+        String boundOwner =
+                bukkitCat.getPersistentDataContainer()
+                        .get(
+                                ownerKey,
+                                PersistentDataType.STRING
+                        );
+
+        if (boundOwner == null ||
+                !boundOwner.equals(
+                        logicalCat.getOwnerUuid()
+                                .toString()
+                )) {
 
             return;
         }
@@ -194,7 +218,7 @@ public class CatEntityBinding {
                 player.getUniqueId();
 
         /*
-         * 0.8.1 修复（R3，社区上报：删除后复活）：
+         * 
          * 绑定前必须已有玩家数据。
          *
          * 旧实现在这里调用 store.ensureCat 兜底建档——
@@ -265,12 +289,34 @@ public class CatEntityBinding {
     ) {
 
         /*
+         * noAI 残留修复（实机反馈：猫悬浮空中、无击退、
+         * 被打无反应、完全不动）：
+         *
+         * 恢复期的 setAI(false) 会随实体持久化（区块保存 /
+         * 服务器重启），而恢复状态是纯内存的——重启后
+         * 没有任何路径恢复 AI，猫会永久 noAI。
+         *
+         * 绑定入口统一执行不变量：不在恢复期的猫必须
+         * 拥有 AI。恢复期内的猫不受影响（保持冻结）。
+         */
+        if (!cat.hasAI() &&
+                !battleState.isRecovering(
+                        cat.getUniqueId()
+                )) {
+
+            cat.setAI(
+                    true
+            );
+        }
+
+        /*
          * 过滤 §，防止名字注入传统颜色码。
          */
         String safeName =
                 name == null
                         ? ""
-                        : name.replace("§", "");
+                        : name.replace("§", "")
+                        .replaceAll("[\\p{Cntrl}\\p{Cf}]", "");
 
         cat.setCustomName(
                 "§d🐱 " + safeName
@@ -344,6 +390,21 @@ public class CatEntityBinding {
                         player.getUniqueId().toString()
                 );
 
+        UUID catId =
+                store.getCatUUID(
+                        player.getUniqueId()
+                );
+
+        if (catId != null) {
+
+            cat.getPersistentDataContainer()
+                    .set(
+                            catIdKey,
+                            PersistentDataType.STRING,
+                            catId.toString()
+                    );
+        }
+
         /*
          * 0.8.3：登记实体索引（所有绑定路径都经 updateCat）。
          */
@@ -363,6 +424,31 @@ public class CatEntityBinding {
             Player player,
             org.bukkit.entity.Cat entity
     ) {
+
+        /*
+         * 0.9.0更新：信任边界——保存函数
+         * 不能假设调用方传入的实体一定属于该玩家，
+         * 先做 PDC 归属校验。
+         */
+        if (entity == null || !entity.isValid()) {
+            return;
+        }
+
+        String boundOwner =
+                entity.getPersistentDataContainer()
+                        .get(
+                                getOwnerKey(),
+                                PersistentDataType.STRING
+                        );
+
+        if (boundOwner == null ||
+                !boundOwner.equals(
+                        player.getUniqueId()
+                                .toString()
+                )) {
+
+            return;
+        }
 
         Location location =
                 entity.getLocation();
@@ -414,7 +500,8 @@ public class CatEntityBinding {
         }
 
         String safeName =
-                name.replace("§", "");
+                name.replace("§", "")
+                        .replaceAll("[\\p{Cntrl}\\p{Cf}]", "");
 
         UUID playerUUID =
                 player.getUniqueId();
@@ -612,6 +699,12 @@ public class CatEntityBinding {
                 location.getWorld().getName()
         );
 
+        logicalCat.setWorldUUID(
+                location.getWorld()
+                        .getUID()
+                        .toString()
+        );
+
         logicalCat.setX(location.getX());
         logicalCat.setY(location.getY());
         logicalCat.setZ(location.getZ());
@@ -623,3 +716,4 @@ public class CatEntityBinding {
         );
     }
 }
+

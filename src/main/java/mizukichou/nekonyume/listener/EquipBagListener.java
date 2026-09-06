@@ -23,12 +23,12 @@ import org.bukkit.inventory.meta.ItemMeta;
 import java.util.Random;
 
 /**
- * 猫猫装备袋（0.8.0 梦魔之夜）监听：
- * 右键开启 → 按品质权重（40/30/20/7.5/2.5）抽取一件装备。
+ * 猫猫装备袋（0.8.0 梦魔之夜）监听哒：
+ * 右键开启 → 按品质权重（40/30/20/7.5/2.5）抽取一件装备啦。
  *
  * <p>
  * 抽取走 {@link CatFoodManager#grantEquipment} 获取途径专用发放：
- * 至极品质同样享受“获得的一瞬间”觉醒 roll（与发放面板口径一致）。
+ * 至极品质同样享受“获得的一瞬间”觉醒 roll（与发放面板口径一致）捏。
  * </p>
  */
 public class EquipBagListener implements Listener {
@@ -95,6 +95,29 @@ public class EquipBagListener implements Listener {
                 event.getPlayer();
 
         /*
+         * 0.9.0更新：BUNDLE 是容器——玩家
+         * 可能把物品装进袋子；整袋被消耗 = 内容物一起销毁。
+         * 打开前拒绝非空袋子。
+         */
+        ItemMeta bagMeta =
+                item.getItemMeta();
+
+        if (bagMeta instanceof
+                org.bukkit.inventory.meta.BundleMeta bundleMeta &&
+                !bundleMeta.getItems()
+                        .isEmpty()) {
+
+            player.sendMessage(
+                    lang.forPlayer(player)
+                            .message(
+                                    "equip-bag.not-empty"
+                            )
+            );
+
+            return;
+        }
+
+        /*
          * 抽取：品质按权重、类型均匀。
          */
         MeowDanQuality quality =
@@ -126,10 +149,9 @@ public class EquipBagListener implements Listener {
         /*
          * 消耗袋子（创造模式不消耗，与喵丹/经验丸口径一致）。
          *
-         * 注意：必须重新从背包取出手持物品再修改——
-         * PlayerInteractEvent#getItem() 在 Paper 1.21 不保证是
-         * 背包槽位的活引用，直接改它可能吞不掉袋子
-         * （与 equipCat 的消耗模式保持一致）。
+         * 0.9.0更新：判定与扣除必须是同一
+         * 主手活引用——若主手已不是袋子（右键瞬间切快捷栏），
+         * 直接拒绝整个流程：绝不"未扣先发"（复制漏洞）。
          */
         if (player.getGameMode()
                 != GameMode.CREATIVE) {
@@ -138,18 +160,27 @@ public class EquipBagListener implements Listener {
                     player.getInventory()
                             .getItemInMainHand();
 
-            if (hand != null &&
-                    !hand.getType().isAir() &&
-                    foodManager.isEquipBag(
+            if (hand == null ||
+                    hand.getType().isAir() ||
+                    !foodManager.isEquipBag(
                             hand
                     )) {
 
-                hand.setAmount(
-                        hand.getAmount() <= 1
-                                ? 0
-                                : hand.getAmount() - 1
+                player.sendMessage(
+                        lang.forPlayer(player)
+                                .message(
+                                        "equip-bag.hand-changed"
+                                )
                 );
+
+                return;
             }
+
+            hand.setAmount(
+                    hand.getAmount() <= 1
+                            ? 0
+                            : hand.getAmount() - 1
+            );
         }
 
         /*
@@ -211,3 +242,4 @@ public class EquipBagListener implements Listener {
                 .name();
     }
 }
+

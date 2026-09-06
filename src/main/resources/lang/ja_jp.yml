@@ -10,6 +10,10 @@
 command:
   no-cat: "<red>🐱 まだ猫を飼っていません！</red>"
   unknown: "<yellow>使い方: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|language|achievements></yellow>"
+
+  model-no-cat: "<yellow>まだ猫がいません。</yellow>"
+  model-current: "<aqua>あなたの猫のモデル：</aqua><gray>{0}</gray>"
+  model-default: "<aqua>あなたの猫のモデル：</aqua><gray>デフォルト（未指定）</gray>"
   help: |
     <gradient:#ff9de2:#a78bfa>
     🐱 Neko n' Yume コマンド
@@ -23,7 +27,7 @@ command:
     <gray>/nekoyume gui</gray> - 猫パネルを開く
     <gray>/nekoyume skill</gray> - スキルパネルを開く
     <gray>/nekoyume tool</gray> - 猫じゃらしを受け取る
-    <gray>/nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp&gt;</gray> - 言語を設定
+    <gray>/nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp|ko_kr|fr_fr|de_de|es_es&gt;</gray> - 言語を設定
     <gray>/nekoyume achievements</gray> - 実績の殿堂を見る
     <gray>/nekoyume help</gray> - ヘルプを表示
   claim:
@@ -60,7 +64,7 @@ command:
     received: "<gradient:#ff9de2:#a78bfa>🐱 猫じゃらしを手に入れました！右クリックで使えます！</gradient>"
     inventory-full: "<yellow>🐱 インベントリがいっぱいなので、猫じゃらしは足元に落ちました。</yellow>"
   language:
-    usage: "<yellow>使い方: /nekoyume language <auto|zh_cn|zh_tw|en_us|ja_jp></yellow>"
+    usage: "<yellow>使い方: /nekoyume language <auto|zh_cn|zh_tw|en_us|ja_jp|ko_kr|fr_fr|de_de|es_es></yellow>"
     set: "<gradient:#ff9de2:#a78bfa>🐱 プラグインの言語を</gradient>{0}に設定しました！"
     reset: "<gradient:#ff9de2:#a78bfa>🐱 プラグインの言語がMinecraftの言語設定に従うようになりました。</gradient>"
     unknown: "<red>❌ 不明な言語: {0}</red>"
@@ -73,9 +77,22 @@ admin:
   ranking-delete-notify: "<red>あなたの猫 {0} は管理者によって削除されました。</red>"
   ranking-target-missing: "<yellow>この猫はもう存在しません。</yellow>"
   no-permission: "<red>❌ このコマンドを実行する権限がありません！</red>"
-  usage: "<yellow>使い方: /nekoyumeadmin <meowdan|cat|skill|mumanight|reload></yellow>"
+  usage: "<yellow>使い方: /nekoyumeadmin <meowdan|cat|skill|mumanight|model|reload></yellow>"
   reload-done: "<gradient:#a7f3d0:#60a5fa>✔ Neko n' Yume の設定を再読み込みしました！</gradient>"
+  reload-failed: "<red>設定のリロードに失敗しました——以前の設定が引き続き有効です。</red>"
   player-only: "<red>❌ このコマンドはプレイヤー専用です。</red>"
+
+  model-usage: "<yellow>使い方: /nekoyumeadmin model <reload|list|set <プレイヤー> <モデルID>|clear <プレイヤー>></yellow>"
+  model-reload-started: "<gray>モデルを再読込中（非同期）…</gray>"
+  model-reload-done: "<gradient:#a7f3d0:#60a5fa>✔ モデルの再読込が完了しました。</gradient>"
+  model-reload-superseded: "<yellow>モデルリロードは新しいリクエストに置き換えられました。</yellow>"
+  model-reload-shutdown: "<yellow>プラグイン停止中のため、リロードは実行されませんでした。</yellow>"
+  model-reload-failed: "<red>モデルリロードに失敗しました（リソースパック構築失敗）。旧モデルが引き続き使用されます。</red>"
+  model-list-empty: "<yellow>モデルが読み込まれていません（models フォルダを確認してください）。</yellow>"
+  model-list: "<aqua>読み込み済みモデル：</aqua><gray>{0}</gray>"
+  model-set-done: "<gradient:#a7f3d0:#60a5fa>✔ {0} の猫のモデルを {1} に設定しました。</gradient>"
+  model-clear-done: "<gradient:#a7f3d0:#60a5fa>✔ {0} の猫のモデルをクリアしました。</gradient>"
+  model-set-failed: "<red>❌ 設定に失敗しました：猫がいないか、モデル ID が不正です。</red>"
   meowdan-usage: "<yellow>使い方: /nekoyumeadmin meowdan give <プレイヤー> <品質> [個数]</yellow>"
   meowdan-quality-hint: "<gray>品質: COMMON / UNCOMMON / RARE / EPIC / LEGENDARY</gray>"
   player-offline: "<red>❌ プレイヤーがオフラインです！</red>"
@@ -187,6 +204,7 @@ battle:
   recovering: "<red>🐱 </red>{0}はケガをしてしまい、<red>{1}秒間</red>動けません…"
   boss-xp: "<gold>🏆 </gold>{0}は{1}を倒し、<green>{2}</green>の経験値を獲得した！"
   starving: "<yellow>🐱 </yellow>{0}は空腹で動けない。ごはんをあげよう。"
+  dream-weaver-rescue: "<aqua>🌙 </aqua>{0}の夢が光となってあなたを守った——体力が回復した！"
 
 entity:
   summoning: "<yellow>🐱 猫を探しています。少しお待ちください！</yellow>"
@@ -202,6 +220,7 @@ muma:
   dawn: "<gold><bold>☀ 夜明けとともに、夢魔の夜は終わりました。</bold></gold>"
 
 tool:
+  already: "<yellow>すでに猫じゃらしを持っています。</yellow>"
   wand-name: "§d🐱 猫じゃらし"
   wand-lore: "§7右クリックで猫パネルを開く"
   claim-title: "§d🎉 猫を迎えました！"
@@ -536,6 +555,8 @@ equip-bonus.obtained: "✦ 至宝降臨！この装備は追加属性に覚醒�
 equip-bag.name: "猫猫装備袋"
 equip-bag.lore-1: "右クリックで猫装備を1つランダム入手"
 equip-bag.lore-2: "品質確率：平凡40%・良質30%・希少20%・卓越7.5%・伝説2.5%"
+hand-changed: "<yellow>メインハンドが変わったため、開封を中止しました。</yellow>"
+not-empty: "<yellow>袋の中身が空ではありません。先に空にしてください。</yellow>"
 equip-bag.open: "猫猫装備袋を開けた：{0}を獲得"
 meowdan-name.epic: "§5✨ エピックニャンダン"
 meowdan-name.legendary: "§6✨ レジェンダリーニャンダン"
@@ -567,3 +588,4 @@ entity.name-recovering: "§c❤ {0}はケガ中・あと{1}秒で回復"
 
 cost.meow-power: "ニャン力"
 cost.player-points: "ポイント"
+

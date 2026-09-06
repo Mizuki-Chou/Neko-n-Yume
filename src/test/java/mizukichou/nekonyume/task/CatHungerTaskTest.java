@@ -146,4 +146,64 @@ class CatHungerTaskTest {
                 )
         );
     }
+
+    @Test
+    void invalidHungerTimestampDetectsCorruptedAndFutureValues() {
+
+        long now = 1_700_000_000_000L;
+
+        /*
+         * 负时间戳（存档损坏/人工修改）：
+         * 若直接参与 elapsed = now - lastUpdate 会溢出为负，
+         * 结算被永久卡住——必须判为无效。
+         */
+        assertTrue(
+                CatHungerTask.isInvalidHungerTimestamp(
+                        Long.MIN_VALUE,
+                        now
+                )
+        );
+
+        assertTrue(
+                CatHungerTask.isInvalidHungerTimestamp(
+                        -1L,
+                        now
+                )
+        );
+
+        /*
+         * 未来时间（时钟回拨）：同样判为无效。
+         */
+        assertTrue(
+                CatHungerTask.isInvalidHungerTimestamp(
+                        now + 1,
+                        now
+                )
+        );
+
+        /*
+         * 合法时间戳：0（未初始化）与正常历史值均有效。
+         */
+        assertFalse(
+                CatHungerTask.isInvalidHungerTimestamp(
+                        0L,
+                        now
+                )
+        );
+
+        assertFalse(
+                CatHungerTask.isInvalidHungerTimestamp(
+                        now,
+                        now
+                )
+        );
+
+        assertFalse(
+                CatHungerTask.isInvalidHungerTimestamp(
+                        now - 60_000L,
+                        now
+                )
+        );
+    }
 }
+

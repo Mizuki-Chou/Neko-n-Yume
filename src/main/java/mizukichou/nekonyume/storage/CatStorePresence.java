@@ -62,15 +62,52 @@ final class CatStorePresence {
             String variant
     ) {
 
+        /*
+         * 0.9.0更新：空串 = 清除花色
+         * （与装备/模型 id 同一"对称写"语义）。
+         */
         if (playerUUID == null ||
                 variant == null ||
-                variant.isBlank() ||
                 !store.hasCat(playerUUID)) {
 
             return;
         }
 
         store.setRaw(playerUUID, AbstractCatStore.FIELD_VARIANT, variant);
+    }
+
+    /*
+     * 视觉模型（Generic Model 系统，预留）。
+     *
+     * 空串 / null = 未指定（默认模型）。
+     * 与装备相同：允许写入空串以表示“清除指定”，
+     * 保证往返一致（空串读回后归一化为 null）。
+     */
+    String getCatModelId(UUID playerUUID) {
+
+        return store.getString(
+                playerUUID,
+                AbstractCatStore.FIELD_MODEL_ID,
+                ""
+        );
+    }
+
+    void setCatModelId(
+            UUID playerUUID,
+            String modelId
+    ) {
+
+        if (playerUUID == null ||
+                !store.hasCat(playerUUID)) {
+
+            return;
+        }
+
+        store.setRaw(
+                playerUUID,
+                AbstractCatStore.FIELD_MODEL_ID,
+                modelId == null ? "" : modelId
+        );
     }
 
     /*
@@ -253,6 +290,67 @@ final class CatStorePresence {
         );
     }
 
+    /*
+     * 0.9.0更新：朝向持久化——此前 yaw/pitch
+     * 只在内存维护，重启后猫总是转向固定方向。
+     */
+
+    float getCatYaw(UUID playerUUID) {
+
+        return (float) store.getDouble(
+                playerUUID,
+                AbstractCatStore.FIELD_YAW,
+                0.0
+        );
+    }
+
+    float getCatPitch(UUID playerUUID) {
+
+        return (float) store.getDouble(
+                playerUUID,
+                AbstractCatStore.FIELD_PITCH,
+                0.0
+        );
+    }
+
+    void setCatYaw(
+            UUID playerUUID,
+            float yaw
+    ) {
+
+        if (playerUUID == null ||
+                !store.hasCat(playerUUID) ||
+                !Float.isFinite(yaw)) {
+
+            return;
+        }
+
+        store.setRaw(
+                playerUUID,
+                AbstractCatStore.FIELD_YAW,
+                (double) yaw
+        );
+    }
+
+    void setCatPitch(
+            UUID playerUUID,
+            float pitch
+    ) {
+
+        if (playerUUID == null ||
+                !store.hasCat(playerUUID) ||
+                !Float.isFinite(pitch)) {
+
+            return;
+        }
+
+        store.setRaw(
+                playerUUID,
+                AbstractCatStore.FIELD_PITCH,
+                (double) pitch
+        );
+    }
+
     void setCatLocation(
             UUID playerUUID,
             UUID worldUUID,
@@ -291,3 +389,4 @@ final class CatStorePresence {
         store.setRaw(playerUUID, AbstractCatStore.FIELD_Z, z);
     }
 }
+

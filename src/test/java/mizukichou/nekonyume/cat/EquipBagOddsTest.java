@@ -538,3 +538,4 @@ class EquipBagOddsTest {
         };
     }
 }
+

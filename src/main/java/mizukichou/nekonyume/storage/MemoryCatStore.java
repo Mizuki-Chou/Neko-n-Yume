@@ -62,7 +62,7 @@ public class MemoryCatStore extends AbstractCatStore {
         }
 
         /*
-         * 0.8.1 修复（P2）：与 YamlCatStore 同语义——
+         * 与 YamlCatStore 同语义——
          * 值未变化时跳过写入与脏标记。
          */
         if (java.util.Objects.equals(
@@ -137,3 +137,4 @@ public class MemoryCatStore extends AbstractCatStore {
         dirty = false;
     }
 }
+

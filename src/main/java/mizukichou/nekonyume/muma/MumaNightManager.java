@@ -31,10 +31,10 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
- * 梦魔之夜（Muma's Night）。
+ * 梦魔之夜（Muma's Night）捏。
  *
  * <p>
- * 致敬法国独立游戏 Muma Rope。
+ * 致敬法国独立游戏 Muma Rope 啦。
  * </p>
  *
  * <p>
@@ -48,6 +48,9 @@ public class MumaNightManager {
     private final NamespacedKey buffedKey;
     private final NamespacedKey origHealthKey;
     private final NamespacedKey origDamageKey;
+    private final NamespacedKey buffedHealthKey;
+    private final NamespacedKey buffedDamageKey;
+    private final NamespacedKey buffedSwordKey;
     private final NamespacedKey enabledKey;
     private final NamespacedKey origMainHandKey;
     private final NamespacedKey origOffHandKey;
@@ -101,6 +104,29 @@ public class MumaNightManager {
                 new NamespacedKey(
                         plugin,
                         "muma_orig_damage"
+                );
+
+        /*
+         * 0.9.0更新：记录强化后写入的值——
+         * 黎明只在自己写入的值仍未被其它系统改动时恢复，
+         * 否则跳过（cooperative state modification）。
+         */
+        this.buffedHealthKey =
+                new NamespacedKey(
+                        plugin,
+                        "muma_buffed_health"
+                );
+
+        this.buffedDamageKey =
+                new NamespacedKey(
+                        plugin,
+                        "muma_buffed_damage"
+                );
+
+        this.buffedSwordKey =
+                new NamespacedKey(
+                        plugin,
+                        "muma_buffed_sword"
                 );
 
         this.enabledKey =
@@ -236,9 +262,14 @@ public class MumaNightManager {
             long time =
                     world.getTime();
 
+            /*
+             * 夜晚判定：与 MOONLIGHT（月华）技能窗口对齐——
+             * 13000 ~ 23000（含）为夜晚；边界口径与
+             * CatBattleTask / CatAuraTask 一致。
+             */
             boolean night =
                     time >= 13000 &&
-                            time < 23000;
+                            time <= 23000;
 
             if (!night) {
 
@@ -375,12 +406,6 @@ public class MumaNightManager {
                 monster.getPersistentDataContainer();
 
         pdc.set(
-                buffedKey,
-                PersistentDataType.BYTE,
-                (byte) 1
-        );
-
-        pdc.set(
                 origHealthKey,
                 PersistentDataType.DOUBLE,
                 origHealth
@@ -468,7 +493,51 @@ public class MumaNightManager {
             equipment.setItemInMainHandDropChance(
                     0f
             );
+
+            /*
+             * 0.9.0更新：强化事务全部成功后才标记
+             * buffed，并记录本次写入的值——异常中途不会留下
+             * “永久标记、半强化状态”。
+             */
+            if (equipment.getItemInMainHand() != null &&
+                    !equipment.getItemInMainHand().getType().isAir()) {
+
+                pdc.set(
+                        buffedSwordKey,
+                        PersistentDataType.BYTE_ARRAY,
+                        equipment.getItemInMainHand()
+                                .serializeAsBytes()
+                );
+            }
         }
+
+        double buffedHealth =
+                maxHealth != null
+                        ? maxHealth.getBaseValue()
+                        : origHealth;
+
+        double buffedDamage =
+                attack != null
+                        ? attack.getBaseValue()
+                        : origDamage;
+
+        pdc.set(
+                buffedHealthKey,
+                PersistentDataType.DOUBLE,
+                buffedHealth
+        );
+
+        pdc.set(
+                buffedDamageKey,
+                PersistentDataType.DOUBLE,
+                buffedDamage
+        );
+
+        pdc.set(
+                buffedKey,
+                PersistentDataType.BYTE,
+                (byte) 1
+        );
     }
 
     /*
@@ -542,7 +611,22 @@ public class MumaNightManager {
                             Attribute.MAX_HEALTH
                     );
 
-            if (maxHealth != null) {
+            Double buffedHealth =
+                    pdc.get(
+                            buffedHealthKey,
+                            PersistentDataType.DOUBLE
+                    );
+
+            /*
+             * 0.9.0更新：仅当当前值仍是我们写入的
+             * 强化值时才恢复；其它系统改过就绝不覆盖。
+             */
+            if (maxHealth != null &&
+                    (buffedHealth == null ||
+                            Math.abs(
+                                    maxHealth.getBaseValue()
+                                            - buffedHealth
+                            ) < 1e-6)) {
 
                 maxHealth.setBaseValue(
                         Math.max(
@@ -568,7 +652,18 @@ public class MumaNightManager {
                             Attribute.ATTACK_DAMAGE
                     );
 
-            if (attack != null) {
+            Double buffedDamage =
+                    pdc.get(
+                            buffedDamageKey,
+                            PersistentDataType.DOUBLE
+                    );
+
+            if (attack != null &&
+                    (buffedDamage == null ||
+                            Math.abs(
+                                    attack.getBaseValue()
+                                            - buffedDamage
+                            ) < 1e-6)) {
 
                 attack.setBaseValue(
                         Math.max(
@@ -607,9 +702,30 @@ public class MumaNightManager {
                             )
                     );
 
-            equipment.setItemInMainHand(
-                    originalMain
-            );
+            byte[] buffedSwordBytes =
+                    pdc.get(
+                            buffedSwordKey,
+                            PersistentDataType.BYTE_ARRAY
+                    );
+
+            ItemStack currentMain =
+                    equipment.getItemInMainHand();
+
+            boolean mainIsOurs =
+                    buffedSwordBytes != null &&
+                    currentMain != null &&
+                    !currentMain.getType().isAir() &&
+                    java.util.Arrays.equals(
+                            currentMain.serializeAsBytes(),
+                            buffedSwordBytes
+                    );
+
+            if (mainIsOurs) {
+
+                equipment.setItemInMainHand(
+                        originalMain
+                );
+            }
 
             equipment.setItemInOffHand(
                     originalOff
@@ -627,14 +743,20 @@ public class MumaNightManager {
                             PersistentDataType.DOUBLE
                     );
 
-            if (mainDrop != null) {
+            if (mainDrop != null &&
+                    Math.abs(
+                            equipment.getItemInMainHandDropChance()
+                    ) < 1e-6) {
 
                 equipment.setItemInMainHandDropChance(
                         mainDrop.floatValue()
                 );
             }
 
-            if (offDrop != null) {
+            if (offDrop != null &&
+                    Math.abs(
+                            equipment.getItemInOffHandDropChance()
+                    ) < 1e-6) {
 
                 equipment.setItemInOffHandDropChance(
                         offDrop.floatValue()
@@ -643,6 +765,9 @@ public class MumaNightManager {
         }
 
         pdc.remove(buffedKey);
+        pdc.remove(buffedHealthKey);
+        pdc.remove(buffedDamageKey);
+        pdc.remove(buffedSwordKey);
         pdc.remove(origHealthKey);
         pdc.remove(origDamageKey);
         pdc.remove(origMainHandKey);
@@ -1084,3 +1209,4 @@ public class MumaNightManager {
         }
     }
 }
+

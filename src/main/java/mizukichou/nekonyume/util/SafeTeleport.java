@@ -11,8 +11,8 @@ import org.bukkit.util.Vector;
  *
  * <p>
  * 用于"传送式跟随"与"战斗扑击"：
- * 传送前检查脚部/头部可通行、
- * 下方有实体、且不在岩浆或水中。
+ * 传送前检查脚部/头部可通行捏、
+ * 下方有实体、且不在岩浆或水中啦。
  * </p>
  */
 public final class SafeTeleport {
@@ -230,6 +230,23 @@ public final class SafeTeleport {
         }
 
         /*
+         * 0.9.0更新：火 / 下界传送门 /
+         * 仙人掌 / 甜浆果丛 / 粉雪——isOccluding 判定下
+         * 全部"可站"，会把猫送进火里或传送门里。
+         */
+        if (type == Material.FIRE ||
+                type == Material.SOUL_FIRE ||
+                type == Material.NETHER_PORTAL ||
+                type == Material.CACTUS ||
+                type == Material.SWEET_BERRY_BUSH ||
+                type == Material.POWDER_SNOW ||
+                type == Material.COBWEB ||
+                type == Material.MAGMA_BLOCK) {
+
+            return false;
+        }
+
+        /*
          * 完整方块（石头 / 玻璃 / 墙等）不可通行；
          * 空气、半砖、树叶、草等可通行。
          */
@@ -246,3 +263,4 @@ public final class SafeTeleport {
         return !block.isPassable();
     }
 }
+

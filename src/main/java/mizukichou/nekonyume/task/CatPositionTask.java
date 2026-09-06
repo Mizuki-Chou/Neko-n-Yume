@@ -20,9 +20,9 @@ public class CatPositionTask implements Runnable {
      * 猫咪位置同步
      * ============================================================
      *
-     * NekoNYume.onEnable() 中每 30 秒执行一次。
+     * NekoNYume.onEnable() 里每 30 秒执行一次捏。
      *
-     * 这里不直接写 players.yml。
+     * 这里不直接写 players.yml 啦。
      *
      * 正确的数据流：
      *
@@ -78,7 +78,7 @@ public class CatPositionTask implements Runnable {
                 cache.getCats()) {
 
             /*
-             * 0.8.1 修复（P2）：单猫异常隔离，
+             * 单猫异常隔离，
              * 与 CatBattleTask 口径一致。
              */
             try {
@@ -234,3 +234,4 @@ public class CatPositionTask implements Runnable {
         );
     }
 }
+

@@ -35,7 +35,7 @@ import java.util.Locale;
  *
  * <p>
  * 0.7.0：玩家文案改走 Lang（command.* 节）；
- * 配置改走 ConfigManager 快照。
+ * 配置改走 ConfigManager 快照啦。
  * </p>
  */
 public class NekoYumeCommand
@@ -104,6 +104,61 @@ public class NekoYumeCommand
         }
 
         /*
+         * /nekoyume model（Phase 8）：查看自己猫的当前模型啦。
+         */
+        if (args.length > 0 &&
+                args[0].equalsIgnoreCase("model")) {
+
+            if (!(sender instanceof Player player)) {
+
+                sender.sendMessage(
+                        "Only players can use this command."
+                );
+
+                return true;
+            }
+
+            if (!store.hasCat(
+                    player.getUniqueId()
+            )) {
+
+                player.sendMessage(
+                        lang.forSender(sender).message(
+                                "command.model-no-cat"
+                        )
+                );
+
+                return true;
+            }
+
+            String modelId =
+                    store.getCatModelId(
+                            player.getUniqueId()
+                    );
+
+            if (modelId == null ||
+                    modelId.isBlank()) {
+
+                player.sendMessage(
+                        lang.forSender(sender).message(
+                                "command.model-default"
+                        )
+                );
+
+            } else {
+
+                player.sendMessage(
+                        lang.forSender(sender).message(
+                                "command.model-current",
+                                modelId
+                        )
+                );
+            }
+
+            return true;
+        }
+
+        /*
          * /nekoyume claim
          */
         if (args.length > 0 &&
@@ -113,6 +168,22 @@ public class NekoYumeCommand
 
                 sender.sendMessage(
                         "Only players can use this command."
+                );
+
+                return true;
+            }
+
+            /*
+             * 0.9.0更新：命令权限检查。
+             */
+            if (!player.hasPermission(
+                    "nekoyume.claim"
+            )) {
+
+                player.sendMessage(
+                        lang.forSender(sender).message(
+                                "command.no-permission"
+                        )
                 );
 
                 return true;
@@ -770,7 +841,8 @@ public class NekoYumeCommand
 
             switch (code) {
 
-                case "auto", "zh_cn", "zh_tw", "en_us", "ja_jp" -> {
+                case "auto", "zh_cn", "zh_tw", "en_us", "ja_jp",
+                        "ko_kr", "fr_fr", "de_de", "es_es" -> {
                 }
 
                 default -> {
@@ -839,6 +911,22 @@ public class NekoYumeCommand
                 return true;
             }
 
+            /*
+             * 0.9.0更新：命令权限检查。
+             */
+            if (!player.hasPermission(
+                    "nekoyume.tool"
+            )) {
+
+                player.sendMessage(
+                        lang.forSender(sender).message(
+                                "command.no-permission"
+                        )
+                );
+
+                return true;
+            }
+
             if (!store.hasCat(
                     player.getUniqueId()
             )) {
@@ -850,6 +938,29 @@ public class NekoYumeCommand
                 );
 
                 return true;
+            }
+
+            /*
+             * 0.9.0更新：已有逗猫棒不再发放
+             * （防铺地刷棒）。
+             */
+            for (ItemStack content :
+                    player.getInventory()
+                            .getContents()) {
+
+                if (CatToolItem.isTool(
+                        content,
+                        toolKey
+                )) {
+
+                    player.sendMessage(
+                            lang.forSender(sender).message(
+                                    "command.tool.already"
+                            )
+                    );
+
+                    return true;
+                }
             }
 
             /*
@@ -962,7 +1073,7 @@ public class NekoYumeCommand
              */
             newName =
                     newName.replaceAll(
-                            "[\\p{Cntrl}]",
+                            "[\\p{Cntrl}\\p{Cf}]",
                             ""
                     );
 
@@ -989,8 +1100,33 @@ public class NekoYumeCommand
             }
 
             /*
-             * 保存新名字
+             * 保存新名字。
+             *
+             * 0.9.0更新：双真相修复——先更新
+             * 内存 Cat（runtime truth），再写 Store（
+             * projection）；只写 store 会让下一次
+             * saveCat 把旧名字写回（与 setModel 同根）。
              */
+            mizukichou.nekonyume.cat.Cat logicalCat =
+                    cache.getCat(
+                            player.getUniqueId()
+                    );
+
+            if (logicalCat == null) {
+
+                logicalCat =
+                        cache.loadCat(
+                                player.getUniqueId()
+                        );
+            }
+
+            if (logicalCat != null) {
+
+                logicalCat.setName(
+                        newName
+                );
+            }
+
             store.setCatName(
                     player.getUniqueId(),
                     newName
@@ -1025,6 +1161,22 @@ public class NekoYumeCommand
 
                 sender.sendMessage(
                         "Only players can use this command."
+                );
+
+                return true;
+            }
+
+            /*
+             * 0.9.0更新：命令权限检查。
+             */
+            if (!player.hasPermission(
+                    "nekoyume.summon"
+            )) {
+
+                player.sendMessage(
+                        lang.forSender(sender).message(
+                                "command.no-permission"
+                        )
                 );
 
                 return true;
@@ -1141,7 +1293,8 @@ public class NekoYumeCommand
                     "tool",
                     "language",
                     "achievements",
-                    "ranking"
+                    "ranking",
+                    "model"
             );
         }
 
@@ -1154,7 +1307,11 @@ public class NekoYumeCommand
                     "zh_cn",
                     "zh_tw",
                     "en_us",
-                    "ja_jp"
+                    "ja_jp",
+                    "ko_kr",
+                    "fr_fr",
+                    "de_de",
+                    "es_es"
             );
         }
 
@@ -1190,3 +1347,4 @@ public class NekoYumeCommand
                 .toList();
     }
 }
+

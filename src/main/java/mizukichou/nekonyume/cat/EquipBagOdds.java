@@ -3,13 +3,13 @@ package mizukichou.nekonyume.cat;
 import java.util.Random;
 
 /**
- * 猫猫装备袋（0.8.0）概率纯函数。
+ * 猫猫装备袋（0.8.0）的概率纯函数捏。
  *
  * <p>
- * 右键打开时按品质权重抽取一件装备：
+ * 右键打开时按品质权重抽取一件装备哒：
  * 平凡 40% / 精良 30% / 独特 20% / 卓越 7.5% / 至极 2.5%
  * （千分比权重，总和 1000，与品质声明顺序对齐）。
- * 掉落概率由 config.yml 的 drops 节提供（0.8.0 起），
+ * 掉落概率由 config.yml 的 drops 节提供（0.8.0 起）啦，
  * 由 {@link #rollsChance(Random, double)} 与
  * {@link #pickQualityByWeights(Random, int[])} 实现。
  * </p>
@@ -108,7 +108,11 @@ public final class EquipBagOdds {
             return -1;
         }
 
-        int total = 0;
+        /*
+         * 0.9.0更新：long 求和——极端权重能把 int 加爆，别问怎么知道的。
+         * 组合下 int 溢出为负会使整个抽取池失效。
+         */
+        long total = 0L;
 
         for (int weight : weights) {
 
@@ -118,16 +122,22 @@ public final class EquipBagOdds {
             }
         }
 
-        if (total <= 0) {
+        if (total <= 0L) {
             return -1;
         }
 
-        int roll =
-                random.nextInt(
-                        total
+        int bound =
+                (int) Math.min(
+                        total,
+                        Integer.MAX_VALUE
                 );
 
-        int cumulative = 0;
+        int roll =
+                random.nextInt(
+                        bound
+                );
+
+        long cumulative = 0L;
 
         for (int i = 0;
              i < weights.length;
@@ -239,3 +249,4 @@ public final class EquipBagOdds {
                 ];
     }
 }
+

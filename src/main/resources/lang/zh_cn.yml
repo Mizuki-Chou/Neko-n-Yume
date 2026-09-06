@@ -13,6 +13,10 @@
 command:
   no-cat: "<red>🐱 你还没有猫咪!</red>"
   unknown: "<yellow>用法: /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|language|achievements></yellow>"
+
+  model-no-cat: "<yellow>你还没有猫咪呢。</yellow>"
+  model-current: "<aqua>你猫咪的模型：</aqua><gray>{0}</gray>"
+  model-default: "<aqua>你猫咪的模型：</aqua><gray>默认（未指定）</gray>"
   help: |
     <gradient:#ff9de2:#a78bfa>
     🐱 Neko n' Yume Commands
@@ -26,7 +30,7 @@ command:
     <gray>/nekoyume gui</gray> - 打开猫咪面板
     <gray>/nekoyume skill</gray> - 打开技能面板
     <gray>/nekoyume tool</gray> - 领取快捷逗猫棒
-    <gray>/nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp&gt;</gray> - 设置插件语言
+    <gray>/nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp|ko_kr|fr_fr|de_de|es_es&gt;</gray> - 设置插件语言
     <gray>/nekoyume achievements</gray> - 查看成就殿堂
     <gray>/nekoyume help</gray> - 显示帮助
 
@@ -70,7 +74,7 @@ command:
     inventory-full: "<yellow>🐱 背包已满，逗猫棒掉在了你的脚边。</yellow>"
 
   language:
-    usage: "<yellow>用法: /nekoyume language <auto|zh_cn|zh_tw|en_us|ja_jp></yellow>"
+    usage: "<yellow>用法: /nekoyume language <auto|zh_cn|zh_tw|en_us|ja_jp|ko_kr|fr_fr|de_de|es_es></yellow>"
     set: "<gradient:#ff9de2:#a78bfa>🐱 插件语言已切换为 </gradient>{0}！"
     reset: "<gradient:#ff9de2:#a78bfa>🐱 插件语言现在跟随你的 Minecraft 语言设置。</gradient>"
     unknown: "<red>❌ 未知语言: {0}</red>"
@@ -87,9 +91,22 @@ admin:
   ranking-delete-notify: "<red>你的猫咪 {0} 已被管理员删除。</red>"
   ranking-target-missing: "<yellow>这只猫已经不存在了。</yellow>"
   no-permission: "<red>❌ 你没有权限执行此命令!</red>"
-  usage: "<yellow>用法: /nekoyumeadmin <meowdan|cat|skill|mumanight|reload></yellow>"
+  usage: "<yellow>用法: /nekoyumeadmin <meowdan|cat|skill|mumanight|model|reload></yellow>"
   reload-done: "<gradient:#a7f3d0:#60a5fa>✔ Neko n' Yume 配置重载成功!</gradient>"
+  reload-failed: "<red>配置热重载失败——旧配置仍保持生效。</red>"
   player-only: "<red>❌ 该命令只能由玩家执行。</red>"
+
+  model-usage: "<yellow>用法: /nekoyumeadmin model <reload|list|set <玩家> <模型ID>|clear <玩家>></yellow>"
+  model-reload-started: "<gray>模型重载中（异步）…</gray>"
+  model-reload-done: "<gradient:#a7f3d0:#60a5fa>✔ 模型重载完成。</gradient>"
+  model-reload-superseded: "<yellow>模型重载已被更新的重载请求取代。</yellow>"
+  model-reload-shutdown: "<yellow>插件正在关停，模型重载未执行。</yellow>"
+  model-reload-failed: "<red>模型重载失败（资源包构建失败），旧模型仍在使用。</red>"
+  model-list-empty: "<yellow>尚未加载任何模型（检查 models 目录）。</yellow>"
+  model-list: "<aqua>已加载模型：</aqua><gray>{0}</gray>"
+  model-set-done: "<gradient:#a7f3d0:#60a5fa>✔ 已将 {0} 的猫模型设为 {1}。</gradient>"
+  model-clear-done: "<gradient:#a7f3d0:#60a5fa>✔ 已清除 {0} 的猫模型（回退默认）。</gradient>"
+  model-set-failed: "<red>❌ 设置失败：玩家没有猫，或模型 ID 非法。</red>"
 
   meowdan-usage: "<yellow>用法: /nekoyumeadmin meowdan give <玩家> <品质> [数量]</yellow>"
   meowdan-quality-hint: "<gray>品质: 平凡 / 精良 / 独特 / 卓越 / 至极</gray>"
@@ -223,6 +240,7 @@ battle:
   recovering: "<red>🐱 </red>{0}受伤了，<red>{1} 秒内无法继续活动…</red>"
   boss-xp: "<gold>🏆 </gold>{0}击败了 {1}，获得 <green>{2}</green> 点经验！"
   starving: "<yellow>🐱 </yellow>{0}饿到走不动了，拒绝出击。喂点吃的吧。"
+  dream-weaver-rescue: "<aqua>🌙 </aqua>{0}的梦境化作光，守护了你——生命已恢复！"
 
 #
 # ---------- 实体 ----------
@@ -247,6 +265,7 @@ muma:
 # ---------- 逗猫棒 ----------
 #
 tool:
+  already: "<yellow>你已经有逗猫棒啦。</yellow>"
   wand-name: "§d🐱 逗猫棒"
   wand-lore: "§7右键打开猫咪面板"
   claim-title: "§d🎉 你获得了猫咪!"
@@ -598,6 +617,8 @@ equip-bonus.obtained: "✦ 至宝降世！这件装备觉醒了附加属性：{0
 equip-bag.name: "猫猫装备袋"
 equip-bag.lore-1: "右键打开，随机抽取一件猫咪装备"
 equip-bag.lore-2: "品质概率：平凡40%·精良30%·独特20%·卓越7.5%·至极2.5%"
+hand-changed: "<yellow>你的主手已经改变了，打开取消。</yellow>"
+not-empty: "<yellow>袋子里还有东西，先清空再打开吧。</yellow>"
 equip-bag.open: "你打开了猫猫装备袋，获得：{0}"
 food-name.cod: "生鳕鱼"
 food-name.salmon: "生鲑鱼"
@@ -626,3 +647,4 @@ entity.name-normal: "§d🐱 {0} {1}"
 entity.name-recovering: "§c❤ {0} 受伤了 · {1}s 后恢复"
 cost.meow-power: "喵力"
 cost.player-points: "点券"
+

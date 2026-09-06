@@ -22,12 +22,12 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 0.8.5：管理员猫咪详情面板。
+ * 0.8.5：管理员猫咪详情面板捏。
  *
  * <p>
- * 从管理员模式的全服排行左键进入，展示单只猫的完整信息
+ * 从管理员模式的全服排行左键进入，展示单只猫的完整信息哒
  * （主人/名字/等级/喵阶/底蕴/性格/饱食/好感/生命/行为/花色/相识日/技能），
- * 并支持“强制删除”二级确认（全程 GUI，无命令）。
+ * 并支持“强制删除”二级确认（全程 GUI，无命令）啦。
  * </p>
  */
 public final class CatDetailGuiManager {
@@ -171,6 +171,31 @@ public final class CatDetailGuiManager {
 
         if (rawSlot == SLOT_CONFIRM_YES) {
 
+            /*
+             * 0.9.0更新：删除确认点击时
+             * 回查权限——GUI 开着期间被撤权不能继续删
+             * 别人的猫。
+             */
+            if (!admin.hasPermission(
+                    "nekoyume.admin"
+            )) {
+
+                admin.sendMessage(
+                        lang.forPlayer(admin)
+                                .message(
+                                        "command.no-permission"
+                                )
+                );
+
+                detailTargets.remove(
+                        admin.getUniqueId()
+                );
+
+                admin.closeInventory();
+
+                return;
+            }
+
             String catName =
                 store.getCatName(target);
 
@@ -289,6 +314,8 @@ public final class CatDetailGuiManager {
                         "gui.ranking-detail-title"
                     )
             );
+
+        ((GuiHolder) inventory.getHolder()).bind(inventory);
 
         ItemStack border =
             item(
@@ -609,6 +636,8 @@ public final class CatDetailGuiManager {
                 )
             );
 
+        ((GuiHolder) inventory.getHolder()).bind(inventory);
+
         ItemStack border =
             item(
                 Material.BLACK_STAINED_GLASS_PANE,
@@ -684,7 +713,7 @@ public final class CatDetailGuiManager {
         if (meta != null) {
 
             /*
-             * 0.8.5 R4（实机日志第三轮）：同 RankingGuiManager——
+             * 0.9.0更新：同 RankingGuiManager——
              * setOwningPlayer 会经 getPlayerProfile() 调度异步补全，
              * 改用 createProfile + setOwnerProfile（零网络，Steve 占位）。
              */
@@ -872,3 +901,4 @@ public final class CatDetailGuiManager {
         return stack;
     }
 }
+

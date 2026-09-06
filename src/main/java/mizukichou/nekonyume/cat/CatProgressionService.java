@@ -23,7 +23,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * 猫咪成长与技能槽服务。
+ * 猫咪成长与技能槽服务捏。
  *
  * <p>
  * 0.6.2：升级时同步猫实体最大生命（10 + 等级/4）。
@@ -179,39 +179,47 @@ public class CatProgressionService {
 
         );
 
-        runtime.callEvent(
-
-
-                new CatLevelUpEvent(
-
-
-
-                player,
-
-
-                cat,
-
-
-                fromLevel,
-
-
-                cat.getLevel()
-
-
-                )
-
-
-        );
-
         /*
-         * 升级：同步实体最大生命（10 + 等级/4）。
+         * 0.9.0更新：核心状态先完全同步
+         * （实体最大生命 + 技能槽），事件最后触发——
+         * 监听器看到的是"升级已完成"的完整状态，
+         * 而不是"逻辑等级已变、实体还是旧值"的半完成态。
          */
         applyLevelMaxHealth(
                 player,
                 cat
         );
 
-        syncSkillSlots(player, cat);
+        syncSkillSlots(
+                player,
+                cat
+        );
+
+        try {
+
+            runtime.callEvent(
+                    new CatLevelUpEvent(
+                            player,
+                            cat,
+                            fromLevel,
+                            cat.getLevel()
+                    )
+            );
+
+        } catch (Exception exception) {
+
+            /*
+             * 0.9.0更新：事件是扩展通知，不是
+             * 核心事务的必经阻断点——坏监听器不得把
+             * 升级收尾停在半完成状态。
+             */
+            org.bukkit.Bukkit.getLogger().log(
+                    java.util.logging.Level.WARNING,
+                    "Listener exception during CatLevelUpEvent "
+                            + "(ignored; core state already committed).",
+                    exception
+            );
+        }
     }
 
     public void grantMeowPower(
@@ -327,31 +335,36 @@ public class CatProgressionService {
             }
         }
 
-        runtime.callEvent(
-
-
-                new CatMeowRankUpEvent(
-
-
-
+        /*
+         * 0.9.0更新：喵阶事件的提交顺序与
+         * 升级一致——先同步技能槽（rank 决定槽数），
+         * 事件最后触发；坏监听器不阻断核心收尾。
+         */
+        syncSkillSlots(
                 player,
-
-
-                cat,
-
-
-                fromRank,
-
-
-                cat.getMeowRank()
-
-
-                )
-
-
+                cat
         );
 
-        syncSkillSlots(player, cat);
+        try {
+
+            runtime.callEvent(
+                    new CatMeowRankUpEvent(
+                            player,
+                            cat,
+                            fromRank,
+                            cat.getMeowRank()
+                    )
+            );
+
+        } catch (Exception exception) {
+
+            org.bukkit.Bukkit.getLogger().log(
+                    java.util.logging.Level.WARNING,
+                    "Listener exception during CatMeowRankUpEvent "
+                            + "(ignored; core state already committed).",
+                    exception
+            );
+        }
     }
 
     public void syncSkillSlots(
@@ -458,7 +471,7 @@ public class CatProgressionService {
     ) {
 
         /*
-         * 0.8.4 R22（社区反馈）：
+         * 
          * 权重累加用 long——当前规模不可能溢出，
          * 属一次性填掉未来扩展坑。
          */
@@ -713,7 +726,7 @@ public class CatProgressionService {
      * 升级且实体在线时刷新；
      * 离线时由 CatEntityService.updateCat 在绑定/恢复时补刷。
      *
-     * 0.8.1 修复（P1）：统一走 Cat#entityMaxHealth，
+     * 统一走 Cat#entityMaxHealth，
      * 此前此处未计入装备生命加成，升级会静默丢失装备加成。
      */
     private void applyLevelMaxHealth(
@@ -783,3 +796,4 @@ public class CatProgressionService {
         store.setCatSkills(playerUUID, names);
     }
 }
+

@@ -59,7 +59,7 @@ public final class PipelineHarness {
     public final CatEntityService service;
 
     /*
-     * 0.8.4 R17（社区上报）：成就奖励幂等协议测试用。
+     * 成就奖励幂等协议测试用。
      */
     public final mizukichou.nekonyume.achievement.AchievementService achievementService;
     public final mizukichou.nekonyume.cat.CatFoodManager foodManager;
@@ -153,6 +153,10 @@ public final class PipelineHarness {
                 lang,
                 catKey,
                 ownerKey,
+                new NamespacedKey(
+                        "nekonyume",
+                        "cat_id"
+                ),
                 entityIndex,
                 runtime
         );
@@ -174,7 +178,8 @@ public final class PipelineHarness {
                 cache,
                 lang,
                 binding,
-                restorer
+                restorer,
+                new mizukichou.nekonyume.model.NoopModelBinding()
         );
 
         achievementService =
@@ -290,3 +295,4 @@ public final class PipelineHarness {
         return FakeBukkit.proxy(Chunk.class, answers, null);
     }
 }
+

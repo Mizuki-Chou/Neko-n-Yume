@@ -56,6 +56,9 @@ public final class FakeCatEntityRuntime implements CatEntityRuntime {
     public final List<Runnable> tasks =
             new ArrayList<>();
 
+    public final List<Runnable> asyncTasks =
+            new ArrayList<>();
+
     public boolean enabled = true;
 
     /*
@@ -132,6 +135,16 @@ public final class FakeCatEntityRuntime implements CatEntityRuntime {
     }
 
     @Override
+    public Collection<Player> onlinePlayers() {
+        return new ArrayList<>(players.values());
+    }
+
+    @Override
+    public Collection<World> onlineWorlds() {
+        return new ArrayList<>(worldCats.keySet());
+    }
+
+    @Override
     public Collection<Cat> catsIn(World world) {
         List<Cat> list = worldCats.get(world);
         return list == null
@@ -153,6 +166,12 @@ public final class FakeCatEntityRuntime implements CatEntityRuntime {
     @Override
     public void runTask(Runnable task) {
         tasks.add(task);
+        task.run();
+    }
+
+    @Override
+    public void runTaskAsync(Runnable task) {
+        asyncTasks.add(task);
         task.run();
     }
 
@@ -269,3 +288,4 @@ public final class FakeCatEntityRuntime implements CatEntityRuntime {
         events.add(event);
     }
 }
+

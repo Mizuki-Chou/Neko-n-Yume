@@ -829,7 +829,7 @@ class ConfigLoaderTest {
     }
 
     /*
-     * 0.8.1 修复（R3，社区上报）：
+     * 
      * NaN / Infinity 倍率绝不能流入 Bukkit 属性 API，
      * 必须回退内置默认。
      */
@@ -884,4 +884,161 @@ class ConfigLoaderTest {
                 0.0001
         );
     }
+
+    /*
+     * 视觉模型节（Generic Model 系统，预留）。
+     */
+    @Test
+    void modelsSectionDefaultsWhenMissing() {
+
+        ConfigSnapshot config =
+                load("");
+
+        assertEquals(
+                "models",
+                config.getModels()
+                        .getDirectory()
+        );
+
+        assertEquals(
+                "",
+                config.getModels()
+                        .getDefaultModelId()
+        );
+
+        assertEquals(
+                "",
+                config.getModels()
+                        .getResourcePackUrl()
+        );
+
+        assertFalse(
+                config.getModels()
+                        .isResourcePackAutoSend()
+        );
+    }
+
+    @Test
+    void modelsSectionParsesValidValues() {
+
+        ConfigSnapshot config =
+                load("""
+                        models:
+                          directory: "ny-models"
+                          default-model: "cats:black_cat"
+                          resource-pack:
+                            url: "https://example.com/pack.zip"
+                            auto-send: true
+                        """);
+
+        assertEquals(
+                "ny-models",
+                config.getModels()
+                        .getDirectory()
+        );
+
+        assertEquals(
+                "cats:black_cat",
+                config.getModels()
+                        .getDefaultModelId()
+        );
+
+        assertEquals(
+                "https://example.com/pack.zip",
+                config.getModels()
+                        .getResourcePackUrl()
+        );
+
+        assertTrue(
+                config.getModels()
+                        .isResourcePackAutoSend()
+        );
+    }
+
+    @Test
+    void resourcePackUrlBlankNormalizesToEmpty() {
+
+        ConfigSnapshot config =
+                load("""
+                        models:
+                          resource-pack:
+                            url: "   "
+                        """);
+
+        assertEquals(
+                "",
+                config.getModels()
+                        .getResourcePackUrl()
+        );
+    }
+
+    @Test
+    void resourcePackUrlTooLongIgnored() {
+
+        ConfigSnapshot config =
+                load(
+                        "models:\n"
+                                + "  resource-pack:\n"
+                                + "    url: 'https://"
+                                + "x".repeat(600)
+                                + "'\n"
+                );
+
+        assertEquals(
+                "",
+                config.getModels()
+                        .getResourcePackUrl()
+        );
+    }
+
+    @Test
+    void modelsDirectoryRejectsPathTraversal() {
+
+        for (String evil :
+                new String[]{
+                        "../evil",
+                        "a/b",
+                        "C:\\evil",
+                        "..",
+                        "a..b/../../x"
+                }) {
+
+            /*
+             * 单引号 YAML 字符串：反斜杠为字面量，
+             * 保证反斜杠能原样到达解析器（双引号会被 YAML 转义吞掉）。
+             */
+            ConfigSnapshot config =
+                    load(
+                            "models:\n"
+                                    + "  directory: '"
+                                    + evil
+                                    + "'\n"
+                    );
+
+            assertEquals(
+                    "models",
+                    config.getModels()
+                            .getDirectory(),
+                    "非法目录应回退默认: "
+                            + evil
+            );
+        }
+    }
+
+    @Test
+    void modelsDefaultModelBlankNormalizesToEmpty() {
+
+        ConfigSnapshot config =
+                load("""
+                        models:
+                          default-model: "  "
+                        """);
+
+        assertEquals(
+                "",
+                config.getModels()
+                        .getDefaultModelId()
+        );
+    }
+
 }

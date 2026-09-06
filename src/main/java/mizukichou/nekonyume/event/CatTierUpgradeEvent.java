@@ -8,11 +8,11 @@ import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 
 /**
- * 猫咪底蕴升阶事件。
+ * 猫咪底蕴升阶事件啦。
  *
  * <p>
- * 在底蕴升阶全部完成后触发（0.7.0，成就系统使用）。
- * 属于事后通知，不可取消。
+ * 在底蕴升阶全部完成后触发（0.7.0，成就系统使用）捏。
+ * 属于事后通知，不可取消呀。
  * </p>
  */
 @Getter
@@ -48,3 +48,4 @@ public class CatTierUpgradeEvent extends Event {
         return handlers;
     }
 }
+

@@ -189,6 +189,16 @@ public interface CatStore {
     void setCatVariant(UUID playerUUID, String variant);
 
     /*
+     * ---------- 视觉模型（Generic Model 系统，预留） ----------
+     *
+     * null / 空串 = 未指定，运行时回退为默认模型。
+     */
+
+    String getCatModelId(UUID playerUUID);
+
+    void setCatModelId(UUID playerUUID, String modelId);
+
+    /*
      * ---------- 装备（0.8.0，唯一装备位） ----------
      */
 
@@ -230,6 +240,13 @@ public interface CatStore {
 
     double getCatZ(UUID playerUUID);
 
+    float getCatYaw(UUID playerUUID);
+
+    float getCatPitch(UUID playerUUID);
+
+    void setCatYaw(UUID playerUUID, float yaw);
+
+    void setCatPitch(UUID playerUUID, float pitch);
     void setCatLocation(
             UUID playerUUID,
             UUID worldUUID,
@@ -279,7 +296,7 @@ public interface CatStore {
     void addAchievementRewarded(UUID playerUUID, String id);
 
     /*
-     * 0.8.4 R17（社区上报）：
+     * 
      * 逐币种奖励已发放标记（幂等发放协议）。
      */
 
@@ -367,3 +384,4 @@ public interface CatStore {
         return false;
     }
 }
+

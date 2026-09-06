@@ -32,3 +32,13 @@ permissions:
   nekoyume.admin:
     description: Neko n' Yume administrator permission
     default: op
+  nekoyume.claim:
+    description: Allow claiming a cat
+    default: true
+  nekoyume.tool:
+    description: Allow receiving the cat wand
+    default: true
+  nekoyume.summon:
+    description: Allow summoning the cat
+    default: true
+

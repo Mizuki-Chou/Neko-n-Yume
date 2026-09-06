@@ -33,7 +33,6 @@ growth:
   level-curve-base: 100
 
 # 好感
-# 好感
 #
 # 抚摸好感：每次 +pet-base（每日上限 daily.pet-limit 次）。
 # 喂食好感已由 0.8.0 care 节接管（care.feed-hungry-affection /
@@ -375,6 +374,24 @@ drops:
     elite-xp-pill-chance: 0.01
     equip-bag-chance: 0.02
 
+# ============================================================
+# 视觉模型（Generic Model 系统，预留）
+# ============================================================
+#
+# directory     模型目录（相对插件数据目录），存放 .bbmodel 文件。
+#               只允许单层目录名，不含路径分隔符。
+# default-model 默认模型 ID（如 "cats:black_cat"）；
+#               猫未指定模型时使用。留空 = 使用原版视觉（当前行为）。
+models:
+  directory: "models"
+  default-model: ""
+  # 资源包分发（Phase 6）：
+  # url      资源包托管地址（HTTP）；留空 = 不发送。
+  # auto-send 玩家登录时是否自动推送（url 非空才生效）。
+  resource-pack:
+    url: ""
+    auto-send: false
+
 # 经验丸（0.7.4）
 #
 # 右键喂给猫咪的经验补充剂（不影响饱食与好感）：
@@ -442,3 +459,4 @@ care:
   # 0.8.0 好感承载战力后必须与喂食节奏对齐：
   # 180 分钟下日喂两次维持高好感、弃养约 2~3 天归零。
   hunger-affection-loss-minutes: 180
+

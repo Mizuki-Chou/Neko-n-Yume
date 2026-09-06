@@ -5,10 +5,10 @@ import org.bukkit.Material;
 import java.util.Locale;
 
 /**
- * 成就定义（元数据）。
+ * 成就定义（元数据）捏。
  *
  * <p>
- * 仿 CatSkill 的元数据驱动模式：
+ * 仿 CatSkill 的元数据驱动模式啦：
  * 代码只承载名称 / 描述 / 图标 / 度量方式 / 阈值 / 默认奖励，
  * 奖励数值可通过 config 的
  * achievements.rewards.&lt;成就ID&gt; 节覆盖。
@@ -441,3 +441,4 @@ public enum CatAchievement {
                 .replace('_', '-');
     }
 }
+

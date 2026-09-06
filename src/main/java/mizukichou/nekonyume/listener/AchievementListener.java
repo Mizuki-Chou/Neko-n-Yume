@@ -22,7 +22,7 @@ import org.bukkit.persistence.PersistentDataType;
 import java.util.UUID;
 
 /**
- * 成就事件监听。
+ * 成就事件监听哟。
  *
  * <p>
  * 全部触发源：
@@ -227,3 +227,4 @@ public class AchievementListener implements Listener {
         );
     }
 }
+

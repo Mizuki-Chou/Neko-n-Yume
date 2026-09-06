@@ -24,11 +24,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 快捷工具（逗猫棒）监听器。
+ * 快捷工具（逗猫棒）监听器哒。
  *
  * <p>
- * 持有 /nekoyume tool 发放的逗猫棒：
- * 右键空气 / 方块 / 任意实体 → 打开猫咪面板。
+ * 持有 /nekoyume tool 发放的逗猫棒啦：
+ * 右键空气 / 方块 / 任意实体 → 打开猫咪面板捏。
  * </p>
  *
  * <p>
@@ -68,7 +68,7 @@ public class CatToolListener implements Listener {
     }
 
     /*
-     * 0.8.1 R5（社区上报）：
+     * 
      * ignoreCancelled = true——与喂食/装备事件同口径，
      * 保护插件取消交互时逗猫棒不再生效。
      */
@@ -111,7 +111,7 @@ public class CatToolListener implements Listener {
     }
 
     /*
-     * 0.8.1 R5（社区上报）：同 onInteract 口径。
+     * 同 onInteract 口径。
      */
     @EventHandler(
             priority = EventPriority.NORMAL,
@@ -323,3 +323,4 @@ public class CatToolListener implements Listener {
         }
     }
 }
+

@@ -21,7 +21,7 @@ import java.util.logging.Logger;
  * <p>
  * 内部组件已全部改为构造注入；
  * 本门面保留为对外 API 与自动保存编排入口，
- * 不再参与任何 plugin.getX() 定位。
+ * 不再参与任何 plugin.getX() 定位啦。
  * </p>
  */
 public class CatManager {
@@ -110,7 +110,7 @@ public class CatManager {
     public java.util.List<Cat> saveAllCats() {
 
         /*
-         * 0.8.4 R18（社区上报 H-NEW-01）：
+         * 
          * 回写成功后不再立即驱逐——驱逐的安全条件是
          * "该 UUID 的最新快照已成功落盘"，而非
          * "已提交到 Store 内存"。
@@ -145,7 +145,7 @@ public class CatManager {
     }
 
     /*
-     * 0.8.4 R18（社区上报 H-NEW-01）：
+     * 
      * 落盘确认之后的驱逐入口。
      * 写盘失败的周期绝不移除内存副本——那是失败时
      * 唯一的第二份数据。
@@ -314,3 +314,4 @@ public class CatManager {
         return catEntityService.getOwnerKey();
     }
 }
+

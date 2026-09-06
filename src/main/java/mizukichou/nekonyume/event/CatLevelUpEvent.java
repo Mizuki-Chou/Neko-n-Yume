@@ -8,11 +8,11 @@ import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 
 /**
- * 猫咪等级提升事件。
+ * 猫咪等级提升事件，好耶。
  *
  * <p>
- * 经验达到升级曲线时触发。
- * 属于事后通知，不可取消。
+ * 经验达到升级曲线时触发啦。
+ * 属于事后通知，不可取消哟。
  * </p>
  */
 @Getter
@@ -48,3 +48,4 @@ public class CatLevelUpEvent extends Event {
         return handlers;
     }
 }
+

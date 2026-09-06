@@ -18,13 +18,20 @@ import java.nio.charset.StandardCharsets;
  * <p>
  * 职责：
  * 1. 内存缓存（key = 逻辑猫 UUID）+ owner→catId 二级索引；
- * 2. 从 CatStore 加载 / 回写逻辑猫；
- * 3. 离线驱逐。
+ * 2. 从 CatStore 加载 / 回写逻辑猫捏；
+ * 3. 离线驱逐哒。
+ * </p>
+ *
+ * <p>
+ * 线程契约：仅主线程访问（主线程单写模型）。
+ * 索引结构使用 ConcurrentHashMap 是防御性选择，
+ * 不代表并发写安全——register/evict 的复合更新
+ * 必须保持在主线程串行执行。
  * </p>
  *
  * <p>
  * 本类不接触 Bukkit 猫实体；
- * 实体相关一律由 CatEntityService 负责。
+ * 实体相关一律由 CatEntityService 负责啦。
  * </p>
  */
 public class CatCache {
@@ -192,6 +199,40 @@ public class CatCache {
                 cat.getOwnerUuid();
 
         /*
+         * 0.9.0更新：Cat UUID 唯一性不变量——
+         * 不赌 UUID.randomUUID() 的随机性，持久化边界
+         * （存档加载/迁移/人工修改 YAML/备份恢复）必须
+         * 把撞号当数据损坏：不同主人撞号 → 拒绝注册
+         * （绝不静默覆盖，避免 getCat(A) 返回 B 的猫）。
+         */
+        Cat collided =
+                cats.get(
+                        cat.getId()
+                );
+
+        if (collided != null &&
+                !collided.getOwnerUuid()
+                        .equals(
+                                ownerUuid
+                        )) {
+
+            logger.log(
+                    java.util.logging.Level.SEVERE,
+                    "Cat UUID collision: " + cat.getId()
+                            + " is owned by both "
+                            + collided.getOwnerUuid()
+                            + " and " + ownerUuid
+                            + " — refusing to register "
+                            + "the second cat (data corruption)."
+            );
+
+            throw new IllegalStateException(
+                    "Cat UUID collision detected: "
+                            + cat.getId()
+            );
+        }
+
+        /*
          * P0-2 / P0-6：
          * 维护"一玩家一猫"不变量与索引一致性——
          * 同一主人新猫注册时，先移除旧猫条目与索引，
@@ -274,7 +315,7 @@ public class CatCache {
      * ============================================================
      *
      * 由 CatManager.saveAllCats() 在每次自动保存后调用。
-     * 0.8.1 修复（R3，社区上报 P1）：只驱逐本轮
+     * 只驱逐本轮
      * “已成功回写”的猫——保存失败的猫保留在内存中
      * 下一轮重试，绝不把未落盘的更新状态扔掉。
      */
@@ -469,6 +510,44 @@ public class CatCache {
                 store.getCatExperience(ownerUUID)
         );
 
+        /*
+         * 0.9.0更新：XP/level 双真相一致性——
+         * setExperience 不重推等级，损坏/迁移存档可能
+         * 让 restore 的 level 与累计经验矛盾；加载时以
+         * 经验为真相重推（等级由经验推导是领域不变量）。
+         */
+        int derivedLevel =
+                GrowthMath.levelFromExperience(
+                        logicalCat.getExperience(),
+                        GrowthMath.DEFAULT_XP_CURVE_BASE
+                );
+
+        if (logicalCat.getLevel() != derivedLevel) {
+
+            logger.log(
+                    java.util.logging.Level.WARNING,
+                    "Inconsistent level for cat " + catUUID
+                            + ": stored level "
+                            + logicalCat.getLevel()
+                            + " vs experience-derived "
+                            + derivedLevel
+                            + " — re-deriving from experience."
+            );
+
+            logicalCat.setLevel(
+                    derivedLevel
+            );
+        }
+
+        /*
+         * 视觉模型（Generic Model 系统，预留）。
+         *
+         * null = 默认模型；setter 会把空串归一化为 null。
+         */
+        logicalCat.setModelId(
+                store.getCatModelId(ownerUUID)
+        );
+
         logicalCat.setMeowPower(
                 store.getCatMeowPower(ownerUUID)
         );
@@ -525,6 +604,10 @@ public class CatCache {
 
         if (worldUUID != null) {
 
+            logicalCat.setWorldUUID(
+                    worldUUID.toString()
+            );
+
             World world =
                     Bukkit.getWorld(worldUUID);
 
@@ -549,6 +632,17 @@ public class CatCache {
 
         logicalCat.setZ(
                 store.getCatZ(ownerUUID)
+        );
+
+        /*
+         * 0.9.0更新：朝向恢复——此前重启必丢，这个坑藏得可深了。
+         */
+        logicalCat.setYaw(
+                store.getCatYaw(ownerUUID)
+        );
+
+        logicalCat.setPitch(
+                store.getCatPitch(ownerUUID)
         );
 
         /*
@@ -577,6 +671,21 @@ public class CatCache {
             return null;
         }
 
+        /*
+         * 0.9.0更新：重载前先落盘运行时
+         * 状态——reload 语义是"reloadAfterSave"，
+         * 绝不静默丢弃未持久化的内存修改。
+         */
+        Cat oldCat =
+                cats.get(
+                        player.getUniqueId()
+                );
+
+        if (oldCat != null) {
+
+            saveCat(oldCat);
+        }
+
         removeByOwner(player.getUniqueId());
 
         return loadCat(player);
@@ -597,6 +706,27 @@ public class CatCache {
         UUID ownerUUID = cat.getOwnerUuid();
 
         if (ownerUUID == null) {
+            return;
+        }
+
+        /*
+         * 0.9.0更新：拒绝陈旧引用覆盖当前存档——
+         * 事件/异步回调/GUI 可能长期持有旧 Cat 对象；只有
+         * "当前缓存中的那只猫"才有资格写回 Store。
+         */
+        Cat current =
+                cats.get(
+                        cat.getId()
+                );
+
+        if (current != cat) {
+
+            logger.warning(
+                    "Rejected stale saveCat for cat "
+                            + cat.getId()
+                            + " (owner " + ownerUUID + ")."
+            );
+
             return;
         }
 
@@ -724,16 +854,40 @@ public class CatCache {
             );
         }
 
-        if (cat.getVariant() != null &&
-                !cat.getVariant().isBlank() &&
-                !java.util.Objects.equals(
-                        store.getCatVariant(ownerUUID),
-                        cat.getVariant()
-                )) {
+        /*
+         * 0.9.0更新：花色对称写——
+         * 两侧归一化为空串后比较，null 变体同样可清除
+         * （旧花色不再"死而复生"）。
+         */
+        if (!java.util.Objects.equals(
+                store.getCatVariant(ownerUUID),
+                cat.getVariant() == null
+                        ? ""
+                        : cat.getVariant()
+        )) {
 
             store.setCatVariant(
                     ownerUUID,
-                    cat.getVariant()
+                    cat.getVariant() == null
+                            ? ""
+                            : cat.getVariant()
+            );
+        }
+
+        /*
+         * 视觉模型（Generic Model 系统，预留）：
+         * 对称写——两侧都归一化为空串后比较，空态收敛不写。
+         */
+        if (!java.util.Objects.equals(
+                store.getCatModelId(ownerUUID),
+                cat.getModelId() == null
+                        ? ""
+                        : cat.getModelId()
+        )) {
+
+            store.setCatModelId(
+                    ownerUUID,
+                    cat.getModelId()
             );
         }
 
@@ -829,45 +983,57 @@ public class CatCache {
             }
         }
 
-        if (cat.getWorldName() != null &&
-                !cat.getWorldName().isBlank()) {
+                /*
+         * 0.9.0更新：位置持久化不依赖 World
+         * 已加载——世界卸载期间的位置更新同样落盘（setRaw
+         * 自带"值未变化跳过"，无条件调用零额外开销）。
+         */
+        if (cat.getWorldUUID() != null) {
 
-            World world =
-                    Bukkit.getWorld(cat.getWorldName());
+            try {
 
-            if (world != null) {
+                store.setCatLocation(
+                        ownerUUID,
+                        UUID.fromString(
+                                cat.getWorldUUID()
+                        ),
+                        cat.getX(),
+                        cat.getY(),
+                        cat.getZ()
+                );
 
-                boolean locationChanged =
-                        !world.getUID().equals(
-                                store.getCatWorldUUID(ownerUUID)
-                        ) ||
-                                store.getCatX(ownerUUID)
-                                        != cat.getX() ||
-                                store.getCatY(ownerUUID)
-                                        != cat.getY() ||
-                                store.getCatZ(ownerUUID)
-                                        != cat.getZ();
+            } catch (IllegalArgumentException exception) {
 
-                if (locationChanged) {
+                logger.warning(
+                        "Invalid world UUID on cat "
+                                + cat.getId()
+                                + " - location save skipped."
+                );
+            }
 
-                    store.setCatLocation(
-                            ownerUUID,
-                            world.getUID(),
-                            cat.getX(),
-                            cat.getY(),
-                            cat.getZ()
-                    );
-                }
+            if (Float.compare(
+                    store.getCatYaw(ownerUUID),
+                    cat.getYaw()
+            ) != 0) {
+
+                store.setCatYaw(
+                        ownerUUID,
+                        cat.getYaw()
+                );
+            }
+
+            if (Float.compare(
+                    store.getCatPitch(ownerUUID),
+                    cat.getPitch()
+            ) != 0) {
+
+                store.setCatPitch(
+                        ownerUUID,
+                        cat.getPitch()
+                );
             }
         }
     }
-
-    /*
-     * ============================================================
-     * 从存档恢复底蕴与技能槽
-     * ============================================================
-     */
-
     private void applyTierAndSkills(
             Cat logicalCat,
             UUID ownerUUID,
@@ -902,3 +1068,4 @@ public class CatCache {
         logicalCat.setSkills(skills);
     }
 }
+

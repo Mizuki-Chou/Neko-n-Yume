@@ -1,6 +1,7 @@
 package mizukichou.nekonyume.cat;
 
 import mizukichou.nekonyume.lang.Lang;
+import mizukichou.nekonyume.model.ModelBinding;
 import mizukichou.nekonyume.storage.CatStore;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
@@ -19,7 +20,7 @@ import java.util.logging.Logger;
  * 猫咪 Bukkit 实体服务门面。
  *
  * <p>
- * God Object 拆分（0.7.3）：
+ * God Object 拆分（0.7.3）啦：
  * 本类只负责编排与对外 API，实现已按职责下沉到：
  * </p>
  *
@@ -31,7 +32,7 @@ import java.util.logging.Logger;
  * <p>
  * 门面自身保留两个跨组件编排操作：
  * removePlayerCat（删除：实体 → 缓存 → 队列 → 数据）与
- * spawnCat（召唤：重入防护 + 回调包装）。
+ * spawnCat（召唤：重入防护 + 回调包装）啦。
  * </p>
  *
  * <p>
@@ -49,8 +50,10 @@ public class CatEntityService {
     private final CatEntityBinding binding;
     private final CatEntityRestorer restorer;
 
+    private final ModelBinding modelBinding;
+
     /*
-     * 防止同一个玩家同时执行多个 summon。
+     * 防止同一个玩家同时执行多个 summon，不然这里就要寄了。
      */
     private final Set<UUID> summoning =
             ConcurrentHashMap.newKeySet();
@@ -61,7 +64,8 @@ public class CatEntityService {
             CatCache cache,
             Lang lang,
             CatEntityBinding binding,
-            CatEntityRestorer restorer
+            CatEntityRestorer restorer,
+            ModelBinding modelBinding
     ) {
 
         this.logger = logger;
@@ -70,6 +74,7 @@ public class CatEntityService {
         this.lang = lang;
         this.binding = binding;
         this.restorer = restorer;
+        this.modelBinding = modelBinding;
     }
 
     /*
@@ -179,7 +184,7 @@ public class CatEntityService {
      *
      * 仅在 /nekoyumeadmin cat remove confirm 确认后调用。
      *
-     * 0.8.1 修复（R3，社区上报：删除后复活）：
+     * 
      * 顺序：
      * 1. 递增召唤代际 + 释放重入标记——所有在途异步召唤
      *    回调回到主线程后全部失效，旧流水线无法再建猫；
@@ -193,6 +198,27 @@ public class CatEntityService {
     public boolean removePlayerCat(UUID playerUUID) {
 
         if (playerUUID == null) {
+            return false;
+        }
+
+        /*
+         * 0.9.0更新：durable 删除先行——
+         * 墓碑持久化成功才动运行时；失败则整体中止，
+         * 实体/缓存与磁盘完全一致（不再出现"实体没了
+         * 但存档还在、重启猫复活"）。
+         */
+        UUID entityUuid =
+                store.getCatEntityUUID(
+                        playerUUID
+                );
+
+        boolean deleted =
+                store.removeCat(
+                        playerUUID
+                );
+
+        if (!deleted) {
+
             return false;
         }
 
@@ -216,7 +242,28 @@ public class CatEntityService {
 
         /*
          * 3. 删除全部已加载世界中的所有猫实体。
+         *
+         * Generic Model 系统（预留）：
+         * 实体删除前通知模型边界，实现侧在实体仍可查询时
+         * 销毁对应 ModelInstance；失败不阻断删除主流程。
          */
+        try {
+
+            modelBinding.onOwnerCatRemoved(
+                    playerUUID,
+                    entityUuid
+            );
+
+        } catch (Exception exception) {
+
+            logger.log(
+                    Level.WARNING,
+                    "Failed to detach model binding for "
+                            + playerUUID,
+                    exception
+            );
+        }
+
         restorer.cleanupAllOwnedEntities(
                 playerUUID
         );
@@ -228,12 +275,7 @@ public class CatEntityService {
                 playerUUID
         );
 
-        /*
-         * 5. 删除持久化数据。
-         */
-        return store.removeCat(
-                playerUUID
-        );
+        return true;
     }
 
     /*
@@ -271,6 +313,17 @@ public class CatEntityService {
             Consumer<SummonResult> callback
     ) {
 
+        /*
+         * 0.9.0更新：null callback 立即拒绝——
+         * 不把错误推迟到异步完成时 NPE。
+         */
+        if (callback == null) {
+
+            throw new IllegalArgumentException(
+                    "callback must not be null"
+            );
+        }
+
         UUID playerUUID =
                 player.getUniqueId();
 
@@ -280,6 +333,14 @@ public class CatEntityService {
                     lang.forPlayer(player).message(
                             "entity.summoning"
                     )
+            );
+
+            /*
+             * 0.9.0更新：忙态也要完成 callback——
+             * 调用方（GUI/命令）不能永远等待。
+             */
+            callback.accept(
+                    SummonResult.BUSY
             );
 
             return;
@@ -301,8 +362,26 @@ public class CatEntityService {
          * 仅当自身代际仍为当前代际时才释放——
          * 旧流水线的迟到回调不得解除新召唤的标记。
          */
+        /*
+         * 0.9.0更新：callback exactly-once——
+         * 无论异步路径怎么把异常/重试叠加到回调上，
+         * 业务回调只会被调用一次。
+         */
+        java.util.concurrent.atomic.AtomicBoolean callbackCompleted =
+                new java.util.concurrent.atomic.AtomicBoolean(
+                        false
+                );
+
         Consumer<SummonResult> wrappedCallback =
                 result -> {
+
+                    if (!callbackCompleted.compareAndSet(
+                            false,
+                            true
+                    )) {
+
+                        return;
+                    }
 
                     try {
 
@@ -351,6 +430,21 @@ public class CatEntityService {
                             "entity.summon-error"
                     )
             );
+
+            /*
+             * 0.9.0更新：同步异常路径
+             * 同样必须完成 callback。
+             */
+            if (callbackCompleted.compareAndSet(
+                    false,
+                    true
+            )) {
+
+                callback.accept(
+                        SummonResult.FAILED
+                );
+            }
         }
     }
 }
+

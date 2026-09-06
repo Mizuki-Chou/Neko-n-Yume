@@ -51,6 +51,7 @@ import mizukichou.nekonyume.listener.CatInteractionListener;
 import mizukichou.nekonyume.listener.CatToolListener;
 import mizukichou.nekonyume.listener.EquipBagListener;
 import mizukichou.nekonyume.listener.MeowDanCraftListener;
+import mizukichou.nekonyume.listener.ModelVisualListener;
 import mizukichou.nekonyume.listener.MumaNightListener;
 import mizukichou.nekonyume.listener.PlayerJoinListener;
 import mizukichou.nekonyume.listener.PlayerQuitListener;
@@ -59,6 +60,8 @@ import mizukichou.nekonyume.muma.MumaNightTask;
 import mizukichou.nekonyume.skill.CatBattleState;
 import mizukichou.nekonyume.skill.CatSkillManager;
 import mizukichou.nekonyume.gui.SkillGuiManager;
+import mizukichou.nekonyume.model.ModelBinding;
+import mizukichou.nekonyume.model.ModelManager;
 import mizukichou.nekonyume.storage.CatStore;
 import mizukichou.nekonyume.storage.PluginCatStoreEnv;
 import mizukichou.nekonyume.storage.YamlCatStore;
@@ -67,6 +70,7 @@ import mizukichou.nekonyume.task.CatBattleTask;
 import mizukichou.nekonyume.task.CatBehaviorTask;
 import mizukichou.nekonyume.task.CatHungerTask;
 import mizukichou.nekonyume.task.CatPositionTask;
+import mizukichou.nekonyume.task.ModelVisualSyncTask;
 import org.bukkit.NamespacedKey;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.PluginCommand;
@@ -135,6 +139,16 @@ public final class NekoNYume extends JavaPlugin {
     private CatEntityBinding catEntityBinding;
     private CatEntityRestorer catEntityRestorer;
     private CatEntityService catEntityService;
+
+    /*
+     * 猫实体与 Generic Model 系统的生命周期边界（预留）。
+     *
+     * 生产装配 ModelManager（Generic Model 系统完整实现）；
+     * Generic Model 系统落地后替换为真实实现。
+     */
+    private ModelBinding modelBinding;
+    private ModelManager modelManager;
+    private BukkitTask modelVisualSyncTask;
     private CatVariantService catVariantService;
 
     /*
@@ -142,6 +156,7 @@ public final class NekoNYume extends JavaPlugin {
      */
     private NamespacedKey catKey;
     private NamespacedKey ownerKey;
+    private NamespacedKey catIdKey;
 
     /*
      * 快捷工具（逗猫棒）PDC Key（Issue #7）。
@@ -293,6 +308,18 @@ public final class NekoNYume extends JavaPlugin {
 
             catSkillManager.loadRefreshCostProvider();
         }
+
+        /*
+         * 模型热加载：解析失败的文件保留旧定义（§39）。
+         * 走异步：扫描/解析/资源包构建均为文件操作（§40），
+         * 同步执行会卡住命令线程。
+         */
+        if (modelManager != null) {
+
+            modelManager.reloadAsync(
+                    null
+            );
+        }
     }
 
     @Override
@@ -359,6 +386,12 @@ public final class NekoNYume extends JavaPlugin {
                 new NamespacedKey(
                         this,
                         "owner_uuid"
+                );
+
+        catIdKey =
+                new NamespacedKey(
+                        this,
+                        "cat_id"
                 );
 
         toolKey =
@@ -441,6 +474,7 @@ public final class NekoNYume extends JavaPlugin {
                         lang,
                         catKey,
                         ownerKey,
+                        catIdKey,
                         catEntityIndex,
                         catEntityRuntime
                 );
@@ -457,6 +491,33 @@ public final class NekoNYume extends JavaPlugin {
                         catEntityIndex
                 );
 
+        /*
+         * Generic Model 系统（预留）：
+         * 第一阶段装配空实现，猫系统通过 ModelBinding
+         * 边界与未来模型系统解耦。
+         */
+        modelManager =
+                new ModelManager(
+                        this,
+                        getLogger(),
+                        catEntityRuntime,
+                        configManager,
+                        catStore,
+                        catCache,
+                        battleState
+                );
+
+        modelManager.loadModels();
+
+        /*
+         * 0.9.0更新：启动清理残留 Display
+         * （spawn 与 setPersistent(false) 之间崩溃的纸片）。
+         */
+        modelManager.cleanupOrphanDisplays();
+
+        modelBinding =
+                modelManager;
+
         catEntityService =
                 new CatEntityService(
                         getLogger(),
@@ -464,7 +525,8 @@ public final class NekoNYume extends JavaPlugin {
                         catCache,
                         lang,
                         catEntityBinding,
-                        catEntityRestorer
+                        catEntityRestorer,
+                        modelBinding
                 );
 
         catManager =
@@ -711,6 +773,7 @@ public final class NekoNYume extends JavaPlugin {
                         mumaNightManager,
                         adminGiveGuiManager,
                         rankingGuiManager,
+                        modelManager,
                         lang
                 )
         )) {
@@ -739,6 +802,20 @@ public final class NekoNYume extends JavaPlugin {
                         configManager
                 );
 
+        /*
+         * 0.9.0更新：CatFoodListener 提前构造——
+         * ModelVisualListener 的交互转发需要引用它。
+         */
+        CatFoodListener catFoodListener =
+                new CatFoodListener(
+                        catFoodManager,
+                        catKey,
+                        ownerKey,
+                        catIdKey,
+                        lang,
+                        catCache
+                );
+
         registerListeners(
                 playerJoinListener,
                 new PlayerQuitListener(
@@ -756,12 +833,7 @@ public final class NekoNYume extends JavaPlugin {
                         catKey,
                         ownerKey
                 ),
-                new CatFoodListener(
-                        catFoodManager,
-                        catKey,
-                        ownerKey,
-                        lang
-                ),
+                catFoodListener,
                 new EquipBagListener(
                         catFoodManager,
                         lang
@@ -792,7 +864,13 @@ public final class NekoNYume extends JavaPlugin {
                         catKey,
                         ownerKey,
                         lang,
-                        catEntityIndex
+                        catEntityIndex,
+                        modelBinding
+                ),
+                new ModelVisualListener(
+                        modelManager.visualController(),
+                        modelManager,
+                        catFoodListener
                 ),
                 new CatInteractionListener(
                         catCache,
@@ -861,6 +939,27 @@ public final class NekoNYume extends JavaPlugin {
                                  */
                                 20L * 45L,
                                 20L * 60L
+                        );
+
+        /*
+         * ========================================================
+         * 模型视觉同步（Phase 4）
+         * ========================================================
+         *
+         * 每 tick 驱动 ModelManager：失效清理、恢复期视觉切换、
+         * 渲染器位置同步（变更检测在 ModelRenderer 内部）。
+         */
+
+        modelVisualSyncTask =
+                getServer()
+                        .getScheduler()
+                        .runTaskTimer(
+                                this,
+                                new ModelVisualSyncTask(
+                                        modelManager
+                                ),
+                                1L,
+                                1L
                         );
 
         /*
@@ -1009,7 +1108,7 @@ public final class NekoNYume extends JavaPlugin {
                                                 .flush();
 
                                         /*
-                                         * 0.8.4 R18/R23（社区上报 H-NEW-01/H-3）：
+                                         * 
                                          * 驱逐前必须拿到真实落盘确认。
                                          * awaitPendingSave 返回本轮是否全部确认——
                                          * 超时（磁盘卡死）绝不等于保存成功，
@@ -1090,6 +1189,10 @@ public final class NekoNYume extends JavaPlugin {
             mumaNightTask.cancel();
         }
 
+        if (modelVisualSyncTask != null) {
+            modelVisualSyncTask.cancel();
+        }
+
         /*
          * 0.8.0 P1-6：停服/重载时主动还原梦魔夜强化。
          *
@@ -1115,6 +1218,29 @@ public final class NekoNYume extends JavaPlugin {
 
         if (autosaveTask != null) {
             autosaveTask.cancel();
+        }
+
+        /*
+         * Generic Model 系统（预留）：集中清理渲染对象。
+         *
+         * 必须发生在最终保存之前：真实实现需要销毁
+         * 自己创建的 Display 等渲染对象（禁止孤儿 Display）。
+         * Noop 实现无行为。
+         */
+        try {
+
+            if (modelBinding != null) {
+
+                modelBinding.shutdown();
+            }
+
+        } catch (Exception exception) {
+
+            getLogger().log(
+                    Level.WARNING,
+                    "Failed to shut down model binding.",
+                    exception
+            );
         }
 
         /*
@@ -1289,3 +1415,4 @@ public final class NekoNYume extends JavaPlugin {
         }
     }
 }
+

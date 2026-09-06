@@ -9,8 +9,8 @@ import org.bukkit.entity.Player;
  * 默认刷新消耗：喵力。
  *
  * <p>
- * 注意：只扣除喵力资源，
- * 喵阶只升不降（历史最高阶保留）。
+ * 注意捏：只扣除喵力资源，
+ * 喵阶只升不降（历史最高阶保留）捏。
  * </p>
  */
 public class MeowPowerCostProvider implements SkillRefreshCostProvider {
@@ -109,3 +109,4 @@ public class MeowPowerCostProvider implements SkillRefreshCostProvider {
         );
     }
 }
+

@@ -25,7 +25,7 @@ final class CatStoreAchievements {
     }
 
     /*
-     * 0.8.4 R17（社区上报）：
+     * 
      * 逐币种奖励已发放标记。
      * 与经验/喵力数据同文档同快照，异常/崩溃下
      * 发放重试幂等：已发放币种绝不重复。
@@ -552,3 +552,4 @@ final class CatStoreAchievements {
         );
     }
 }
+

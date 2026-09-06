@@ -9,11 +9,11 @@ import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 
 /**
- * 主动技能成功施放事件。
+ * 主动技能成功施放事件哟。
  *
  * <p>
- * 效果已生效、冷却已记录后触发。
- * 属于事后通知，不可取消。
+ * 效果已生效、冷却已记录后触发啦。
+ * 属于事后通知，不可取消哒。
  * </p>
  */
 @Getter
@@ -46,3 +46,4 @@ public class CatSkillActivatedEvent extends Event {
         return handlers;
     }
 }
+

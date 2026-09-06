@@ -9,7 +9,7 @@ import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 
 /**
- * 技能抽取 / 刷新结果事件。
+ * 技能抽取 / 刷新结果事件啦。
  *
  * <p>
  * 结果已写入并持久化后触发。
@@ -27,7 +27,7 @@ public class CatSkillRollEvent extends Event {
     private final int slotIndex;
 
     /*
-     * 刷新前的旧技能；
+     * 刷新前的旧技能捏；
      * 新槽免费抽取时为 null。
      */
     private final CatSkill oldSkill;
@@ -66,3 +66,4 @@ public class CatSkillRollEvent extends Event {
         return handlers;
     }
 }
+

@@ -21,11 +21,11 @@ import java.util.Arrays;
 import java.util.UUID;
 
 /**
- * 猫咪状态面板。
+ * 猫咪状态面板捏。
  *
  * <p>
- * 9×6 面板：第二行属性、第三行行为模式、第五行功能入口、
- * 末行中间关闭按钮。
+ * 9×6 面板哒：第二行属性、第三行行为模式、第五行功能入口、
+ * 末行中间是关闭按钮啦，点它就能回家哟。
  * </p>
  *
  * <p>
@@ -125,6 +125,8 @@ public class CatGuiManager {
                                 "gui.title"
                         )
                 );
+
+        ((GuiHolder) inventory.getHolder()).bind(inventory);
 
         /*
          * 装饰背景。
@@ -571,3 +573,4 @@ public class CatGuiManager {
         return text;
     }
 }
+

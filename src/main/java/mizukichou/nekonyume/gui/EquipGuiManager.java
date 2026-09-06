@@ -20,10 +20,10 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 装备界面（0.8.0）。
+ * 装备界面（0.8.0）捏。
  *
  * <p>
- * 布局（27 格）：
+ * 布局（27 格）哒：
  * </p>
  * <ul>
  * <li>4：当前装备（含完整属性与"已装备"标记；未装备时显示空态）；</li>
@@ -32,7 +32,7 @@ import java.util.UUID;
  * </ul>
  *
  * <p>
- * 面板仅主人可操作；卸下后装备物品归还背包（满则掉落脚边），
+ * 面板仅主人可操作捏；卸下后装备物品归还背包（满则掉落脚边），
  * 并即时重算实体最大生命。
  * </p>
  */
@@ -105,6 +105,8 @@ public final class EquipGuiManager {
                                 "equip-gui.title"
                         )
                 );
+
+        ((GuiHolder) inventory.getHolder()).bind(inventory);
 
         ItemStack filler =
                 new ItemStack(
@@ -303,7 +305,7 @@ public final class EquipGuiManager {
         /*
          * 实体在场时重算最大生命。
          *
-         * 0.8.1 修复（P2）：存档 entity-uuid 损坏指向非猫实体时，
+         * 存档 entity-uuid 损坏指向非猫实体时，
          * 旧实现直接强转会抛 ClassCastException；改用 instanceof 守卫，
          * 异常数据只跳过刷新，不击穿卸下流程。
          */
@@ -404,7 +406,7 @@ public final class EquipGuiManager {
         /*
          * 实体在场时重算最大生命。
          *
-         * 0.8.1 修复（P2）：同 unequip，instanceof 守卫，
+         * 同 unequip，instanceof 守卫，
          * 异常存档不击穿快捷穿戴流程。
          */
         if (cat.getEntityUuid() != null) {
@@ -514,3 +516,4 @@ public final class EquipGuiManager {
         return item;
     }
 }
+

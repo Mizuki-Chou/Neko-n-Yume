@@ -8,9 +8,7 @@ import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.event.CatAchievementUnlockedEvent;
 import mizukichou.nekonyume.lang.Lang;
 import mizukichou.nekonyume.storage.CatStore;
-import org.bukkit.Bukkit;
 import org.bukkit.Particle;
-import org.bukkit.Sound;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
@@ -37,7 +35,7 @@ import java.util.logging.Logger;
  *
  * <p>
  * 铁律遵守：
- * - 只读 Cat 与 CatStore，绝不建档；
+ * - 只读 Cat 与 CatStore，绝不建档哒；
  * - 先持久化解锁，再发放奖励（防重入重复发放）；
  * - 全部逻辑运行在主线程（事件回调 / 命令）。
  * </p>
@@ -56,6 +54,20 @@ public class AchievementService {
     private final Lang lang;
     private final mizukichou.nekonyume.cat.CatEntityRuntime runtime;
     private final Logger logger;
+
+    /*
+     * 0.9.0更新：奖励发放重入锁——不锁住就等着一次领两份吧。
+     * gainExperience 触发 CatLevelUpEvent（同步），
+     * 监听器可能重入 checkAll → 再次进入同一成就的
+     * completePendingReward；内层会把外层正在使用的
+     * applied 标记清掉，导致同一份奖励发两次。
+     * 锁按 (玩家, 成就) 维度：重入直接返回，
+     * 由外层完成整个事务。
+     */
+    private final java.util.Set<String> rewardInProgress =
+            java.util.Collections.newSetFromMap(
+                    new java.util.concurrent.ConcurrentHashMap<>()
+            );
 
     public AchievementService(
             CatStore store,
@@ -190,7 +202,9 @@ public class AchievementService {
         );
 
         Player player =
-                Bukkit.getPlayer(ownerUuid);
+                runtime.playerByUuid(
+                        ownerUuid
+                );
 
         if (player != null &&
                 player.isOnline()) {
@@ -340,7 +354,7 @@ public class AchievementService {
              * - 崩溃于奖励发放后、pending 清除前 →
              *   奖励也未随崩溃前的快照落盘，
              *   下次登录补发恰好一次；
-             * - 发放环节抛异常（0.8.4 R17 幂等协议）→
+             * - 发放环节抛异常（幂等协议）→
              *   逐币种"已发放"标记保证：已发放的绝不重发、
              *   未发放的下次补发，不再偏向永久少发。
              */
@@ -484,7 +498,7 @@ public class AchievementService {
                 player.getUniqueId();
 
         /*
-         * 0.8.4 R24（审查复核）：
+         * 
          * 幂等守卫——奖励发放触发 CatLevelUpEvent 时，
          * 第三方监听器可能重入 checkAll，内层先解锁后
          * 外层再以旧快照进入 unlock：store 已标记则直接
@@ -524,16 +538,15 @@ public class AchievementService {
                     rewardMeowPower(achievement)
             );
 
-            Bukkit.getPluginManager()
-                    .callEvent(
-                            new CatAchievementUnlockedEvent(
-                                    player,
-                                    cat,
-                                    achievement,
-                                    rewardXp(achievement),
-                                    rewardMeowPower(achievement)
-                            )
-                    );
+            runtime.callEvent(
+                    new CatAchievementUnlockedEvent(
+                            player,
+                            cat,
+                            achievement,
+                            rewardXp(achievement),
+                            rewardMeowPower(achievement)
+                    )
+            );
 
         } catch (Exception exception) {
 
@@ -568,6 +581,18 @@ public class AchievementService {
 
         UUID playerUuid =
                 player.getUniqueId();
+
+        /*
+         * 0.9.0更新：重入锁——见字段说明。
+         */
+        if (!rewardInProgress.add(
+                playerUuid + ":" + achievement.name()
+        )) {
+
+            return;
+        }
+
+        try {
 
         /*
          * 幂等补记解锁标记：
@@ -612,7 +637,7 @@ public class AchievementService {
                 rewardMeowPower(achievement);
 
         /*
-         * 0.8.4 R17（社区上报）：
+         * 
          * 逐币种幂等发放协议——
          *
          * 每个币种发放成功后立即落"已发放"标记，
@@ -631,13 +656,18 @@ public class AchievementService {
                 )) {
 
             /*
-             * 0.8.4 R18（社区上报 H-02）：
+             * 
              * 标记先于发放落地——gainExperience 内部会触发
              * CatLevelUpEvent（第三方监听器可同步执行、甚至 flush）。
              * 标记与经验同文档同快照：任何重入 flush 都只会看到
              * "经验 + 标记"的成对状态，绝不出现"经验已持久化、
-             * 标记未持久化"的窗口；发放抛异常则回滚标记，
-             * pending 保留由外层重试。
+             * 标记未持久化"的窗口。
+             *
+             * 0.9.0更新：异常时**不回撤标记**——
+             * gainExperience 是"先改数值后发事件"，异常发生时
+             * 数值往往已经写入；回撤标记会重新打开重复领奖窗口。
+             * 保留标记 → 下次重试时凭 applied 标记跳过发放，
+             * 幂等协议保证恰好一次。
              */
             store.addAchievementRewardXpApplied(
                     playerUuid,
@@ -654,11 +684,11 @@ public class AchievementService {
 
             } catch (RuntimeException e) {
 
-                store.removeAchievementRewardXpApplied(
-                        playerUuid,
-                        achievement.name()
-                );
-
+                /*
+                 * 标记保留（APPLIED 不逆转）；异常上抛由
+                 * 外层决定是否重试——重试时 applied 标记
+                 * 会让本币种跳过发放。
+                 */
                 throw e;
             }
         }
@@ -684,11 +714,6 @@ public class AchievementService {
 
             } catch (RuntimeException e) {
 
-                store.removeAchievementRewardMeowApplied(
-                        playerUuid,
-                        achievement.name()
-                );
-
                 throw e;
             }
         }
@@ -712,6 +737,12 @@ public class AchievementService {
                 playerUuid,
                 achievement.name()
         );
+        } finally {
+
+            rewardInProgress.remove(
+                    playerUuid + ":" + achievement.name()
+            );
+        }
     }
 
     private void notifyUnlock(
@@ -817,7 +848,7 @@ public class AchievementService {
         }
 
         Entity entity =
-                Bukkit.getEntity(
+                runtime.getEntity(
                         entityUuid
                 );
 
@@ -941,3 +972,4 @@ public class AchievementService {
         return result;
     }
 }
+

@@ -3,11 +3,11 @@ package mizukichou.nekonyume.cat;
 import lombok.Getter;
 
 /**
- * 猫咪行为模式。
+ * 猫咪的行为模式捏。
  *
  * <p>
- * FOLLOW = 跟随主人
- * SIT    = 坐下
+ * FOLLOW = 跟随主人啦
+ * SIT    = 坐下捏
  * FREE   = 自由（原版 AI，玩家可空手右键切换坐姿）
  * </p>
  */
@@ -61,3 +61,4 @@ public enum CatBehaviorMode {
         return FOLLOW;
     }
 }
+

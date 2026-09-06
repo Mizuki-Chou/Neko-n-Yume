@@ -1,11 +1,11 @@
 package mizukichou.nekonyume.cat;
 
 /**
- * 猫咪成长曲线纯函数。
+ * 猫咪成长曲线的纯函数喵。
  *
  * <p>
  * 从 Cat 中抽取，避免 God Object：
- * 曲线数学与状态持有解耦，
+ * 曲线数学与状态持有解耦就行。
  * 任何组件（命令 / GUI / 数据迁移）都可以直接使用。
  * </p>
  *
@@ -29,7 +29,7 @@ public final class GrowthMath {
      * 等级 / 喵阶的安全上限。
      * 与旧 Cat 实现一致，防止异常数据死循环。
      *
-     * 0.8.4 R21（社区上报 L-NEW-10）：
+     * 
      * 公开为统一 domain contract，Cat.setLevel/addLevel
      * 与等级计算共同遵守同一上限。
      */
@@ -95,7 +95,7 @@ public final class GrowthMath {
      * </p>
      *
      * <p>
-     * 0.8.1 R8（效率）：累计经验曲线严格单调递增，
+     * 累计经验曲线严格单调递增，
      * 改用上界二分替代线性扫描，
      * 复杂度 O(MAX_LEVEL) → O(log MAX_LEVEL)；
      * 本方法位于喂食/抚摸/击杀的最热路径上。
@@ -173,7 +173,7 @@ public final class GrowthMath {
      * </p>
      *
      * <p>
-     * 0.8.1 R8（效率）：同 levelFromExperience，
+     * 同 levelFromExperience，
      * 上界二分替代线性扫描。
      * </p>
      */
@@ -210,3 +210,4 @@ public final class GrowthMath {
         return low;
     }
 }
+

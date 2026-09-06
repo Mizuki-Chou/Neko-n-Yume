@@ -74,3 +74,4 @@ public final class ConfigManager {
         return snapshot;
     }
 }
+

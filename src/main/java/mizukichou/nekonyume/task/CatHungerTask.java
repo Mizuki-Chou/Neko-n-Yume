@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.task;
 
+import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEquipItem;
@@ -18,11 +19,11 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
- * 饥饿结算任务。
+ * 饥饿结算任务啦。
  *
  * <p>
  * 0.7.0：配置改走 ConfigManager 快照。
- * 本任务无玩家消息（纯后台结算）。
+ * 本任务没有玩家消息（纯后台结算）啦。
  * </p>
  */
 public class CatHungerTask implements Runnable {
@@ -70,7 +71,8 @@ public class CatHungerTask implements Runnable {
      * 羁绊纪元（0.8.0）：饥饿好感衰减节流表（玩家 UUID → 上次扣减时间）。
      * 与饥饿 tick 解耦：旧实现每 5 分钟扣一次，日喂两次仍好感净亏损；
      * 现按 care.hunger-affection-loss-minutes 节流，与喂食节奏对齐。
-     * 纯节奏状态，重启丢失无影响；每轮 run 按现存玩家收敛。
+     * 纯节奏状态，重启丢失仅重置节流（可能提前一次衰减），
+     * 不影响任何持久化数据；每轮 run 按现存玩家收敛。
      */
     private final Map<UUID, Long> lastStarveLossAt =
             new HashMap<>();
@@ -125,9 +127,15 @@ public class CatHungerTask implements Runnable {
                     );
 
             /*
-             * 防止系统时间异常倒退。
+             * 时间归一化：未来时间（时钟回拨）与负值
+             * （存档损坏/人工修改）都重置为 now——
+             * 负时间戳会让 elapsed 溢出为负，
+             * 饥饿结算被永久卡住。
              */
-            if (lastUpdate > now) {
+            if (isInvalidHungerTimestamp(
+                    lastUpdate,
+                    now
+            )) {
 
                 store.setCatHungerLastUpdate(
                         playerUUID,
@@ -157,7 +165,7 @@ public class CatHungerTask implements Runnable {
                 } catch (Exception exception) {
 
                     /*
-                     * 0.8.1 修复（P2）：单玩家异常隔离。
+                     * 单玩家异常隔离。
                      * 一只猫的数据异常绝不瘫痪整个饥饿/衰减任务。
                      */
                     logger.warning(
@@ -270,6 +278,21 @@ public class CatHungerTask implements Runnable {
                     applyHungerSlow(
                             effectiveInterval,
                             equipBonus.getHungerSlowPercent()
+                    );
+        }
+
+        /*
+         * 0.9.0更新：小胃口（饥饿消耗 -10%）——
+         * 与装备/附加属性的衰减减缓同口径叠加。
+         */
+        if (cat.hasSkill(
+                CatSkill.SMALL_APPETITE
+        )) {
+
+            effectiveInterval =
+                    applyHungerSlow(
+                            effectiveInterval,
+                            10
                     );
         }
 
@@ -567,7 +590,7 @@ public class CatHungerTask implements Runnable {
         }
 
         String today =
-                java.time.LocalDate.now()
+                java.time.LocalDate.now(java.time.ZoneOffset.UTC)
                         .toString();
 
         if (today.equals(
@@ -645,7 +668,7 @@ public class CatHungerTask implements Runnable {
         }
 
         String today =
-                java.time.LocalDate.now()
+                java.time.LocalDate.now(java.time.ZoneOffset.UTC)
                         .toString();
 
         if (today.equals(
@@ -864,4 +887,25 @@ public class CatHungerTask implements Runnable {
                 (now - lastAt >= intervalMillis ||
                         (now == 0L && lastAt == 0L));
     }
+
+    /*
+     * 纯判定函数（供单测）：饥饿时间戳是否无效。
+     *
+     * <p>
+     * 无效条件：负值（存档损坏/人工修改）或晚于 now
+     * （时钟回拨）。无效时间戳必须重置为 now，
+     * 否则 elapsed = now - lastUpdate 溢出为负，
+     * 饥饿结算被永久卡住。
+     * </p>
+     */
+
+    static boolean isInvalidHungerTimestamp(
+            long timestamp,
+            long now
+    ) {
+
+        return timestamp < 0 ||
+                timestamp > now;
+    }
 }
+

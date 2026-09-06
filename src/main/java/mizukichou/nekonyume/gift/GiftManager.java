@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.gift;
 
+import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.Cat;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatFoodManager;
@@ -24,10 +25,10 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * 猫咪礼物事件。
+ * 猫咪送礼事件啦，欸嘿。
  *
  * <p>
- * 每天登录后判定一次（由 PlayerJoinListener 延迟调用）。
+ * 每天登录后判定一次（由 PlayerJoinListener 延迟调用）哒。
  * 所有数值与礼物池来自 config.yml 的 gift 节。
  * 0.7.0：配置改走 ConfigManager 快照；文案改走 Lang。
  * </p>
@@ -136,7 +137,7 @@ public class GiftManager {
          * 概率：
          * base + per-rank × 喵阶，封顶 max。
          *
-         * 0.8.4 R19（社区上报 L-NEW-06）：
+         * 
          * long 数学——损坏数据（巨大 meowRank）与高倍率相乘
          * 会 int 溢出为负，让玩家永远拿不到礼物。
          */
@@ -144,6 +145,18 @@ public class GiftManager {
                 (long) giftConfig.getBaseChance()
                         + (long) giftConfig.getChancePerRank()
                         * cat.getMeowRank();
+
+        /*
+         * 0.9.0更新：觅食（礼物判定概率 +10）——
+         * 技能此前仅有枚举与描述，无任何运行时实现。
+         */
+        if (cat.hasSkill(
+                CatSkill.FORAGER
+        )) {
+
+            chance +=
+                    10L;
+        }
 
         chance =
                 Math.min(
@@ -188,7 +201,23 @@ public class GiftManager {
         }
 
         /*
-         * 0.8.4 R18（社区上报 M-02）：
+         * 0.9.0更新：拒绝配置错误产出的
+         * 非法材质礼物（命令方块 / 基岩 / 屏障 / 结构方块
+         * 等——登录即得此类物品属于配置事故）。
+         */
+        if (isBannedGiftMaterial(
+                gift.getType()
+        )) {
+
+            /*
+             * 静默跳过：配置事故由管理员自行排查，
+             * 不向玩家暴露异常物品。
+             */
+            return;
+        }
+
+        /*
+         * 
          * 礼物真正生成成功后才记"已判定"——
          * 配置无有效礼物等抽奖/生成失败不再白耗当天；
          * 发放环节仍在标记之后，保持防重语义。
@@ -315,12 +344,23 @@ public class GiftManager {
             List<GiftItemEntry> entries
     ) {
 
-        int totalWeight = 0;
+        /*
+         * 礼物权重求和：long 累加 + 饱和钳制。
+         *
+         * 条目权重经解析层保证为正（weight <= 0 被跳过），
+         * 但总量不受上限约束——极端配置下 int 累加溢出为负，
+         * 会静默判空（当天礼物永远不落地）。
+         * long 累加不会溢出；超出 int 范围时把
+         * nextInt 的 bound 饱和钳制到 Integer.MAX_VALUE，
+         * 行为可预测（前 2^31-1 权重参与抽取）。
+         */
+        long totalWeight = 0;
 
         for (GiftItemEntry entry :
                 entries) {
 
-            totalWeight += entry.getWeight();
+            totalWeight +=
+                    entry.getWeight();
         }
 
         if (totalWeight <= 0) {
@@ -329,15 +369,24 @@ public class GiftManager {
 
         int roll =
                 random.nextInt(
-                        totalWeight
+                        (int) Math.min(
+                                totalWeight,
+                                Integer.MAX_VALUE
+                        )
                 );
+
+        /*
+         * 游标 long 化：减法滚动同样不会溢出。
+         */
+        long cursor = 0;
 
         for (GiftItemEntry entry :
                 entries) {
 
-            roll -= entry.getWeight();
+            cursor +=
+                    entry.getWeight();
 
-            if (roll < 0) {
+            if (roll < cursor) {
                 return entry;
             }
         }
@@ -453,4 +502,22 @@ public class GiftManager {
                         0.02
                 );
     }
+
+    /*
+     * 0.9.0更新：礼物材质黑名单。
+     */
+    private static boolean isBannedGiftMaterial(
+            org.bukkit.Material material
+    ) {
+
+        return material == org.bukkit.Material.COMMAND_BLOCK ||
+                material == org.bukkit.Material.CHAIN_COMMAND_BLOCK ||
+                material == org.bukkit.Material.REPEATING_COMMAND_BLOCK ||
+                material == org.bukkit.Material.STRUCTURE_BLOCK ||
+                material == org.bukkit.Material.STRUCTURE_VOID ||
+                material == org.bukkit.Material.BARRIER ||
+                material == org.bukkit.Material.JIGSAW ||
+                material == org.bukkit.Material.LIGHT;
+    }
 }
+

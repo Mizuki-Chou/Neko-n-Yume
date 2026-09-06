@@ -38,3 +38,4 @@ class XpPillTierTest {
         assertNull(XpPillTier.fromId("legendary"));
     }
 }
+

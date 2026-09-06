@@ -3,7 +3,7 @@ package mizukichou.nekonyume.cat;
 import lombok.Getter;
 
 /**
- * 经验丸档位。
+ * 经验丸的档位啦。
  *
  * <p>
  * 0.7.4：初阶经验丸 / 高阶经验丸。
@@ -56,3 +56,4 @@ public enum XpPillTier {
         return null;
     }
 }
+

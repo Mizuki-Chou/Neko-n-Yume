@@ -74,6 +74,7 @@ public abstract class AbstractCatStore implements CatStore {
     protected static final String FIELD_TIER = "tier";
     protected static final String FIELD_SKILLS = "skills";
     protected static final String FIELD_VARIANT = "variant";
+    protected static final String FIELD_MODEL_ID = "model-id";
     protected static final String FIELD_EQUIPMENT = "equipment";
     protected static final String FIELD_EQUIPMENT_BONUS = "equipment-bonus";
     protected static final String FIELD_ENTITY_UUID = "entity-uuid";
@@ -82,6 +83,10 @@ public abstract class AbstractCatStore implements CatStore {
     protected static final String FIELD_X = "x";
     protected static final String FIELD_Y = "y";
     protected static final String FIELD_Z = "z";
+
+    protected static final String FIELD_YAW = "yaw";
+
+    protected static final String FIELD_PITCH = "pitch";
     protected static final String FIELD_ACHIEVEMENTS_UNLOCKED = "achievements-unlocked";
     protected static final String FIELD_ACHIEVEMENTS_PROGRESS = "achievements-progress";
     protected static final String FIELD_ACHIEVEMENTS_PENDING = "achievements-pending";
@@ -277,7 +282,7 @@ public abstract class AbstractCatStore implements CatStore {
         if (value instanceof java.util.Date date) {
 
             /*
-             * 0.8.4 R22（社区反馈）：
+             * 
              * 业务日期是纯日期（无时区语义，写入时即
              * "yyyy-MM-dd"），格式化必须固定 UTC——用 JVM
              * 默认时区在 UTC 以西的环境会把午夜 UTC 的
@@ -316,9 +321,44 @@ public abstract class AbstractCatStore implements CatStore {
 
         Object value = getRaw(playerUUID, field);
 
-        return value instanceof Number n
-                ? n.intValue()
-                : def;
+        if (value instanceof Number n) {
+
+            /*
+             * 0.9.0更新：损坏数据不静默 narrowing——
+             * 超出 int 范围的数值返回默认值并告警（4294967297
+             * 不再悄无声息变 1）。
+             */
+            long wide =
+                    n.longValue();
+
+            if (wide < Integer.MIN_VALUE ||
+                    wide > Integer.MAX_VALUE) {
+
+                corruptionWarning(
+                        playerUUID,
+                        field,
+                        n.toString()
+                );
+
+                return def;
+            }
+
+            return (int) wide;
+        }
+
+        return def;
+    }
+
+    /**
+     * 损坏数值告警（子类可覆写接入 logger）。
+     */
+    protected void corruptionWarning(
+            UUID playerUUID,
+            String field,
+            String rawValue
+    ) {
+
+        // 默认静默——实现类按需接入日志。
     }
 
     protected final long getLong(
@@ -354,9 +394,31 @@ public abstract class AbstractCatStore implements CatStore {
 
         Object value = getRaw(playerUUID, field);
 
-        return value instanceof Number n
-                ? n.doubleValue()
-                : def;
+        if (value instanceof Number n) {
+
+            /*
+             * 0.9.0更新：读取方向同写入一样
+             * 防非有限值——NaN/Infinity 坐标不再进入 Cat
+             * 并污染实体恢复（Math.floor(NaN) 等）。
+             */
+            double wide =
+                    n.doubleValue();
+
+            if (!Double.isFinite(wide)) {
+
+                corruptionWarning(
+                        playerUUID,
+                        field,
+                        n.toString()
+                );
+
+                return def;
+            }
+
+            return wide;
+        }
+
+        return def;
     }
 
     /*
@@ -457,7 +519,7 @@ public abstract class AbstractCatStore implements CatStore {
                 System.currentTimeMillis();
 
         String today =
-                LocalDate.now().toString();
+                LocalDate.now(java.time.ZoneOffset.UTC).toString();
 
         Map<String, Object> fields =
                 new HashMap<>();
@@ -833,6 +895,16 @@ public abstract class AbstractCatStore implements CatStore {
     }
 
     @Override
+    public String getCatModelId(UUID playerUUID) {
+        return presence.getCatModelId(playerUUID);
+    }
+
+    @Override
+    public void setCatModelId(UUID playerUUID, String modelId) {
+        presence.setCatModelId(playerUUID, modelId);
+    }
+
+    @Override
     public String getCatEquipment(UUID playerUUID) {
         return presence.getCatEquipment(playerUUID);
     }
@@ -890,6 +962,50 @@ public abstract class AbstractCatStore implements CatStore {
     @Override
     public double getCatZ(UUID playerUUID) {
         return presence.getCatZ(playerUUID);
+    }
+
+    @Override
+    public float getCatYaw(
+            UUID playerUUID
+    ) {
+
+        return presence.getCatYaw(
+                playerUUID
+        );
+    }
+
+    @Override
+    public float getCatPitch(
+            UUID playerUUID
+    ) {
+
+        return presence.getCatPitch(
+                playerUUID
+        );
+    }
+
+    @Override
+    public void setCatYaw(
+            UUID playerUUID,
+            float yaw
+    ) {
+
+        presence.setCatYaw(
+                playerUUID,
+                yaw
+        );
+    }
+
+    @Override
+    public void setCatPitch(
+            UUID playerUUID,
+            float pitch
+    ) {
+
+        presence.setCatPitch(
+                playerUUID,
+                pitch
+        );
     }
 
     @Override
@@ -956,7 +1072,7 @@ public abstract class AbstractCatStore implements CatStore {
     }
 
     /*
-     * 0.8.4 R17（社区上报）：
+     * 
      * 逐币种“已发放”标记——与经验/喵力同文档同快照落盘，
      * 奖励发放具备幂等性：异常/崩溃后补发绝不重复，
      * 也不永久丢失。
@@ -1007,3 +1123,4 @@ public abstract class AbstractCatStore implements CatStore {
         achievements.addAchievementProgress(playerUUID, key, amount);
     }
 }
+

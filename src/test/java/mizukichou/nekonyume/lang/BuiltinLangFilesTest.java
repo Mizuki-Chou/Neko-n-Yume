@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * 0.8.1 修复（R3，社区上报）：
+ * 
  * 生产资源验证——四套内置语言文件必须真实可解析，
  * 且包含关键键。此前单元测试只解析人工构造的小 YAML，
  * 导致内置资源缩进损坏也无法被测试发现。
@@ -27,7 +27,11 @@ class BuiltinLangFilesTest {
                     "zh_cn",
                     "zh_tw",
                     "en_us",
-                    "ja_jp"
+                    "ja_jp",
+                    "ko_kr",
+                    "fr_fr",
+                    "de_de",
+                    "es_es"
             );
 
     /*
@@ -46,7 +50,14 @@ class BuiltinLangFilesTest {
                     "entity.name-normal",
                     "equip.done",
                     "gift.received",
-                    "gui.close"
+                    "gui.close",
+                    "command.model-no-cat",
+                    "command.model-current",
+                    "admin.model-usage",
+                    "admin.model-reload-started",
+                    "admin.model-reload-done",
+                    "admin.model-set-done",
+                    "admin.model-clear-done"
             );
 
     /*
@@ -206,3 +217,4 @@ class BuiltinLangFilesTest {
         }
     }
 }
+

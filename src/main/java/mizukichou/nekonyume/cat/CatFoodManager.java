@@ -27,7 +27,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * 猫咪食物与喵丹管理。
+ * 猫咪食物与喵丹管理捏。
  *
  * <p>
  * plugin 仅用于 NamespacedKey；
@@ -476,7 +476,7 @@ public class CatFoodManager {
                         - oldAffection;
 
         /*
-         * 0.8.4 R18（社区上报 M-03）：
+         * 
          * 消耗先行（与经验丸统一）——发放链路触发可重入
          * 事件前先扣除物品，杜绝"状态已加、物品未扣"。
          */
@@ -1351,7 +1351,7 @@ public class CatFoodManager {
     ) {
 
         /*
-         * 0.8.4 R18（社区上报 M-NEW-03）：
+         * 
          * 快照语义：判定与消费围绕同一个 ItemStack 引用。
          */
         return equipCat(
@@ -1402,19 +1402,11 @@ public class CatFoodManager {
                         itemSnapshot
                 );
 
-        if (!applyEquipCore(
-                player,
-                playerUUID,
-                cat,
-                equip,
-                bonus
-        )) {
-
-            return false;
-        }
-
         /*
-         * 消耗手持物品（创造模式不消耗）。
+         * 先消耗、后写入——顺序反过来就是白嫖现场。
+         * 跨系统事务（插件存档与玩家背包各自持久化）无法原子，
+         * 顺序调整为"玩家先付出"使崩溃窗口偏向物品丢失
+         * 而非物品复制（丢失可申诉，复制破坏经济）。
          */
         if (player.getGameMode()
                 != GameMode.CREATIVE) {
@@ -1427,6 +1419,33 @@ public class CatFoodManager {
                                 : itemSnapshot.getAmount() - 1
                 );
             }
+        }
+
+        if (!applyEquipCore(
+                player,
+                playerUUID,
+                cat,
+                equip,
+                bonus
+        )) {
+
+            /*
+             * 穿戴被拒绝（同名同属性）：消耗必须回退——
+             * 先消耗后写入的顺序下，业务失败要返还物品。
+             */
+            if (player.getGameMode()
+                    != GameMode.CREATIVE) {
+
+                itemSnapshot.setAmount(
+                        Math.min(
+                                itemSnapshot.getType()
+                                        .getMaxStackSize(),
+                                itemSnapshot.getAmount() + 1
+                        )
+                );
+            }
+
+            return false;
         }
 
         /*
@@ -1479,17 +1498,11 @@ public class CatFoodManager {
                         source
                 );
 
-        if (!applyEquipCore(
-                player,
-                playerUUID,
-                cat,
-                equip,
-                bonus
-        )) {
-
-            return false;
-        }
-
+        /*
+         * 先消耗、后写入
+         * （跨系统事务崩溃窗口偏向丢失而非复制，
+         * 详见 equipCat）。
+         */
         if (player.getGameMode()
                 != GameMode.CREATIVE) {
 
@@ -1498,6 +1511,32 @@ public class CatFoodManager {
                             ? 0
                             : source.getAmount() - 1
             );
+        }
+
+        if (!applyEquipCore(
+                player,
+                playerUUID,
+                cat,
+                equip,
+                bonus
+        )) {
+
+            /*
+             * 业务拒绝（同名同属性）：返还消耗。
+             */
+            if (player.getGameMode()
+                    != GameMode.CREATIVE) {
+
+                source.setAmount(
+                        Math.min(
+                                source.getType()
+                                        .getMaxStackSize(),
+                                source.getAmount() + 1
+                        )
+                );
+            }
+
+            return false;
         }
 
         return true;
@@ -1565,14 +1604,55 @@ public class CatFoodManager {
 
         if (old != null) {
 
-            giveOrDrop(
-                    player,
-                    createEquippedReturn(
-                            old,
-                            oldBonus,
-                            player
-                    )
-            );
+            /*
+             * 0.9.0更新：归还失败必须回滚
+             * 新旧装备——旧装备绝不能既离开猫又回不到
+             * 玩家（重启也无法恢复）。
+             */
+            try {
+
+                giveOrDrop(
+                        player,
+                        createEquippedReturn(
+                                old,
+                                oldBonus,
+                                player
+                        )
+                );
+
+            } catch (Exception exception) {
+
+                cat.setEquippedItem(
+                        old
+                );
+
+                cat.setEquippedBonus(
+                        oldBonus
+                );
+
+                store.setCatEquipment(
+                        playerUUID,
+                        old.getCode()
+                );
+
+                store.setCatEquipmentBonus(
+                        playerUUID,
+                        oldBonus == null
+                                ? ""
+                                : oldBonus.getCode()
+                );
+
+                org.bukkit.Bukkit.getLogger()
+                        .log(
+                                java.util.logging.Level.SEVERE,
+                                "Failed to return replaced equipment for "
+                                        + player.getName()
+                                        + " — rollback to previous loadout.",
+                                exception
+                        );
+
+                return false;
+            }
 
             player.sendMessage(
                     lang.forPlayer(player).message(
@@ -1675,7 +1755,7 @@ public class CatFoodManager {
         }
 
         /*
-         * 0.8.4 R18（社区上报 M-03）：
+         * 
          * 消耗先行——gainExperience 内部会触发可重入事件，
          * 若物品在经验发放之后才消耗，事件监听器抛异常时
          * 会出现"经验已加、物品未扣"的重复利用窗口。
@@ -1809,7 +1889,7 @@ public class CatFoodManager {
                 } else if (isEpic) {
 
                     /*
-                     * 0.8.1 修复（R2）：
+                     * 
                      * “稀有：卓越无效”此前静默无反馈，
                      * 玩家会误以为吞了喵丹。现在明确提示。
                      */
@@ -1961,7 +2041,7 @@ public class CatFoodManager {
     }
 
     /*
-     * 0.8.1 修复（R2）：卓越喵丹对当前底蕴无效的明确提示。
+     * 卓越喵丹对当前底蕴无效的明确提示。
      */
     private void notifyTierUpgradeInvalid(
             Player player,
@@ -2069,6 +2149,31 @@ public class CatFoodManager {
             return false;
         }
 
+        ItemStack fedSnapshot =
+                item.clone();
+
+        if (player.getGameMode() != GameMode.CREATIVE) {
+
+            if (item.getAmount() <= 1) {
+
+                item.setAmount(0);
+
+            } else {
+
+                item.setAmount(
+                        item.getAmount() - 1
+                );
+            }
+        }
+
+        /*
+         * 0.8.0 修复：扣减前捕获食物快照。
+         *
+         * 物品扣减后数量可能归零（ItemStack 变为 AIR），
+         * 若在扣减后再读取 getType()，"只剩1个食物"时
+         * 喂食消息会显示为 AIR。事件参数同样改用快照，
+         * 避免事后监听器拿到空气物品。
+         */
         cat.setHunger(
                 newHunger
         );
@@ -2160,31 +2265,6 @@ public class CatFoodManager {
                 cat.getLastFedAt()
         );
 
-        /*
-         * 0.8.0 修复：扣减前捕获食物快照。
-         *
-         * 物品扣减后数量可能归零（ItemStack 变为 AIR），
-         * 若在扣减后再读取 getType()，"只剩1个食物"时
-         * 喂食消息会显示为 AIR。事件参数同样改用快照，
-         * 避免事后监听器拿到空气物品。
-         */
-        ItemStack fedSnapshot =
-                item.clone();
-
-        if (player.getGameMode() != GameMode.CREATIVE) {
-
-            if (item.getAmount() <= 1) {
-
-                item.setAmount(0);
-
-            } else {
-
-                item.setAmount(
-                        item.getAmount() - 1
-                );
-            }
-        }
-
         int xpGain =
                 effectiveFoodValue;
 
@@ -2232,6 +2312,18 @@ public class CatFoodManager {
 
                 chance +=
                         equipBonus.getMeowBonus();
+            }
+
+            /*
+             * 0.9.0更新：灵光一现（抚摸/喂食的
+             * 喵力概率 +5）——喂食侧。
+             */
+            if (cat.hasSkill(
+                    CatSkill.FLASH_OF_SPIRIT
+            )) {
+
+                chance +=
+                        5;
             }
 
             if (chance > 0 &&
@@ -2358,3 +2450,4 @@ public class CatFoodManager {
     }
 
 }
+

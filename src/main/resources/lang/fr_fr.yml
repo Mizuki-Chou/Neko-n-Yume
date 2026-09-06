@@ -1,0 +1,650 @@
+#
+# Fichier de langue Neko n' Yume (français)
+#
+# Les messages de chat utilisent des templates MiniMessage ;
+# {0} {1} … sont des espaces réservés (remplacés après parsing,
+# le texte des joueurs n'est jamais interprété comme des balises).
+# Les chaînes pures (noms d'items GUI / lore / title) utilisent les codes couleur §.
+# Fichier de remplacement serveur : plugins/NekoNYume/lang/fr_fr.yml
+# Rechargement à chaud via /nekoyumeadmin reload.
+
+#
+# ---------- Commandes ----------
+#
+command:
+  no-cat: "<red>🐱 Tu n'as pas encore de chat !</red>"
+  unknown: "<yellow>Usage : /nekoyume <help|claim|cat|rename|summon|mode|gui|skill|tool|language|achievements></yellow>"
+
+  model-no-cat: "<yellow>Tu n'as pas encore de chat.</yellow>"
+  model-current: "<aqua>Modèle de ton chat : </aqua><gray>{0}</gray>"
+  model-default: "<aqua>Modèle de ton chat : </aqua><gray>par défaut (non défini)</gray>"
+  help: |
+    <gradient:#ff9de2:#a78bfa>
+    🐱 Commandes Neko n' Yume
+    </gradient>
+
+    <gray>/nekoyume claim</gray> - Adopter ton premier chat
+    <gray>/nekoyume cat</gray> - Voir ton chat
+    <gray>/nekoyume rename &lt;nom&gt;</gray> - Renommer ton chat
+    <gray>/nekoyume summon</gray> - Invoquer ton chat
+    <gray>/nekoyume mode &lt;follow|sit|free&gt;</gray> - Changer le mode de comportement
+    <gray>/nekoyume gui</gray> - Ouvrir le panneau du chat
+    <gray>/nekoyume skill</gray> - Ouvrir le panneau des compétences
+    <gray>/nekoyume tool</gray> - Recevoir la baguette à chat
+    <gray>/nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp|ko_kr|fr_fr|de_de|es_es&gt;</gray> - Changer la langue du plugin
+    <gray>/nekoyume achievements</gray> - Voir le panthéon des succès
+    <gray>/nekoyume help</gray> - Afficher l'aide
+
+  claim:
+    already-has: "<red>🐱 Tu as déjà un chat !</red>"
+    first-cat: "<gradient:#ff9de2:#a78bfa>🐱 Félicitations ! Voici ton premier chat </gradient>{0} !"
+    here: "<gradient:#ff9de2:#a78bfa>🐱 </gradient>{0} est arrivé à tes côtés !"
+
+  cat:
+    data-error: "<red>🐱 Les données de ton chat sont anormales, contacte un administrateur.</red>"
+    header: "<gradient:#ff9de2:#a78bfa>🐱 Ton chat</gradient>"
+    name: "Nom : {0}"
+    days: "<white>Ensemble : <aqua>{0}ᵉ jour</aqua>"
+    level: "<white>Niveau : <yellow>{0}</yellow> <gray>(XP {1}/{2})</gray>"
+    meow: "<white>Rang miaou : <light_purple>{0}</light_purple> <gray>(Force miaou {1}/{2})</gray>"
+    mood: "<white>Humeur : <yellow>{0} {1}</yellow>"
+    personality: "<white>Personnalité : <aqua>{0}</aqua>"
+    tier: "<white>Prestige : <aqua>{0}</aqua>"
+    behavior: "<white>Comportement : <aqua>{0}</aqua>"
+    bond: "<white>Lien : <light_purple>{0}</light_purple> <gray>({1}/100)</gray>"
+    combat-bonus: "<white>Bonus de combat : <red>{0}%</red></white>"
+    equipment: "<white>Équipement : <gold>{0}</gold></white>"
+
+  mode:
+    usage: "<yellow>Usage : /nekoyume mode <follow|sit|free></yellow>"
+    unknown: "<red>❌ Mode inconnu : {0}</red>"
+    changed: "<gradient:#ff9de2:#a78bfa>🐱 Mode de comportement changé : </gradient>{0}"
+
+  rename:
+    usage: "<yellow>Usage : /nekoyume rename <nom></yellow>"
+    empty: "<red>❌ Le nom du chat ne peut pas être vide !</red>"
+    too-long: "<red>❌ Le nom du chat ne peut pas dépasser 16 caractères !</red>"
+    done: "<gradient:#ff9de2:#a78bfa>🐱 Ton chat s'appelle désormais </gradient>{0} !"
+
+  summon:
+    spawned: "<gradient:#ff9de2:#a78bfa>🐱 </gradient>{0} est apparu à tes côtés !"
+    here: "<gradient:#ff9de2:#a78bfa>🐱 </gradient>{0} t'a rejoint !"
+
+  tool:
+    received: "<gradient:#ff9de2:#a78bfa>🐱 Tu as reçu une baguette à chat, clic droit pour l'utiliser !</gradient>"
+    inventory-full: "<yellow>🐱 Inventaire plein, la baguette est tombée à tes pieds.</yellow>"
+
+  language:
+    usage: "<yellow>Usage : /nekoyume language <auto|zh_cn|zh_tw|en_us|ja_jp|ko_kr|fr_fr|de_de|es_es></yellow>"
+    set: "<gradient:#ff9de2:#a78bfa>🐱 Langue du plugin changée : </gradient>{0} !"
+    reset: "<gradient:#ff9de2:#a78bfa>🐱 La langue du plugin suit maintenant tes paramètres Minecraft.</gradient>"
+    unknown: "<red>❌ Langue inconnue : {0}</red>"
+
+  achievements:
+    disabled: "<red>🏆 Le système de succès est désactivé.</red>"
+
+#
+# ---------- Commandes admin ----------
+#
+admin:
+  ranking-delete-done: "<green>✔ Chat {1} de {0} supprimé.</green>"
+  ranking-delete-failed: "<red>❌ Échec de la suppression du chat de {0}.</red>"
+  ranking-delete-notify: "<red>Ton chat {0} a été supprimé par un administrateur.</red>"
+  ranking-target-missing: "<yellow>Ce chat n'existe plus.</yellow>"
+  no-permission: "<red>❌ Tu n'as pas la permission d'exécuter cette commande !</red>"
+  usage: "<yellow>Usage : /nekoyumeadmin <meowdan|cat|skill|mumanight|model|reload></yellow>"
+  reload-done: "<gradient:#a7f3d0:#60a5fa>✔ Configuration de Neko n' Yume rechargée !</gradient>"
+  reload-failed: "<red>Échec du rechargement à chaud — l'ancienne configuration reste active.</red>"
+  player-only: "<red>❌ Cette commande est réservée aux joueurs.</red>"
+
+  model-usage: "<yellow>Usage : /nekoyumeadmin model <reload|list|set <joueur> <idModèle>|clear <joueur>></yellow>"
+  model-reload-started: "<gray>Rechargement des modèles (asynchrone)…</gray>"
+  model-reload-done: "<gradient:#a7f3d0:#60a5fa>✔ Rechargement des modèles terminé.</gradient>"
+  model-reload-superseded: "<yellow>Le rechargement a été remplacé par une demande plus récente.</yellow>"
+  model-reload-shutdown: "<yellow>Le plugin s'arrête, rechargement non exécuté.</yellow>"
+  model-reload-failed: "<red>Échec du rechargement (échec de construction du pack) — anciens modèles conservés.</red>"
+  model-list-empty: "<yellow>Aucun modèle chargé (vérifie le dossier models).</yellow>"
+  model-list: "<aqua>Modèles chargés : </aqua><gray>{0}</gray>"
+  model-set-done: "<gradient:#a7f3d0:#60a5fa>✔ Modèle du chat de {0} défini sur {1}.</gradient>"
+  model-clear-done: "<gradient:#a7f3d0:#60a5fa>✔ Modèle du chat de {0} effacé (retour au défaut).</gradient>"
+  model-set-failed: "<red>❌ Échec : le joueur n'a pas de chat, ou l'ID du modèle est invalide.</red>"
+
+  meowdan-usage: "<yellow>Usage : /nekoyumeadmin meowdan give <joueur> <qualité> [quantité]</yellow>"
+  meowdan-quality-hint: "<gray>Qualités : commune / bonne / unique / excellente / suprême</gray>"
+  player-offline: "<red>❌ Le joueur n'est pas en ligne !</red>"
+  unknown-quality: "<red>❌ Qualité inconnue : {0}</red>"
+  invalid-amount: "<red>❌ Quantité invalide !</red>"
+  amount-positive: "<red>❌ La quantité doit être supérieure à 0 !</red>"
+  give-cap: "<yellow>⚠ Maximum {0} à la fois, plafonné automatiquement.</yellow>"
+  give-sender: "<gradient:#a7f3d0:#60a5fa>✔ </gradient>{1} ×{2} {0} donnés"
+  give-target: "<gradient:#c4b5fd:#a78bfa>✨ Tu as reçu </gradient>{0}"
+
+  cat-usage: "<yellow>Usage : /nekoyumeadmin cat <remove> <joueur> [confirm]</yellow>"
+  player-not-found: "<red>❌ Joueur introuvable.</red>"
+  no-cat-data: "<red>❌ Ce joueur n'a pas de données de chat.</red>"
+  remove-warning: "<red>⚠ Cette action supprimera toutes les données du chat, irréversible !</red>"
+  remove-confirm: "<yellow>Pour confirmer : /nekoyumeadmin cat remove {0} confirm</yellow>"
+  remove-done: "<red>✔ Données du chat de {0} supprimées.</red>"
+  remove-fail: "<red>❌ Échec : ce joueur n'a pas de données de chat.</red>"
+
+  skill-usage: "<yellow>Usage : /nekoyumeadmin skill give <joueur> <idCompétence></yellow>"
+  skill-hint: "<gray>Compétences : SHARP_CLAW LIGHT_STEP LIGHT_FUR ALERT WARMTH SMALL_APPETITE IRON_WALL HUNTER_SENSE GUARDIAN FORAGER HEALING_PURR SWIFT_PAWS HUNTING_INSTINCT SPIRIT_SHOT SHADOW_STRIKE DRAIN STAR_DUST NINE_LIVES MEOW_GUARD FLASH_OF_SPIRIT DREAM_AWAKEN STARFALL MOONLIGHT ETERNITY TIME_ECHO RESONANCE DREAM_WEAVER</gray>"
+  unknown-skill: "<red>❌ Compétence inconnue : {0}</red>"
+  skill-granted: "<green>✔ Compétence {1} accordée à </green>{0}"
+  skill-granted-target: "<gradient:#fde68a:#f59e0b>🎉 Ton chat a appris une nouvelle compétence : </gradient>{0}"
+  skill-grant-fail: "<red>❌ Ce joueur possède déjà cette compétence.</red>"
+
+  mumanight-player-only: "<red>❌ Cette commande est réservée aux joueurs.</red>"
+  mumanight-status: "<yellow>🌑 Nuit du démon (monde actuel) : </yellow> {0} <gray>Usage : /nekoyumeadmin mumanight <on|off></gray>"
+  mumanight-on: "<dark_red>✔ Nuit du démon activée.</dark_red>"
+  mumanight-off: "<gold>✔ Nuit du démon désactivée.</gold>"
+  mumanight-state-on: "activée"
+  mumanight-state-off: "désactivée"
+  mumanight-usage: "<yellow>Usage : /nekoyumeadmin mumanight <on|off></yellow>"
+
+#
+# ---------- Nourriture ----------
+#
+feed:
+  full: "<yellow>🐱 Ton chat est déjà rassasié !</yellow>"
+  ate-food: "<light_purple>🐱 </light_purple>{0} a mangé <yellow>{1}</yellow> !"
+  hunger-up: "<gold>🍖 Satiété <green>+{0} <gray>({1}/100)</gray>"
+  affection-up: "<red>❤ Affection <green>+{0} <gray>({1}/100)</gray>"
+  hungry-bonus: "<red>❤ </red>{0} mourait de faim, ce repas était délicieux — affection fortement augmentée !"
+  meowdan-eat: "<gradient:#c4b5fd:#a78bfa>✨ </gradient>{0} a mangé {1} !"
+  meowdan-affection: "<red>❤ Affection <green>+{0} <gray>({1}/100)</gray>"
+  meowdan-lore-use: "Clic droit sur ton chat pour utiliser"
+  meowdan-lore-values: "Force miaou +{0} · Affection +{1} · XP +{2}"
+  tier-upgrade: "<gradient:#c4b5fd:#a78bfa>🌟 Prestige sublimé !</gradient> Le prestige de {0} est monté à {1}"
+  tier-upgrade-invalid: "<yellow>⚠ Avec le prestige actuel de ce chat, {0} ne peut plus le sublimer.</yellow>"
+  tier-upgrade-fail: "<gray>La force du Dan de miaou a circulé, mais le prestige n'a pas changé…</gray>"
+  not-your-cat: "<red>🐱 Ce n'est pas ton chat.</red>"
+  meowdan-expired: "<red>🐱 Ce Dan de miaou est périmé et inutilisable.</red>"
+  xp-pill-eat: "<gradient:#a7f3d0:#60a5fa>🍀 </gradient>{0} a mangé {1} et gagné <green>{2}</green> XP !"
+
+#
+# ---------- Caresses ----------
+#
+pet:
+  limit-reached: "<yellow>🐱 Tu as déjà caressé ton chat {0} fois aujourd'hui !</yellow>"
+  petted: "<light_purple>🐱 </light_purple>{0}<white> s'est frotté contre toi !</white>"
+  affection-up: "<red>❤ Affection <green>+{0} <gray>({1}/100)</gray>"
+  affection-max: "<red>❤ Affection <gray>déjà au maximum ({0}/100)</gray>"
+  progress: "<yellow>🐾 Caresses du jour : {0}/{1} <gray>| {2} restantes</gray>"
+
+#
+# ---------- Progression ----------
+#
+progression:
+  level-up: "<gradient:#fde68a:#f59e0b>🎉 </gradient>{0} est passé au <yellow>niveau {1}</yellow> !"
+  meow-power: "<gradient:#c4b5fd:#a78bfa>✨ Éclat de miaou !</gradient>{0} a gagné <light_purple>{1} de force miaou</light_purple> !"
+  meow-rank-up: "<gradient:#c4b5fd:#a78bfa>🌟 Rang miaou supérieur !</gradient>{0} a atteint le <light_purple>rang miaou {1}</light_purple> !"
+  new-skill: "<gradient:#fde68a:#f59e0b>🎉 </gradient>{0} a appris une nouvelle compétence : {1}"
+  refresh-cant-afford: "<red>❌ {0} insuffisant pour rafraîchir.</red>"
+  refresh-no-pool: "<yellow>Plus aucune nouvelle compétence à tirer.</yellow>"
+  refresh-charge-fail: "<red>❌ Échec du prélèvement de {0}.</red>"
+  refresh-done: "<gradient:#c4b5fd:#a78bfa>✨ Emplacement rafraîchi : </gradient>{0} → {1}"
+
+#
+# ---------- Cadeaux ----------
+#
+gift:
+  received: "<gradient:#fde68a:#f59e0b>🎁 </gradient>{0} t'a apporté un cadeau, déposé dans ton inventaire !"
+  content: "<gray>Contenu du cadeau : <white>{0} × {1}</white></gray>"
+
+#
+# ---------- Équipement (0.8.0) ----------
+#
+equip:
+  done: "✨ <white>{0}</white> équipé !"
+  same: "……{0} est déjà équipé."
+  replaced: "L'ancien {0} a été rendu."
+  unequipped: "{0} retiré, l'équipement a été rendu."
+  no-place: "❌L'équipement du chat ne peut pas être posé ni utilisé. Clic droit sur ton chat pour l'équiper."
+
+#
+# ---------- Panneau de don admin (0.8.0) ----------
+#
+give-gui:
+  title: "§6Panneau de don admin"
+  close: "§cFermer"
+  received: "{0} reçu(s)"
+
+equip-gui:
+  title: "§b🛡 Écran d'équipement"
+  close: "§cFermer"
+  unequip: "§cRetirer l'équipement actuel"
+  none: "§7Pas encore d'équipement"
+  equipped-mark: "§a✔ Équipé"
+  busy: "❌Un équipement est déjà porté, retire-le d'abord."
+
+#
+# ---------- Compétences ----------
+#
+skill:
+  missing: "<red>🐱 Ton chat ne connaît pas cette compétence.</red>"
+  recovering: "<red>🐱 Ton chat est blessé, compétence indisponible.</red>"
+  hungry: "<yellow>🐱 </yellow>{0} est trop affamé pour utiliser une compétence. Nourris-le d'abord."
+  cooldown: "<yellow>⏳ Rechargement en cours, <white>{0} s</white> restantes</yellow>"
+  effect-healing: "<green>❤ « Ronron guérisseur » actif, {0} PV restaurés.</green>"
+  effect-swift: "<aqua>💨 « Pattes agiles » actif, vitesse augmentée.</aqua>"
+  effect-hunting: "<red>⚔ « Instinct de chasse » actif, attaque augmentée.</red>"
+  effect-guard: "<light_purple>🛡 « Garde miaou » active, résistance augmentée.</light_purple>"
+  effect-dream: "<gradient:#c4b5fd:#a78bfa>🌙 « Éveil du rêve » descendu, les ennemis s'effondrent.</gradient>"
+  effect-starfall: "<gradient:#fde68a:#f59e0b>⭐ « Pluie d'étoiles » déclenchée, les étoiles tombent !</gradient>"
+  effect-time-echo: "<gradient:#c4b5fd:#f59e0b>⏳ « Écho du temps » déclenché, le temps remonte pour vous.</gradient>"
+
+#
+# ---------- Combat ----------
+#
+battle:
+  recovering: "<red>🐱 </red>{0} est blessé, <red>{1} s sans pouvoir agir…</red>"
+  boss-xp: "<gold>🏆 </gold>{0} a vaincu {1} et gagné <green>{2}</green> XP !"
+  starving: "<yellow>🐱 </yellow>{0} est trop affamé pour bouger et refuse de combattre. Nourris-le."
+  dream-weaver-rescue: "<aqua>🌙 </aqua>Le rêve de {0} est devenu lumière et t'a protégé — PV restaurés !"
+
+#
+# ---------- Entités ----------
+#
+entity:
+  summoning: "<yellow>🐱 Recherche de ton chat, un instant !</yellow>"
+  summon-failed: "<red>❌ Invocation échouée, réessaie plus tard.</red>"
+  summon-error: "<red>🐱 Erreur pendant l'invocation, consulte les logs du serveur.</red>"
+  teleport-fail: "<red>🐱 Le chat ne peut pas se téléporter pour l'instant, réessaie plus tard.</red>"
+  chunk-fail: "<red>🐱 Échec de chargement du chunk cible, réessaie plus tard.</red>"
+  restored-new: "<yellow>🐱 Entité du chat introuvable, <gray>un chat identique a été restauré.</gray></yellow>"
+
+#
+# ---------- Nuit du démon ----------
+#
+muma:
+  night-start-1: "<dark_red><bold>🌑 La Nuit du démon est tombée……</bold></dark_red>"
+  night-start-2: "<red>Les monstres sauvages deviennent extrêmement dangereux — mais les tuer peut rapporter des Dans de miaou !</red>"
+  dawn: "<gold><bold>☀ L'aube arrive, la Nuit du démon est terminée.</bold></gold>"
+
+#
+# ---------- Baguette à chat ----------
+#
+tool:
+  already: "<yellow>Tu as déjà une baguette à chat.</yellow>"
+  wand-name: "§d🐱 Baguette à chat"
+  wand-lore: "§7Clic droit pour ouvrir le panneau du chat"
+  claim-title: "§d🎉 Tu as obtenu un chat !"
+  claim-subtitle: "§7§oBienvenue dans 猫と夢 · Neko n' Yume"
+
+#
+# ---------- Livre du débutant ----------
+#
+book:
+  title: "§d🐱 Guide du débutant 猫と夢"
+  author: "Mizuki Chou"
+  page-1: "§l§1🐱 Bienvenue dans 猫と夢 !\n\n§r§7Voici un petit monde à toi et ton chat.\n§7Ce petit chat restera toujours à tes côtés."
+  page-2: "§l§2🐾 Opérations de base\n\n§r§7Clic droit avec la baguette pour ouvrir le panneau.\n§7Le panneau montre l'état du chat\n§7et permet de passer aux compétences.\n§7S'accroupir près du chat pour le caresser."
+  page-3: "§l§3🍖 Nourriture\n\n§r§7Clic droit sur le chat avec de la nourriture.\n§7Nourrir augmente satiété et affection.\n§7Affamé, le chat maigrit —\n§7pense à bien le nourrir."
+  page-4: "§l§4💖 Affection\n\n§r§7Caresses et nourriture augmentent l'affection.\n§7L'affection influence l'aura et les cadeaux.\n§7Les 3 premières interactions du jour sont les meilleures."
+  page-5: "§l§5📈 Progression\n\n§r§7Les interactions donnent de l'XP.\n§7Nourrir peut rapporter de la force miaou,\n§7qui élève le rang et débloque des emplacements.\n§7En combat, le chat te protège."
+  page-6: "§l§6⚔ Combat\n\n§r§7En mode suivi, le chat attaque\n§7les ennemis proches du maître.\n§7Blessé, il se repose 90 secondes\n§7et ne meurt jamais."
+  page-7: "§l§8🏆 Succès\n\n§r§7Chaque interaction avec le chat\n§7peut débloquer un succès.\n§7/nekoyume achievements\n§7pour voir le panthéon."
+  page-8: "§l§d🌙 Nuit du démon\n\n§r§7Elle peut tomber chaque nuit.\n§7Monstres plus forts,\n§7mais des Dans de miaou à la clé.\n§7🐱 Bonne aventure avec ton chat !"
+
+#
+# ---------- Panneau du chat (§ chaînes pures) ----------
+#
+gui:
+  ranking-detail-title: "§6§l🐱 Détails du chat"
+  ranking-detail-head: "§eJoueur : {0} ({1})"
+  ranking-detail-owner: "§7Maître : {0}"
+  ranking-detail-name: "§eNom : {0}"
+  ranking-detail-level: "§bNiveau {0} (XP {1})"
+  ranking-detail-meow: "§dRang miaou {0} (Force miaou {1})"
+  ranking-detail-tier: "§6Prestige : {0}"
+  ranking-detail-personality: "§aPersonnalité : {0}"
+  ranking-detail-hunger: "§6Satiété : {0}/100"
+  ranking-detail-affection: "§cAffection : {0}/100"
+  ranking-detail-health: "§cVie : {0}/100"
+  ranking-detail-behavior: "§9Comportement : {0}"
+  ranking-detail-variant: "§3Robe : {0}"
+  ranking-detail-created: "§7Rencontré le : {0}"
+  ranking-detail-skills-header: "§eCompétences"
+  ranking-detail-skill-locked: "§8Emplacement verrouillé"
+  ranking-detail-skill-tag: "§7{0}"
+  ranking-detail-delete: "§c§l⚠ Supprimer ce chat"
+  ranking-detail-delete-lore: "§7{1} de {0}§7 — irréversible !"
+  ranking-detail-back: "§7⬅ Retour au classement"
+  ranking-detail-close: "§7✖ Fermer"
+  ranking-confirm-title: "§c§l⚠ Confirmation"
+  ranking-confirm-question: "§eSupprimer le chat {1} de {0} ?"
+  ranking-confirm-warning: "§cCette action est irréversible !"
+  ranking-confirm-yes: "§c§lConfirmer la suppression"
+  ranking-confirm-no: "§aAnnuler"
+
+  ranking-title: "§6§l🏆 Classement des chats"
+  ranking-head: "§6Chat de {0} §f{1}"
+  ranking-lore-rank: "§6{0}ᵉ place"
+  ranking-lore-owner: "§7Maître : {0}"
+  ranking-lore-meow: "§dRang miaou {0} · Force miaou {1}"
+  ranking-lore-level: "§bNiveau {0} · XP {1}"
+  ranking-sort: "§eTri : {0}"
+  ranking-mode-meow: "§dRang miaou"
+  ranking-mode-level: "§bNiveau"
+  ranking-page: "§7Page {0}/{1}"
+  ranking-prev: "§f◀ Précédent"
+  ranking-next: "§fSuivant ▶"
+  ranking-close: "§c✖ Fermer"
+  ranking-empty: "§7Le classement est encore vide……"
+  title: "🐱 Neko n' Yume"
+  close: "§cFermer"
+  head-mood: "§7Humeur : {0} {1}"
+  head-days: "§7Ensemble : {0}ᵉ jour"
+  head-enter-skill: "§9✦ Cliquer pour ouvrir les compétences"
+  head-bond: "§dLien : {0} §7({1}/100)"
+  head-combat-bonus: "§cBonus de combat : {0}%"
+  head-equipment: "§6Équipement : {0}"
+  entry-skill: "§9✦ Compétences"
+  entry-equipment: "§b🛡 Équipement"
+  entry-achievements: "§6🏆 Panthéon des succès"
+  level-name: "§eNiveau"
+  level-value: "§7Niveau : §f{0}"
+  level-xp: "§7XP : §f{0} / {1}"
+  meow-name: "§dRang miaou"
+  meow-value: "§7Rang miaou : §f{0}"
+  meow-power: "§7Force miaou : §f{0} / {1}"
+  personality-name: "§bPersonnalité"
+  personality-value: "§7{0}"
+  hunger-name: "§6Faim"
+  hunger-value: "§7{0} /100"
+  affection-name: "§cAffection"
+  affection-value: "§7{0} /100"
+  health-name: "§aSanté"
+  health-value: "§7{0} /100"
+  mode-follow: "§a🐾 Suivre"
+  mode-sit: "§e🪑 Assis"
+  mode-free: "§7🌿 Libre"
+  mode-current: "§7✔ Mode actuel"
+  click-passive: "<yellow>« {0} » est une compétence passive, elle s'active automatiquement.</yellow>"
+
+#
+# ---------- Panneau des compétences (§ chaînes pures) ----------
+#
+skill-gui:
+  title: "🐱 Panneau des compétences"
+  close: "§cFermer"
+  head-lore: "§7Panneau des compétences"
+  tier-name: "§ePrestige : {0}"
+  tier-lore: "§7Les emplacements croissent avec le prestige"
+  growth-name: "§aCroissance"
+  growth-level: "§7Niveau : {0}"
+  growth-rank: "§7Rang miaou : {0}"
+  progress-name: "§dEmplacements"
+  progress-count: "§7{0} / {1} emplacements"
+  hint-name: "§6Instructions"
+  hint-cast: "§7Clic gauche : lancer la compétence active"
+  hint-refresh: "§7Clic droit : rafraîchir ({0} requis)"
+  hint-dream-multiplier: "§7Rafraîchissement du rêve ×{0}"
+  slot-empty: "§7Emplacement vide"
+  slot-index: "§8Emplacement #{0}"
+  quality: "§7Qualité : {0}"
+  type-active: "§7Type : §eActif"
+  type-passive: "§7Type : §bPassif"
+  cooldown: "§c⏳ Rechargement : {0} s"
+  ready: "§a✔ Prêt"
+  dream-slot: "§d✦ Emplacement de rêve ✦"
+  cast-refresh: "§8Clic gauche : lancer · Clic droit : rafraîchir ({0})"
+  passive-refresh: "§8Passif automatique · Clic droit : rafraîchir ({0})"
+  max-reached: "§cMaximum atteint"
+  max-reached-tier: "§7Chat de prestige {0}"
+  max-reached-slots: "§7Maximum {0} emplacements"
+  locked-name: "§8Emplacement verrouillé"
+  locked-hint: "§7Condition de déblocage :"
+
+#
+# ---------- Succès ----------
+#
+achievement:
+  unlock-title: "§e🏆 Succès débloqué !"
+  unlock-subtitle: "§6§l{0}"
+  unlocked: "<gradient:#fde68a:#f59e0b>🏆 Succès débloqué : </gradient>{0} · {1}"
+  reward: "<gold>🎁 Récompense : </gold>{0}"
+
+achievement-gui:
+  title: "🏆 Panthéon des succès"
+  close: "§cFermer"
+  info-name: "§ePanthéon des succès"
+  info-lore-1: "§7Chaque interaction avec le chat"
+  info-lore-2: "§7devient un succès mémorable."
+  info-count: "§7Débloqués : §f{0} / {1}"
+  head-days: "§7Ensemble : {0}ᵉ jour"
+  unlocked-name: "§e🏆 §6{0}"
+  unlocked-mark: "§a✔ Débloqué"
+  reward-label: "§7Récompense : {0}"
+  locked-name: "§8🏆 {0}"
+  progress: "§7Progression : §f{0} / {1}"
+  locked-reward: "§8Récompense : {0}"
+  reward-xp: "+{0} XP"
+  reward-meow: "+{0} force miaou"
+  reward-both: "+{0} XP, +{1} force miaou"
+
+#
+# ---------- Noms d'énumérations localisés (0.7.1) ----------
+#
+achievement-name.first-claim: "Rencontre du destin"
+achievement-desc.first-claim: "Adopter ton premier chat"
+achievement-name.companion-days-3: "Promesse de 3 jours"
+achievement-desc.companion-days-3: "Passer 3 jours avec ton chat"
+achievement-name.companion-days-100: "100 jours ensemble"
+achievement-desc.companion-days-100: "Passer 100 jours avec ton chat"
+achievement-name.pet-total-10: "Petite caresse"
+achievement-desc.pet-total-10: "Caresser ton chat 10 fois"
+achievement-name.pet-total-200: "Maître des caresses"
+achievement-desc.pet-total-200: "Caresser ton chat 200 fois"
+achievement-name.feed-total-10: "Nourricier"
+achievement-desc.feed-total-10: "Nourrir ton chat 10 fois"
+achievement-name.feed-total-100: "Roi des gamelles"
+achievement-desc.feed-total-100: "Nourrir ton chat 100 fois"
+achievement-name.level-10: "Premier éclat"
+achievement-desc.level-10: "Chat niveau 10"
+achievement-name.level-60: "Sommet atteint"
+achievement-desc.level-60: "Chat niveau 60"
+achievement-name.meow-rank-5: "Première lueur"
+achievement-desc.meow-rank-5: "Chat rang miaou 5"
+achievement-name.meow-rank-30: "Force suprême"
+achievement-desc.meow-rank-30: "Chat rang miaou 30"
+achievement-name.skill-activate-20: "Virtuose"
+achievement-desc.skill-activate-20: "Lancer 20 compétences actives"
+achievement-name.skill-refresh-10: "Accro au rafraîchissement"
+achievement-desc.skill-refresh-10: "Rafraîchir 10 emplacements"
+achievement-name.tier-upgrade-1: "Jour de métamorphose"
+achievement-desc.tier-upgrade-1: "1 montée de prestige"
+achievement-name.gift-1: "Petite surprise"
+achievement-desc.gift-1: "Recevoir 1 cadeau"
+achievement-name.monster-kill-50: "Chevalier protecteur"
+achievement-desc.monster-kill-50: "Chat : 50 monstres vaincus"
+achievement-name.affection-60: "Complicité"
+achievement-desc.affection-60: "Affection 60 avec ton chat"
+achievement-name.affection-100: "Lien d'âme"
+achievement-desc.affection-100: "Affection 100 avec ton chat"
+skill-name.sharp_claw: "Griffe acérée"
+skill-desc.sharp_claw: "Dégâts de mêlée du chat +2"
+skill-name.light_step: "Pas léger"
+skill-desc.light_step: "Intervalle d'attaque du chat -20%"
+skill-name.light_fur: "Fourrure légère"
+skill-desc.light_fur: "Dégâts subis par le chat -10%"
+skill-name.alert: "Vigilance"
+skill-desc.alert: "Aura étendue à 12 blocs"
+skill-name.warmth: "Chaleur"
+skill-desc.warmth: "L'aura donne aussi Vitesse I"
+skill-name.small_appetite: "Petit appétit"
+skill-desc.small_appetite: "Baisse de satiété -10%"
+skill-name.iron_wall: "Mur de fer"
+skill-desc.iron_wall: "Dégâts subis par le chat -25%"
+skill-name.hunter_sense: "Instinct de chasseur"
+skill-desc.hunter_sense: "Aura étendue à 15 blocs"
+skill-name.guardian: "Gardien"
+skill-desc.guardian: "Le chat absorbe 20% des dégâts du maître"
+skill-name.forager: "Cueillette"
+skill-desc.forager: "Chance de cadeau +10%"
+skill-name.healing_purr: "Ronron guérisseur"
+skill-desc.healing_purr: "Soigne immédiatement le maître"
+skill-name.swift_paws: "Pattes agiles"
+skill-desc.swift_paws: "Maître : Vitesse II pendant 20 s"
+skill-name.hunting_instinct: "Instinct de chasse"
+skill-desc.hunting_instinct: "Maître : Force II pendant 30 s"
+skill-name.spirit_shot: "Balle spirituelle"
+skill-desc.spirit_shot: "Le chat attaque à distance"
+skill-name.shadow_strike: "Frappe de l'ombre"
+skill-desc.shadow_strike: "Toutes les 5 attaques, critique ×3 garanti"
+skill-name.drain: "Absorption"
+skill-desc.drain: "20% des dégâts du chat soignent le maître"
+skill-name.star_dust: "Poussière d'étoile"
+skill-desc.star_dust: "20% de chance de dégâts de zone 50%"
+skill-name.nine_lives: "Neuf vies"
+skill-desc.nine_lives: "Après protection fatale : récupération plus rapide"
+skill-name.meow_guard: "Garde miaou"
+skill-desc.meow_guard: "Maître : Résistance II pendant 10 s"
+skill-name.flash_of_spirit: "Éclair d'inspiration"
+skill-desc.flash_of_spirit: "Chance de force miaou +5% (caresses/nourriture)"
+skill-name.dream_awaken: "Éveil du rêve"
+skill-desc.dream_awaken: "Heure de l'éveil : gros dégâts de zone et ralentissement"
+skill-name.starfall: "Pluie d'étoiles"
+skill-desc.starfall: "Les étoiles tombent : dégâts massifs sur une très grande zone"
+skill-name.moonlight: "Clair de lune"
+skill-desc.moonlight: "Jour et nuit alternent : attaque renforcée la nuit, régénération le jour"
+skill-name.eternity: "Éternité"
+skill-desc.eternity: "La protection fatale devient résurrection à pleine vie"
+skill-name.time_echo: "Écho du temps"
+skill-desc.time_echo: "Retour du temps : puissants buffs pour le maître et le chat"
+skill-name.resonance: "Résonance"
+skill-desc.resonance: "Cœurs connectés : attaque augmentée pour les deux dans l'aura"
+skill-name.dream_weaver: "Tisseur de rêves"
+skill-desc.dream_weaver: "Le rêve te protège : sauvetage automatique à l'agonie"
+tier-name.common: "Commun"
+tier-name.rare: "Rare"
+tier-name.unique: "Unique"
+tier-name.dream: "Onirique"
+mood-name.ecstatic: "Extatique"
+mood-name.happy: "Heureux"
+mood-name.calm: "Calme"
+mood-name.low: "Abattu"
+mood-name.sad: "Triste"
+personality-name.gourmand: "Gourmand"
+personality-name.lazy: "Paresseux"
+personality-name.clingy: "Pot de colle"
+personality-name.independent: "Indépendant"
+personality-name.picky: "Difficile"
+personality-name.sunny: "Ensoleillé"
+behavior-name.follow: "Suivre"
+behavior-name.sit: "Assis"
+behavior-name.free: "Libre"
+meowdan-name.common: "§7✨ Dan de miaou commun"
+meowdan-name.uncommon: "§a✨ Bon Dan de miaou"
+meowdan-name.rare: "§9✨ Dan de miaou unique"
+meowdan-name.epic: "§5✨ Excellent Dan de miaou"
+meowdan-name.legendary: "§6✨ Suprême Dan de miaou"
+item.xp-pill.normal-name: "§a✨ Pilule d'XP débutante"
+item.xp-pill.elite-name: "§b✨ Pilule d'XP avancée"
+item.xp-pill.lore: "Donnée au chat : +{0} XP"
+bond-name.stranger: "Inconnu"
+bond-name.acquaintance: "Connaissance"
+bond-name.friend: "Ami"
+bond-name.intimate: "Intime"
+bond-name.trusted: "Confiant"
+bond-name.soulmate: "Lien d'âme"
+entity-name.ender-dragon: "Ender Dragon"
+entity-name.wither: "Wither"
+
+#Équipement (0.8.0)
+equip-name.collar-common: "Collier commun"
+equip-name.collar-uncommon: "Bon collier"
+equip-name.collar-rare: "Collier unique"
+equip-name.collar-epic: "Excellent collier"
+equip-name.collar-legendary: "Suprême collier"
+equip-name.bell-common: "Grelot commun"
+equip-name.bell-uncommon: "Bon grelot"
+equip-name.bell-rare: "Grelot unique"
+equip-name.bell-epic: "Excellent grelot"
+equip-name.bell-legendary: "Suprême grelot"
+equip-name.scarf-common: "Écharpe commune"
+equip-name.scarf-uncommon: "Bonne écharpe"
+equip-name.scarf-rare: "Écharpe unique"
+equip-name.scarf-epic: "Excellente écharpe"
+equip-name.scarf-legendary: "Suprême écharpe"
+equip-name.name-tag-common: "Médaille commune"
+equip-name.name-tag-uncommon: "Bonne médaille"
+equip-name.name-tag-rare: "Médaille unique"
+equip-name.name-tag-epic: "Excellente médaille"
+equip-name.name-tag-legendary: "Suprême médaille"
+equip-name.yarn-ball-common: "Pelote commune"
+equip-name.yarn-ball-uncommon: "Bonne pelote"
+equip-name.yarn-ball-rare: "Pelote unique"
+equip-name.yarn-ball-epic: "Excellente pelote"
+equip-name.yarn-ball-legendary: "Suprême pelote"
+equip-none: "Aucun"
+equip-lore.collar: "Collier du chat, améliore le combat"
+equip-lore.bell: "Grelot du chat, étend l'aura"
+equip-lore.scarf: "Écharpe du chat, ralentit la faim et protège"
+equip-lore.name-tag: "Médaille du chat, accélère la croissance"
+equip-lore.yarn-ball: "Pelote du chat, accélère le rythme de combat"
+equip-lore.damage: "Dégâts de mêlée +{0}"
+equip-lore.aura: "Rayon d'aura +{0}"
+equip-lore.meow: "Chance de force miaou +{0}%"
+equip-lore.health: "Vie max du chat +{0}"
+equip-lore.reduction: "Dégâts réduits de {0}%"
+equip-lore.lifesteal: "Vol de vie {0}% (soigne le chat)"
+equip-lore.aura-speed: "Maître accéléré dans l'aura"
+equip-lore.feed-affection: "Affection +{0} par repas"
+equip-lore.hunger-slow: "Faim ralentie de {0}%"
+equip-lore.xp: "XP +{0}%"
+equip-lore.cooldown: "Rechargement -{0}%"
+equip-lore.attack-speed: "Intervalle d'attaque -{0} tick"
+equip-lore.decay-reduce: "Perte d'affection quotidienne -{0}"
+equip-lore.regen: "Régénération lente +{0}%"
+equip-bonus-name.starlight: "Lumière d'étoile"
+equip-bonus-name.bloodmoon: "Lune de sang"
+equip-bonus-name.unyielding: "Inflexible"
+equip-bonus-name.timeflow: "Flux du temps"
+equip-bonus-name.avarice: "Avarice"
+equip-bonus-name.resonance: "Résonance"
+equip-bonus-name.hearth: "Âtre"
+equip-bonus-name.shadowstep: "Pas de l'ombre"
+equip-bonus-desc.starlight: "Dégâts de mêlée +{0}"
+equip-bonus-desc.bloodmoon: "Vol de vie {0}% (soigne le chat)"
+equip-bonus-desc.unyielding: "Dégâts réduits de {0}%"
+equip-bonus-desc.timeflow: "Rechargement -{0}%"
+equip-bonus-desc.avarice: "XP +{0}%"
+equip-bonus-desc.resonance: "Chance de force miaou +{0}%"
+equip-bonus-desc.hearth: "Faim ralentie de {0}%"
+equip-bonus-desc.shadowstep: "Intervalle d'attaque -{0} tick"
+equip-bonus.obtained: "✦ Trésor apparu ! Cet équipement a éveillé un bonus : {0}"
+equip-bag.name: "Sac d'équipement du chat"
+equip-bag.lore-1: "Clic droit pour tirer un équipement aléatoire"
+equip-bag.lore-2: "Probabilités : commune40%·bonne30%·unique20%·excellente7.5%·suprême2.5%"
+hand-changed: "<yellow>Ta main principale a changé, ouverture annulée.</yellow>"
+not-empty: "<yellow>Le sac contient encore des objets, vide-le d'abord.</yellow>"
+equip-bag.open: "Tu as ouvert le sac et obtenu : {0}"
+food-name.cod: "Morue crue"
+food-name.salmon: "Saumon cru"
+food-name.cooked_cod: "Morue cuite"
+food-name.cooked_salmon: "Saumon cuit"
+food-name.chicken: "Poulet cru"
+food-name.cooked_chicken: "Poulet rôti"
+food-name.beef: "Bœuf cru"
+food-name.cooked_beef: "Steak"
+food-name.porkchop: "Côtelette de porc crue"
+food-name.cooked_porkchop: "Côtelette de porc cuite"
+food-name.mutton: "Mouton cru"
+food-name.cooked_mutton: "Mouton cuit"
+food-name.rabbit: "Lapin cru"
+food-name.cooked_rabbit: "Lapin cuit"
+food-name.golden_carrot: "Carotte dorée"
+food-name.apple: "Pomme"
+food-name.bread: "Pain"
+food-name.cake: "Gâteau"
+checkpoint.hint-0: "Emplacement de rêve inné"
+checkpoint.hint-1: "Rang miaou 1"
+checkpoint.hint-2: "Rang miaou 10 et niveau 30"
+checkpoint.hint-3: "Rang miaou 30 et niveau 60"
+checkpoint.unknown: "Inconnu"
+entity.name-normal: "§d🐱 {0} {1}"
+entity.name-recovering: "§c❤ {0} est blessé · récupération dans {1}s"
+cost.meow-power: "Force miaou"
+cost.player-points: "Points"

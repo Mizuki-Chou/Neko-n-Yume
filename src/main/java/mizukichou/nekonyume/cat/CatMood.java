@@ -7,7 +7,7 @@ import lombok.Getter;
  *
  * <p>
  * 心情不存储、不迁移。
- * 由饥饿 / 好感 / 健康 / 时间实时推导。
+ * 由饥饿 / 好感 / 健康 / 时间实时推导哒。
  * 0.7.0：纯 accessor 由 Lombok @Getter 生成。
  * </p>
  */
@@ -63,7 +63,7 @@ public enum CatMood {
     private final String displayName;
 
     /*
-     * 命令面板使用的图标（emoji）。
+     * 命令面板用的图标（emoji）捏。
      */
     private final String icon;
 
@@ -237,3 +237,4 @@ public enum CatMood {
         return CALM;
     }
 }
+

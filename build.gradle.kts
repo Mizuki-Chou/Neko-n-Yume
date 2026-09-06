@@ -16,13 +16,13 @@ dependencies {
      * 固定具体 build 会导致依赖无法解析；如需精确复现，
      * 发布时从 Gradle 缓存锁定实际解析到的版本号。
      */
-    compileOnly("io.papermc.paper:paper-api:26.2.build.+")
+    compileOnly("io.papermc.paper:paper-api:26.2.build.121-stable")
 
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    testImplementation("io.papermc.paper:paper-api:26.2.build.+")
+    testImplementation("io.papermc.paper:paper-api:26.2.build.121-stable")
 
     /*
      * 0.7.0：Lombok（仅 @Getter / @Setter）。
@@ -35,8 +35,7 @@ dependencies {
     testAnnotationProcessor("org.projectlombok:lombok:1.18.46")
 }
 
-group = "mizukichou"
-version = "0.8.5-alpha"
+version = "0.9.0-beta"
 
 base {
     archivesName.set("NekoNYume")
@@ -81,3 +80,4 @@ tasks {
         dependsOn(jacocoTestReport)
     }
 }
+

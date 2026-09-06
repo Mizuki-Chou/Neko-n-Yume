@@ -58,6 +58,14 @@ import java.util.logging.Level;
  */
 public class YamlCatStore extends AbstractCatStore {
 
+    /*
+     * 0.9.0更新：单个 YAML 数据文件硬性大小上限——
+     * 畸形/超大 YAML 在 SnakeYAML 解析期可能 OOM 或长阻塞，
+     * 解析前先拒。
+     */
+    private static final long MAX_DATA_FILE_BYTES =
+            16L * 1024L * 1024L;
+
     private static final String PLAYERS_PATH = "players";
 
     /*
@@ -78,7 +86,7 @@ public class YamlCatStore extends AbstractCatStore {
     private static final String META_FILE_NAME = "meta.yml";
 
     /*
-     * 删除墓碑文件（0.8.4 R18，社区上报）：
+     * 删除墓碑文件：
      * 物理删除失败/崩溃窗口的持久化删除标记，
      * 启动时据此跳过对应分片并重试清理。
      */
@@ -123,7 +131,7 @@ public class YamlCatStore extends AbstractCatStore {
             new HashMap<>();
 
     /*
-     * 0.8.4 R18/R23（社区上报）：
+     * 
      * 已删除玩家墓碑：UUID → 删除时的分片快照版本。
      * 物理删除失败时保留，启动时拒绝恢复对应分片；
      * 版本用于区分"删除后的新化身"（版本高于删除点 → 保留）。
@@ -175,7 +183,7 @@ public class YamlCatStore extends AbstractCatStore {
             new LinkedHashMap<>();
 
     /*
-     * 写入代际（0.8.4 R17，社区上报）：
+     * 写入代际：
      * 删除玩家数据时递增——已取走/已重排的旧字节
      * 一律作废，杜绝“写后复活”。
      * 仅在 saverMonitor 下访问；条目只在删除时创建，
@@ -262,7 +270,7 @@ public class YamlCatStore extends AbstractCatStore {
                 );
 
         /*
-         * 0.8.4 R17（社区上报）：
+         * 
          * listFiles 在 I/O/权限异常时可能返回 null，
          * 必须防护，否则初始化直接 NPE。
          */
@@ -330,6 +338,36 @@ public class YamlCatStore extends AbstractCatStore {
 
         } else {
 
+            /*
+             * 0.9.0更新：判定“全新服务器”前必须确认
+             * 无任何既有数据库痕迹——deletions.yml 存在活跃墓碑
+             * （有删除记录 = 有历史玩家）或 backup 目录存在，
+             * 都说明 players/ 缺失是存储故障（磁盘未挂载 /
+             * 权限变化 / 外部删除），绝不能静默初始化成空库。
+             * meta 单独存在不视为故障痕迹（管理员重置数据时
+             * 可能只删 players/ 而保留 meta）。
+             */
+                        /*
+             * 0.9.0更新：meta.yml 是 sharded 数据库的
+             * 初始化标记——它存在而 players/ 目录缺失，说明是
+             * 存储故障（磁盘未挂载 / 权限 / 外部删除），绝不
+             * 能静默初始化成空库。meta 不存在时走正常 fresh /
+             * legacy 路径（含“删除玩家后 players/ 为空目录”的
+             * 合法场景）。
+             */
+            boolean hasDbTraces =
+                    metaFile.exists() &&
+                    metaFile.length() > 0;
+
+            if (hasDbTraces) {
+
+                throw new IllegalStateException(
+                        "sharded 数据库标记（meta.yml）存在而数据目录缺失——"
+                                + "疑似存储故障，插件拒绝启动以保护数据。"
+                                + "请检查磁盘挂载与目录权限后重启。"
+                );
+            }
+
             initializeFreshSharded();
         }
 
@@ -355,6 +393,36 @@ public class YamlCatStore extends AbstractCatStore {
      * ============================================================
      */
 
+    /*
+     * 损坏字段告警去重：同一 (玩家, 字段) 只告警一次——
+     * 否则损坏字段每次读取（每 tick）都刷一条日志。
+     */
+    private final java.util.Set<String> warnedCorruptions =
+            java.util.Collections.newSetFromMap(
+                    new java.util.concurrent.ConcurrentHashMap<>()
+            );
+
+    @Override
+    protected void corruptionWarning(
+            UUID playerUUID,
+            String field,
+            String rawValue
+    ) {
+
+        if (!warnedCorruptions.add(
+                playerUUID + ":" + field
+        )) {
+
+            return;
+        }
+
+        env.logger().warning(
+                "Corrupt numeric value ignored for field '"
+                        + field + "' of player " + playerUUID
+                        + " (raw: " + rawValue + ")."
+        );
+    }
+
     private void rollbackIncompleteSplit() {
 
         File[] children =
@@ -364,7 +432,14 @@ public class YamlCatStore extends AbstractCatStore {
 
             /*
              * 第一遍：删全部序号分片与临时文件。
+             *
+             * 0.9.0更新：删除必须全部成功才删标记——
+             * 此前任一删除失败只告警、标记照删，磁盘残留"B.yml"
+             * 却失去 split 证据，下次启动不再进入回滚。
              */
+            boolean allDeleted =
+                    true;
+
             for (File child : children) {
 
                 if (SPLIT_MARKER_NAME.equals(child.getName())) {
@@ -373,11 +448,29 @@ public class YamlCatStore extends AbstractCatStore {
 
                 if (child.isDirectory()) {
 
-                    deleteRecursively(child);
+                    try {
+
+                        deleteRecursively(
+                                child
+                        );
+
+                    } catch (Exception exception) {
+
+                        allDeleted =
+                                false;
+
+                        env.logger().warning(
+                                "Failed to remove incomplete split directory: "
+                                        + child.getName()
+                        );
+                    }
 
                 } else {
 
                     if (!child.delete()) {
+
+                        allDeleted =
+                                false;
 
                         env.logger().warning(
                                 "Failed to remove incomplete split file: "
@@ -388,9 +481,19 @@ public class YamlCatStore extends AbstractCatStore {
             }
 
             /*
-             * 第二遍：最后删标记（提交点——标记消失即意味着
-             * 目录里已没有任何分片数据）。
+             * 提交点：只有全部残留删除成功才移除标记——
+             * 失败则保留标记，下次启动重新进入回滚。
              */
+            if (!allDeleted) {
+
+                env.logger().warning(
+                        "Incomplete split rollback failed; marker kept — "
+                                + "will retry on next startup."
+                );
+
+                return;
+            }
+
             File marker =
                     new File(
                             shardDir,
@@ -418,7 +521,7 @@ public class YamlCatStore extends AbstractCatStore {
         checkShardedMetaVersion();
 
         /*
-         * 0.8.4 R18/R23（社区上报）：
+         * 
          * 先恢复 deletions.yml 自身的崩溃残留，再加载墓碑，
          * 然后恢复 tmp（墓碑玩家的旧 tmp 直接丢弃），
          * 接着清理残留分片，最后扫描——
@@ -515,7 +618,7 @@ public class YamlCatStore extends AbstractCatStore {
     private void initializeFreshSharded() {
 
         /*
-         * 0.8.4 R18（社区上报 H-01）：
+         * 
          * 全新启动同样加载墓碑——否则重新领养的猫
          * 会在下一次重启被启动清理误删。
          */
@@ -564,12 +667,12 @@ public class YamlCatStore extends AbstractCatStore {
      * 因此"目标缺失 + tmp 完整"必为崩溃窗口内的唯一完整数据。
      */
     /*
-     * 0.8.4 R18（社区上报）：
+     * 
      * 加载墓碑（deletions.yml → deleted 列表）。
      * 文件损坏时保守留空（墓碑缺失只会少清理、不会破坏数据）。
      */
     /*
-     * 0.8.4 R23（社区上报 H-1）：
+     * 
      * deletions.yml 自身的崩溃恢复——persistTombstones 的
      * tmp + fsync + move 协议在 move 前崩溃会留下完整 tmp，
      * 启动时必须采纳（否则刚删除的玩家会复活）。
@@ -719,7 +822,7 @@ public class YamlCatStore extends AbstractCatStore {
         } catch (Exception e) {
 
             /*
-             * 0.8.4 R23（社区上报 H-1）：
+             * 
              * 删除日志是权威删除记录，不是缓存——不可信时
              * 绝不能"当成没有任何删除"继续加载全部分片
              * （否则已删除玩家直接复活），必须 fail-closed。
@@ -733,11 +836,13 @@ public class YamlCatStore extends AbstractCatStore {
     }
 
     /*
-     * 0.8.4 R18（社区上报）：
+     * 
      * 持久化墓碑（tmp + fsync + 原子替换）。
-     * 写入失败属删除协议降级：记录 SEVERE，绝不静默。
+     * 0.9.0更新：改为返回布尔——写入失败
+     * 必须能成为删除事务的 fail-closed 条件（不再
+     * “SEVERE 后继续物理删除”）。
      */
-    private void persistTombstones() {
+    private boolean persistTombstones() {
 
         File temp =
                 new File(
@@ -796,18 +901,24 @@ public class YamlCatStore extends AbstractCatStore {
                 );
             }
 
+            return true;
+
         } catch (Exception e) {
 
             env.logger().log(
                     java.util.logging.Level.SEVERE,
-                    "Failed to persist tombstones; deleted players may resurrect on next startup.",
+                    "Failed to persist tombstones; deletion aborted "
+                            + "(fail-closed) — deleted players may "
+                            + "resurrect if deletion proceeds.",
                     e
             );
+
+            return false;
         }
     }
 
     /*
-     * 0.8.4 R18（社区上报）：
+     * 
      * 启动清理：墓碑中的分片若仍存在，重试删除；
      * 删除成功 → 移除墓碑；仍失败 → 保留墓碑并拒绝加载该分片。
      */
@@ -838,7 +949,7 @@ public class YamlCatStore extends AbstractCatStore {
                 if (shardVersion > entry.getValue()) {
 
                     /*
-                     * 0.8.4 R23（社区上报 H-2）：
+                     * 
                      * 分片版本高于删除版本 = 删除后重新领养
                      * 且已成功提交的新化身——保留分片、清除墓碑。
                      */
@@ -898,7 +1009,7 @@ public class YamlCatStore extends AbstractCatStore {
     }
 
     /*
-     * 0.8.4 R21（社区上报 H-NEW-04）：
+     * 
      * 读取分片文件的快照版本（缺失=0，损坏/空=-1）。
      */
     private long shardVersion(
@@ -916,15 +1027,64 @@ public class YamlCatStore extends AbstractCatStore {
                 return -1L;
             }
 
-            return cfg.getLong(
-                    "save-snapshot",
-                    0L
-            );
+            /*
+             * 0.9.0更新：save-snapshot 参与数据生死决策，
+             * 不能宽松解析——非数字值视为损坏（-1）。
+             */
+            Object raw =
+                    cfg.get(
+                            "save-snapshot"
+                    );
+
+            if (!(raw instanceof Number)) {
+                return -1L;
+            }
+
+            return ((Number) raw).longValue();
 
         } catch (Exception e) {
 
             return -1L;
         }
+    }
+
+    /*
+     * 0.9.0更新：完整分片的最低结构——
+     * save-snapshot 为合法数字且猫身份字段存在；
+     * “可解析的非空 YAML”不足以证明事务完整提交。
+     */
+    private boolean isCompleteShard(
+            YamlConfiguration cfg
+    ) {
+
+        if (cfg == null ||
+                cfg.getKeys(false).isEmpty()) {
+
+            return false;
+        }
+
+        /*
+         * save-snapshot：缺失合法（v8 升级 / split 产物的旧分片
+         * 没有该字段），存在则必须是数字——损坏值参与生死决策，
+         * 不能宽松解释成 0。
+         */
+        Object snapshot =
+                cfg.get(
+                        "save-snapshot"
+                );
+
+        if (snapshot != null &&
+                !(snapshot instanceof Number)) {
+
+            return false;
+        }
+
+        /*
+         * 猫身份字段：id（猫 UUID）或 name 任一存在即视为
+         * 结构完整（半截写入可能两个都没有）。
+         */
+        return cfg.get("id") != null ||
+                cfg.get("name") != null;
     }
 
     private void recoverShardTempFiles() {
@@ -956,9 +1116,14 @@ public class YamlCatStore extends AbstractCatStore {
                     );
 
             /*
-             * 0.8.4 R18（社区上报）：
+             * 
              * 墓碑中的玩家：tmp 是删除前的旧快照，直接丢弃，
              * 绝不晋升复活（无论目标是否存在）。
+             *
+             * 0.9.0更新：不能无条件删——删除后
+             * 重新领养的玩家，其新化身的崩溃快照版本
+             * 严格大于墓碑；按版本比较：tmp ≤ 墓碑才是
+             * 旧残留，否则按正常晋升逻辑恢复。
              */
             UUID tmpPlayerUuid =
                     parseUUID(
@@ -970,21 +1135,42 @@ public class YamlCatStore extends AbstractCatStore {
                             tmpPlayerUuid
                     )) {
 
-                temp.delete();
+                long tmpVersion =
+                        readSnapshotVersion(
+                                temp
+                        );
 
-                env.logger().warning(
-                        "Discarded stale temp file "
-                                + temp.getName()
-                                + " of a deleted player."
+                long tombstoneVersion =
+                        tombstones.get(
+                                tmpPlayerUuid
+                        );
+
+                if (tmpVersion <= tombstoneVersion) {
+
+                    temp.delete();
+
+                    env.logger().warning(
+                            "Discarded stale temp file "
+                                    + temp.getName()
+                                    + " of a deleted player."
+                    );
+
+                    continue;
+                }
+
+                env.logger().info(
+                        "Temp file " + temp.getName()
+                                + " belongs to a reincarnation"
+                                + " (version " + tmpVersion
+                                + " > tombstone " + tombstoneVersion
+                                + "), keeping for recovery."
                 );
-
-                continue;
             }
 
             if (target.exists()) {
 
                 /*
-                 * 0.8.4 R21（社区上报 H-NEW-04）：
+                 * 
                  * "target 存在 ⇒ tmp 一定旧"在 ATOMIC_MOVE 退化
                  * 为普通 REPLACE_EXISTING 时不再成立（崩溃可能
                  * 留下完整 tmp + 旧/截断 target）。按分片快照
@@ -1090,6 +1276,34 @@ public class YamlCatStore extends AbstractCatStore {
                 continue;
             }
 
+            /*
+             * 0.9.0更新：目标缺失时无法与任何正式
+             * 版本比较——半截写入的 YAML 同样“合法可解析”。
+             * 只提升结构完整的快照；否则按损坏丢弃，
+             * 绝不让半截数据成为正式数据库状态。
+             */
+            if (!isCompleteShard(tmpData)) {
+
+                if (temp.delete()) {
+
+                    env.logger().severe(
+                            "Discarded incomplete shard temp file "
+                                    + temp.getName()
+                                    + " (half-written snapshot)."
+                    );
+
+                } else {
+
+                    env.logger().severe(
+                            "Found incomplete shard temp file "
+                                    + temp.getName()
+                                    + " but failed to delete it."
+                    );
+                }
+
+                continue;
+            }
+
             try {
 
                 Files.move(
@@ -1134,7 +1348,7 @@ public class YamlCatStore extends AbstractCatStore {
         if (files == null) {
 
             /*
-             * 0.8.4 R23（社区上报 H-4）：
+             * 
              * "读不到数据库目录"绝不能等价于"数据库为空"——
              * 否则玩家会误判为无数据而重新建档，随后覆盖旧分片。
              */
@@ -1168,7 +1382,7 @@ public class YamlCatStore extends AbstractCatStore {
             }
 
             /*
-             * 0.8.4 R18（社区上报）：
+             * 
              * 墓碑中的玩家即使物理删除失败也不加载。
              */
             if (tombstones.containsKey(
@@ -1186,6 +1400,15 @@ public class YamlCatStore extends AbstractCatStore {
             }
 
             YamlConfiguration shard;
+
+            if (shardFile.length() > MAX_DATA_FILE_BYTES) {
+
+                throw new IllegalStateException(
+                        "分片数据文件超出大小上限，插件拒绝启动以保护数据。"
+                                + "请从 backup/ 目录恢复有效备份，或修复文件："
+                                + shardFile.getAbsolutePath()
+                );
+            }
 
             try {
 
@@ -1214,8 +1437,50 @@ public class YamlCatStore extends AbstractCatStore {
                 );
             }
 
+            /*
+             * 0.9.0更新：最低结构校验——
+             * "可解析且非空"不足以证明事务完整提交；
+             * 半截快照会以默认值被重新固化，必须 fail-fast。
+             */
+            if (!isCompleteShard(shard)) {
+
+                throw new IllegalStateException(
+                        "分片数据文件结构不完整（缺少必需字段或版本非法），"
+                                + "插件拒绝启动以保护数据。"
+                                + "请从 backup/ 目录恢复有效备份；"
+                                + "若确认无需旧数据，可删除该文件后重启。文件："
+                                + shardFile.getAbsolutePath()
+                );
+            }
+
             shards.put(playerUUID, shard);
             knownPlayers.add(playerUUID);
+        }
+    }
+
+    /**
+     * 读取 tmp 分片内嵌的 save-snapshot 版本；
+     * 解析失败返回 -1（视为旧残留）。
+     */
+    private long readSnapshotVersion(
+            File tmpFile
+    ) {
+
+        try {
+
+            YamlConfiguration snapshot =
+                    YamlConfiguration.loadConfiguration(
+                            tmpFile
+                    );
+
+            return snapshot.getLong(
+                    "save-snapshot",
+                    -1L
+            );
+
+        } catch (Exception exception) {
+
+            return -1L;
         }
     }
 
@@ -1224,8 +1489,34 @@ public class YamlCatStore extends AbstractCatStore {
         if (!metaFile.exists() || metaFile.length() <= 0) {
 
             /*
-             * meta.yml 缺失（旧 0.8.3 开发版？）：
-             * 补写当前版本。
+             * 0.9.0更新：meta 缺失绝不伪造当前版本——
+             * 分片没有独立 data-version，伪造 schema 身份会
+             * 把 v7/v10 数据当 v9 解释。目录里已有任何数据
+             * 迹象时拒绝启动，交由人工恢复。
+             */
+            File[] existingShards =
+                    shardDir == null
+                            ? null
+                            : shardDir.listFiles(
+                            (dir, name) ->
+                                    name.endsWith(".yml")
+                    );
+
+            boolean hasData =
+                    existingShards != null &&
+                            existingShards.length > 0;
+
+            if (hasData) {
+
+                throw new IllegalStateException(
+                        "meta.yml 缺失而分片数据存在——"
+                                + "无法确定数据 schema 版本，插件拒绝启动。"
+                                + "请恢复 meta.yml 或从 backup/ 恢复。"
+                );
+            }
+
+            /*
+             * 全新空目录：合法初始化。
              */
             writeMetaSynchronously();
 
@@ -1244,7 +1535,7 @@ public class YamlCatStore extends AbstractCatStore {
         } catch (Exception e) {
 
             /*
-             * 0.8.4 R17（社区上报）：
+             * 
              * meta.yml 损坏必须拒绝启动（与分片 fail-fast 同口径）——
              * 版本元数据不可信时按当前版本解释旧数据，
              * 未来 schema 变更会形成真正的数据兼容事故。
@@ -1275,6 +1566,25 @@ public class YamlCatStore extends AbstractCatStore {
                             + metaFile.getAbsolutePath()
             );
         }
+
+        /*
+         * 0.9.0更新：低于当前版本的分片元数据同样
+         * 拒绝——分片目录诞生于 v9，版本回退只能来自人为
+         * 替换/损坏；没有迁移链却按当前 schema 解释旧数据
+         * 会形成真正的不兼容事故。
+         */
+        if (version < DATA_VERSION) {
+
+            throw new IllegalStateException(
+                    "meta.yml data-version "
+                            + version
+                            + " 低于本插件支持的 "
+                            + DATA_VERSION
+                            + "，且不存在迁移链，插件拒绝启动以保护数据。"
+                            + "请升级数据或从 backup/ 恢复。文件："
+                            + metaFile.getAbsolutePath()
+            );
+        }
     }
 
     private void writeMetaSynchronously() {
@@ -1300,7 +1610,7 @@ public class YamlCatStore extends AbstractCatStore {
     private void initializeLegacyAndSplit() {
 
         /*
-         * 0.8.4 R18/R23（社区上报）：
+         * 
          * 降级升级场景也恢复并加载墓碑，拆分时跳过已删除玩家。
          */
         recoverTombstoneTempFile();
@@ -1315,6 +1625,16 @@ public class YamlCatStore extends AbstractCatStore {
         if (file.exists() && file.length() > 0) {
 
             YamlConfiguration parsed;
+
+            if (file.length() > MAX_DATA_FILE_BYTES) {
+
+                throw new IllegalStateException(
+                        "players.yml 超出大小上限，插件拒绝启动以保护数据。"
+                                + "请从 backup/ 目录恢复有效备份，"
+                                + "或检查 players.yml.tmp 中的崩溃快照，或修复文件："
+                                + file.getAbsolutePath()
+                );
+            }
 
             try {
 
@@ -1352,7 +1672,7 @@ public class YamlCatStore extends AbstractCatStore {
 
         /*
          * 读取快照序列号，随后尝试从崩溃残留的 tmp
-         * 恢复更新数据（R4，社区上报：不再直接删除 tmp）。
+         * 恢复更新数据（0.9.0更新：不再直接删除 tmp）。
          */
         snapshotSequence =
                 data.getLong(
@@ -1360,12 +1680,14 @@ public class YamlCatStore extends AbstractCatStore {
                         0L
                 );
 
-        recoverStaleTempFileIfNewer();
-
         /*
-         * 启动备份（拆分前备份原单文件）。
+         * 0.9.0更新：先备份恢复前的原始正式版本，
+         * 再考虑 tmp 恢复——否则 tmp 残缺但被采纳时，
+         * backup 里存的已经是损坏后的恢复版本。
          */
         createBackupIfEnabled();
+
+        recoverStaleTempFileIfNewer();
 
         migrate();
 
@@ -1373,7 +1695,7 @@ public class YamlCatStore extends AbstractCatStore {
     }
 
     /*
-     * 0.8.1 修复（R4，社区上报）：崩溃残留 tmp 的智能恢复。
+     * 崩溃残留 tmp 的智能恢复。当年直接删 tmp 的日子真是草了。
      * 规则与旧版一致：
      * 1. tmp 解析失败 / 为空 → 删除；
      * 2. tmp 的 data-snapshot 比主文件新（或主文件缺失）→ 采用；
@@ -1424,17 +1746,52 @@ public class YamlCatStore extends AbstractCatStore {
             return;
         }
 
-        long tmpSequence =
-                tmpData.getLong(
-                        "data-snapshot",
-                        -1L
+        long tmpSequence;
+
+        Object rawSequence =
+                tmpData.get(
+                        "data-snapshot"
                 );
+
+        if (!(rawSequence instanceof Number)) {
+
+            tmpSequence = -1L;
+        } else {
+
+            tmpSequence =
+                    ((Number) rawSequence).longValue();
+        }
+
+        /*
+         * 0.9.0更新：可解析不能证明完整写完——
+         * 半截 YAML 同样合法。缺少玩家数据节点的 tmp 绝不
+         * 采用（否则残缺版本会被迁移/拆分固化）。
+         * data-snapshot 只在“新旧比较”时参与（主文件缺失时
+         * tmp 是唯一数据源，无 snapshot 的旧版 tmp 仍可恢复）。
+         */
+        boolean tmpHasPlayers =
+                tmpData.isConfigurationSection(
+                        "players"
+                ) &&
+                        !tmpData.getConfigurationSection(
+                                "players"
+                        ).getKeys(false).isEmpty();
 
         boolean mainUsable =
                 file.exists() &&
                         file.length() > 0;
 
         if (!mainUsable) {
+
+            if (!tmpHasPlayers) {
+
+                env.logger().severe(
+                        "players.yml is missing and players.yml.tmp is incomplete"
+                                + " (half-written snapshot) — refusing to adopt it."
+                );
+
+                return;
+            }
 
             data = tmpData;
 
@@ -1457,7 +1814,8 @@ public class YamlCatStore extends AbstractCatStore {
         long mainSequence =
                 snapshotSequence;
 
-        if (tmpSequence > mainSequence) {
+        if (tmpSequence > mainSequence &&
+                tmpHasPlayers) {
 
             data = tmpData;
 
@@ -1553,7 +1911,7 @@ public class YamlCatStore extends AbstractCatStore {
     }
 
     /*
-     * 0.8.4 R20（全面自查）：
+     * 
      * 备份只包含 players/ 目录。若管理员只恢复 players/ 而不恢复
      * deletions.yml，已删除玩家会被墓碑再次清理——这是"部分恢复"
      * 的固有语义：完整回滚应恢复整个数据目录（含 deletions.yml）。
@@ -1591,41 +1949,72 @@ public class YamlCatStore extends AbstractCatStore {
                             "yyyy-MM-dd-HH-mm-ss-SSS"
                     ).format(new Date());
 
+            /*
+             * 0.9.0更新：备份必须原子化——
+             * 先复制到 .tmp 目录，全部成功后才 rename 为正式名；
+             * 半截备份目录绝不能以“看起来完整”的面目公开。
+             */
+            File stagingTarget =
+                    new File(
+                            backupDir,
+                            "players-" + timestamp + ".tmp"
+                    );
+
             File backupTarget =
                     new File(
                             backupDir,
                             "players-" + timestamp
                     );
 
-            if (!backupTarget.exists() &&
-                    !backupTarget.mkdirs()) {
+            deleteRecursively(stagingTarget);
+
+            if (!stagingTarget.mkdirs()) {
 
                 env.logger().warning(
-                        "Failed to create sharded backup directory."
+                        "Failed to create sharded backup staging directory."
                 );
 
                 return;
             }
 
-            File[] shardFiles =
-                    shardDir.listFiles(
-                            (dir, name) ->
-                                    name.endsWith(".yml")
-                    );
+            try {
 
-            if (shardFiles != null) {
+                File[] shardFiles =
+                        shardDir.listFiles(
+                                (dir, name) ->
+                                        name.endsWith(".yml")
+                        );
 
-                for (File shardFile : shardFiles) {
+                if (shardFiles != null) {
 
-                    Files.copy(
-                            shardFile.toPath(),
-                            new File(
-                                    backupTarget,
-                                    shardFile.getName()
-                            ).toPath(),
-                            StandardCopyOption.REPLACE_EXISTING
-                    );
+                    for (File shardFile : shardFiles) {
+
+                        Files.copy(
+                                shardFile.toPath(),
+                                new File(
+                                        stagingTarget,
+                                        shardFile.getName()
+                                ).toPath(),
+                                StandardCopyOption.REPLACE_EXISTING
+                        );
+                    }
                 }
+
+                Files.move(
+                        stagingTarget.toPath(),
+                        backupTarget.toPath()
+                );
+
+            } catch (Exception e) {
+
+                deleteRecursively(stagingTarget);
+
+                env.logger().warning(
+                        "Failed to create sharded backup: "
+                                + e.getMessage()
+                );
+
+                return;
             }
 
             pruneBackups(backupDir);
@@ -1872,7 +2261,7 @@ public class YamlCatStore extends AbstractCatStore {
                 }
 
                 /*
-                 * 0.8.4 R18（社区上报）：
+                 * 
                  * 墓碑中的玩家不产生分片（降级升级场景）。
                  */
                 if (tombstones.containsKey(
@@ -2238,7 +2627,7 @@ public class YamlCatStore extends AbstractCatStore {
 
                 data.set(
                         path + ".feed-date",
-                        java.time.LocalDate.now().toString()
+                        java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()
                 );
             }
 
@@ -2461,7 +2850,7 @@ public class YamlCatStore extends AbstractCatStore {
         }
 
         String today =
-                java.time.LocalDate.now()
+                java.time.LocalDate.now(java.time.ZoneOffset.UTC)
                         .toString();
 
         for (String key : playersSection.getKeys(false)) {
@@ -2595,7 +2984,7 @@ public class YamlCatStore extends AbstractCatStore {
             }
 
             /*
-             * 0.8.4 R17（社区上报）：
+             * 
              * 写前代际校验——删除已递增代际的旧条目直接丢弃。
              */
             boolean staleBeforeWrite;
@@ -2643,7 +3032,21 @@ public class YamlCatStore extends AbstractCatStore {
 
                         if (resurrected.exists()) {
 
-                            resurrected.delete();
+                            /*
+                             * 0.9.0更新：补偿删除失败
+                             * 必须 SEVERE——旧分片被写回且删不掉
+                             * 意味着删除协议降级，不能只靠普通日志。
+                             */
+                            if (!resurrected.delete()) {
+
+                                env.logger().log(
+                                        java.util.logging.Level.SEVERE,
+                                        "DELETION_DEGRADED: resurrected shard "
+                                                + resurrected.getName()
+                                                + " could not be removed; "
+                                                + "tombstone retained for cleanup."
+                                );
+                            }
                         }
                     }
 
@@ -2657,7 +3060,7 @@ public class YamlCatStore extends AbstractCatStore {
                     );
 
                     /*
-                     * 0.8.4 R23（社区上报 H-2）：
+                     * 
                      * 新化身成功提交才清除墓碑——createRaw 不再
                      * 提前清除，删除 → 重建的崩溃一致性由此闭合。
                      */
@@ -2677,7 +3080,7 @@ public class YamlCatStore extends AbstractCatStore {
             synchronized (saverMonitor) {
 
                 /*
-                 * 0.8.4 R18（社区上报 H-NEW-02）：
+                 * 
                  * 失败重排必须在完成判定之前完成——
                  * 只有"队列空 + 无失败重排 + 无在飞写入"才宣告完成，
                  * 否则 awaitPendingSave/shutdown 会在重排前被唤醒，
@@ -2845,7 +3248,7 @@ public class YamlCatStore extends AbstractCatStore {
             }
 
             /*
-             * 0.8.4 R17（社区上报）：
+             * 
              * 失败重排上移到 saverLoop——必须携带“取走时”的
              * 原始代际，否则写盘期间的删除会使旧字节被标成
              * 新代际而绕过作废校验。
@@ -2903,7 +3306,7 @@ public class YamlCatStore extends AbstractCatStore {
         }
 
         /*
-         * 0.8.1 修复（P2）：值未变化时跳过写入与脏标记。
+         * 值未变化时跳过写入与脏标记。
          */
         Object existing =
                 shard.get(field);
@@ -2948,12 +3351,26 @@ public class YamlCatStore extends AbstractCatStore {
             );
         }
 
+        /*
+         * 0.9.0更新：新化身的 save-snapshot 必须
+         * 严格大于该玩家的墓碑版本——否则删除→重新领养后
+         * 新猫快照(1) < 旧墓碑(25)，启动清理会把新猫当旧
+         * 残留误删。
+         */
+        shard.set(
+                "save-snapshot",
+                tombstones.getOrDefault(
+                        playerUUID,
+                        -1L
+                ) + 1L
+        );
+
         shards.put(playerUUID, shard);
         knownPlayers.add(playerUUID);
         dirtyPlayers.add(playerUUID);
 
         /*
-         * 0.8.4 R23（社区上报 H-2）：
+         * 
          * 这里绝不清除墓碑——新化身提交成功前墓碑必须存在，
          * 否则"删除失败 + 重新领养 + 提交前崩溃"会让旧猫复活。
          * 墓碑由保存线程在"新分片成功落盘"后清除。
@@ -2973,7 +3390,7 @@ public class YamlCatStore extends AbstractCatStore {
         synchronized (saverMonitor) {
 
             /*
-             * 0.8.4 R18/R23（社区上报 H-1/H-2）：
+             * 
              * 墓碑先于物理删除落盘——即使文件删除失败，
              * 重启时也会跳过该分片并重试清理，绝不复活。
              * 同时记录删除时的分片版本：启动清理用版本区分
@@ -2994,7 +3411,19 @@ public class YamlCatStore extends AbstractCatStore {
                             )
             );
 
-            persistTombstones();
+            /*
+             * 0.9.0更新：墓碑落盘失败 → 中止删除
+             * （fail-closed）——绝不"墓碑没写成功却继续
+             * 物理删除"，否则只读磁盘 + 崩溃 = 已删玩家复活。
+             */
+            if (!persistTombstones()) {
+
+                tombstones.remove(
+                        playerUUID
+                );
+
+                return;
+            }
 
             /*
              * 关键：删除时同时撤销未落盘的待写，
@@ -3003,7 +3432,7 @@ public class YamlCatStore extends AbstractCatStore {
             pendingWrites.remove(playerUUID);
 
             /*
-             * 0.8.4 R17（社区上报）：
+             * 
              * 递增写入代际——已取走的旧字节即使写失败重排，
              * 写前校验也会将其作废，杜绝“写后复活”。
              */
@@ -3073,7 +3502,7 @@ public class YamlCatStore extends AbstractCatStore {
         if (shardFile.exists() && !shardFile.delete()) {
 
             /*
-             * 0.8.4 R18（社区上报）：
+             * 
              * 物理删除失败：墓碑已落盘，重启时跳过并重试，
              * 绝不把删除失败伪装成删除成功。
              */
@@ -3098,7 +3527,7 @@ public class YamlCatStore extends AbstractCatStore {
         if (drained) {
 
             /*
-             * 0.8.4 R18（社区上报 M-01）：
+             * 
              * 在飞写入已彻底排空才移除代际条目——
              * 否则超时场景下残留的旧写后确认仍需代际作废。
              */
@@ -3137,6 +3566,7 @@ public class YamlCatStore extends AbstractCatStore {
         return dirty;
     }
 
+
     /**
      * 提交全部脏分片（不等待磁盘完成）。
      * 返回是否已提交给保存线程。
@@ -3154,13 +3584,22 @@ public class YamlCatStore extends AbstractCatStore {
             return true;
         }
 
-        enqueueWrites(
-                new ArrayList<>(
-                        dirtyPlayers
-                )
-        );
+        java.util.Set<UUID> skipped =
+                enqueueWrites(
+                        new ArrayList<>(
+                                dirtyPlayers
+                        )
+                );
 
+        /*
+         * 0.9.0更新：shard 缺失的玩家保留 dirty——
+         * 保存请求不静默丢失（等待分片恢复后重试）。
+         */
         dirtyPlayers.clear();
+
+        dirtyPlayers.addAll(
+                skipped
+        );
 
         dirty = false;
 
@@ -3205,9 +3644,12 @@ public class YamlCatStore extends AbstractCatStore {
      * 序列化脏分片并入队（保存线程异步落盘）。
      * 仅主线程调用。
      */
-    private void enqueueWrites(
+    private java.util.Set<UUID> enqueueWrites(
             java.util.List<UUID> players
     ) {
+
+        java.util.Set<UUID> skipped =
+                new java.util.LinkedHashSet<>();
 
         synchronized (saverMonitor) {
 
@@ -3219,13 +3661,34 @@ public class YamlCatStore extends AbstractCatStore {
                         shards.get(playerUUID);
 
                 if (shard == null) {
+
+                    /*
+                     * 0.9.0更新：shard 缺失是
+                     * invariant 破坏，不能静默丢弃保存请求——
+                     * SEVERE 并保留 dirty（让异常可见，而不是
+                     * 把缓存不一致进一步变成数据丢失）。
+                     */
+                    env.logger().severe(
+                            "Skipped write for player " + playerUUID
+                                    + " — no shard loaded."
+                    );
+
+                    skipped.add(
+                            playerUUID
+                    );
+
                     continue;
                 }
 
                 /*
-                 * 0.8.4 R21（社区上报 H-NEW-04）：
+                 * 
                  * 每次入队前递增分片快照版本并随快照一并序列化，
                  * 供启动恢复比较 tmp 与 target 的新旧。
+                 *
+                 * 0.9.0更新：该版本是
+                 * “内容代数”（随 bytes 快照一起序列化），不是
+                 * 持久提交计数——它标识磁盘 tmp/target 内容的
+                 * 相对新旧，这正是恢复比较所需的语义。
                  */
                 shard.set(
                         "save-snapshot",
@@ -3263,6 +3726,8 @@ public class YamlCatStore extends AbstractCatStore {
 
             saverMonitor.notifyAll();
         }
+
+        return skipped;
     }
 
     /**
@@ -3287,7 +3752,35 @@ public class YamlCatStore extends AbstractCatStore {
 
         saveNow();
 
-        awaitPendingSave();
+        /*
+         * 0.9.0更新：awaitPendingSave 返回 false 时
+         * 绝不能静默继续——最后一批数据没有落盘确认就停机，
+         * 与"shutdownAndAwait"的名称语义相悖。重试一次，
+         * 仍失败则 SEVERE 并保持 stopping 语义（服务器关停
+         * 不应无限阻塞，但失败必须可见）。
+         */
+        boolean flushed =
+                awaitPendingSave();
+
+        if (!flushed) {
+
+            env.logger().severe(
+                    "Final save did not complete; retrying once."
+            );
+
+            flushed =
+                    awaitPendingSave(
+                            5_000L
+                    );
+        }
+
+        if (!flushed) {
+
+            env.logger().severe(
+                    "Final save failed after retry — "
+                            + "latest in-memory state may be lost."
+            );
+        }
 
         stopping = true;
 
@@ -3342,6 +3835,19 @@ public class YamlCatStore extends AbstractCatStore {
 
         synchronized (saverMonitor) {
 
+            /*
+             * 0.9.0更新：没有待写、也没有脏分片时，
+             * flush 语义上已经完成——干净的关服不该等待
+             * 15 秒超时（lastWriteCompleted 从未被置位）。
+             */
+            if (pendingWrites.isEmpty() &&
+                    dirtyPlayers.isEmpty()) {
+
+                lastWriteCompleted = true;
+
+                return true;
+            }
+
             long deadline =
                     System.currentTimeMillis()
                             + timeoutMillis;
@@ -3379,7 +3885,7 @@ public class YamlCatStore extends AbstractCatStore {
         }
 
         /*
-         * 0.8.4 R23（社区上报 H-3）：
+         * 
          * 队列空 + 完成标志 + 无写失败 = 本轮全部确认落盘。
          */
         return !isLastWriteFailed();
@@ -3418,3 +3924,4 @@ public class YamlCatStore extends AbstractCatStore {
         return playerPath(playerUUID) + ".cat";
     }
 }
+

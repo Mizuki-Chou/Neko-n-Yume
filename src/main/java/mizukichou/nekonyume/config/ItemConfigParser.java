@@ -157,3 +157,4 @@ final class ItemConfigParser {
         target.put(Material.CAKE, 25);
     }
 }
+

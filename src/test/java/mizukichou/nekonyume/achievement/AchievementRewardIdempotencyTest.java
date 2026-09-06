@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 0.8.4 R17（社区上报）：
+ * 
  * 成就奖励逐币种幂等协议回归测试。
  *
  * <p>
@@ -150,3 +150,4 @@ class AchievementRewardIdempotencyTest {
         );
     }
 }
+

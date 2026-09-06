@@ -683,7 +683,7 @@ class YamlCatStoreLifecycleTest {
         );
 
         assertEquals(
-                java.time.LocalDate.now()
+                java.time.LocalDate.now(java.time.ZoneOffset.UTC)
                         .toString(),
                 store.getAffectionDecayDate(player)
         );
@@ -752,7 +752,7 @@ class YamlCatStoreLifecycleTest {
         );
 
         assertEquals(
-                java.time.LocalDate.now()
+                java.time.LocalDate.now(java.time.ZoneOffset.UTC)
                         .toString(),
                 store.getAffectionDecayDate(player)
         );
@@ -1319,6 +1319,11 @@ class YamlCatStoreLifecycleTest {
         );
 
         Files.writeString(
+                tempDir.resolve("meta.yml"),
+                "data-version: 9\n"
+        );
+
+        Files.writeString(
                 tempDir.resolve("players")
                         .resolve(player + ".yml"),
                 "this is not valid player data"
@@ -1757,7 +1762,7 @@ class YamlCatStoreLifecycleTest {
 
     /*
      * ============================================================
-     * 0.8.4 R18（社区上报 H-01 / H-NEW-03）：墓碑协议
+     * 墓碑协议
      * ============================================================
      */
 
@@ -1948,7 +1953,7 @@ class YamlCatStoreLifecycleTest {
     void newerShardTempIsAdoptedOverExistingTarget() throws IOException {
 
         /*
-         * 0.8.4 R21（社区上报 H-NEW-04）：
+         * 
          * 非原子替换崩溃现场：target 存在（旧版本）+
          * tmp 是完整新快照——必须按版本采纳 tmp，绝不误删。
          */
@@ -2042,7 +2047,7 @@ class YamlCatStoreLifecycleTest {
     void deletionsTmpIsRecoveredOnStartup() throws IOException {
 
         /*
-         * 0.8.4 R23（社区上报 H-1）：
+         * 
          * deletions.yml.tmp（move 前崩溃的完整墓碑写入）
          * 必须在启动时采纳，否则刚删除的玩家会复活。
          */
@@ -2090,7 +2095,7 @@ class YamlCatStoreLifecycleTest {
     void corruptDeletionsFileFailsFast() throws IOException {
 
         /*
-         * 0.8.4 R23（社区上报 H-1）：
+         * 
          * 删除日志不可信 → 拒绝启动（fail-closed），
          * 绝不把已删除玩家重新加载。
          */
@@ -2121,7 +2126,7 @@ class YamlCatStoreLifecycleTest {
     void reclaimedShardWithNewerVersionSurvivesTombstone() throws IOException {
 
         /*
-         * 0.8.4 R23（社区上报 H-2）：
+         * 
          * 墓碑版本 2 + 分片版本 7 = 删除后重新领养的新化身，
          * 启动清理必须保留分片并清除墓碑。
          */
@@ -2206,6 +2211,71 @@ class YamlCatStoreLifecycleTest {
         reopened.shutdownAndAwait();
     }
 
+    /*
+     * 视觉模型 ID（Generic Model 系统，预留）磁盘往返：
+     * 写入 → 落盘 → 重开 → 读回；清除后重开读回空串。
+     */
+    @Test
+    void modelIdDiskRoundTrip() throws IOException {
+
+        UUID player = UUID.randomUUID();
+
+        YamlCatStore store =
+                newStore();
+
+        try {
+
+            store.createCat(player);
+
+            assertEquals(
+                    "",
+                    store.getCatModelId(player)
+            );
+
+            store.setCatModelId(player, "cats:black_cat");
+
+            flushAndAwait(store);
+
+        } finally {
+
+            store.shutdownAndAwait();
+        }
+
+        YamlCatStore reopened =
+                newStore();
+
+        try {
+
+            assertEquals(
+                    "cats:black_cat",
+                    reopened.getCatModelId(player)
+            );
+
+            reopened.setCatModelId(player, "");
+
+            flushAndAwait(reopened);
+
+        } finally {
+
+            reopened.shutdownAndAwait();
+        }
+
+        YamlCatStore again =
+                newStore();
+
+        try {
+
+                assertEquals(
+                    "",
+                    again.getCatModelId(player)
+            );
+
+        } finally {
+
+            again.shutdownAndAwait();
+        }
+    }
+
 private static class FakeCatStoreEnv implements CatStoreEnv {
 
         private final Path dataFolder;
@@ -2267,3 +2337,4 @@ private static class FakeCatStoreEnv implements CatStoreEnv {
         }
     }
 }
+

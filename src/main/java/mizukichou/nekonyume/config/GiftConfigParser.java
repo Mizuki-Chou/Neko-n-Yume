@@ -157,12 +157,20 @@ final class GiftConfigParser {
                 rawEntries) {
 
             int weight =
-                    ConfigParseSupport.mapInt(
-                            entryMap,
-                            "weight",
-                            1
+                    Math.min(
+                            1_000_000,
+                            ConfigParseSupport.mapInt(
+                                    entryMap,
+                                    "weight",
+                                    1
+                            )
                     );
 
+            /*
+             * 0.9.0更新：权重在解析层钳制
+             * 上限——totalWeight 永不超过 int 范围，
+             * 抽取阶段不再有"后半条目不可达"的概率损失。
+             */
             if (weight <= 0) {
                 continue;
             }
@@ -191,11 +199,11 @@ final class GiftConfigParser {
                             minAmount
                     );
 
-            maxAmount =
+            maxAmount = Math.min(256,
                     Math.max(
                             minAmount,
                             maxAmount
-                    );
+                    ));
 
             /*
              * 喵丹条目。
@@ -297,3 +305,4 @@ final class GiftConfigParser {
         return CatMood.CALM;
     }
 }
+

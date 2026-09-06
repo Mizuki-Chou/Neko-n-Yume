@@ -22,9 +22,9 @@ public class CatBehaviorTask implements Runnable {
      * 跟随传送阈值（水平距离，格）
      * ============================================================
      *
-     * 心情影响阈值：
+     * 心情影响阈值哒：
      *
-     * 非常开心 → 8 格（紧紧粘着你）
+     * 非常开心 → 8 格（紧紧粘着你）喵
      * 开心/平静 → 10 格
      * 低落/难过 → 16 格（懒洋洋，离得远才跟）
      */
@@ -67,7 +67,7 @@ public class CatBehaviorTask implements Runnable {
                 cache.getCats()) {
 
             /*
-             * 0.8.1 修复（P2）：单猫异常隔离，
+             * 单猫异常隔离，
              * 与 CatBattleTask 口径一致。
              */
             try {
@@ -338,3 +338,4 @@ public class CatBehaviorTask implements Runnable {
         };
     }
 }
+
