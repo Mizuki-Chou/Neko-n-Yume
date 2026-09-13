@@ -19,7 +19,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * 语言文本核心（可单元测试）。
+ * 语言文本核心（可单元测试）啦。
  *
  * <p>
  * 占位符规则：
@@ -76,7 +76,7 @@ public final class LangMessages {
         /*
          * 1. 服务器端覆盖文件（管理员可改）。
          *
-         * 0.8.1 R5（社区上报）：
+         * 
          * 覆盖文件是“局部覆盖”——与内建资源深度合并；
          * 只写一个键也不会丢失其余内建文案。
          */
@@ -189,7 +189,7 @@ public final class LangMessages {
     /*
      * 加载内建语言资源（含 en_us 回退链）。
      *
-     * 0.8.1（用户要求）：全部回退场景统一 en_us——
+     * 全部回退场景统一 en_us——
      * 不支持的语言 / 检测失败 / 文件缺失 / 解析失败。
      * 返回 null 表示 en_us 自身也缺失/损坏。
      */
@@ -263,7 +263,7 @@ public final class LangMessages {
     }
 
     /*
-     * 0.8.1 R5（社区上报）：
+     * 
      * 深度合并——覆盖文件的每个键覆盖内建同路径键，
      * 未提及的键保留内建值；嵌套节逐层递归。
      * 包级可见以便单元测试。
@@ -595,7 +595,7 @@ public final class LangMessages {
         }
 
         /*
-         * 0.8.1 修复（P0）：content 无占位符时绝不能丢弃它。
+         * content 无占位符时绝不能丢弃它。
          *
          * 模板形如 <white>等级: <yellow>{0}</yellow></white>
          * 解析后占位符位于子节点、父节点 content="等级: "。
@@ -794,3 +794,4 @@ public final class LangMessages {
         return true;
     }
 }
+

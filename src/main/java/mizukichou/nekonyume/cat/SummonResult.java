@@ -1,7 +1,7 @@
 package mizukichou.nekonyume.cat;
 
 /**
- * 召唤/恢复流水线的结果语义（0.8.1 R5）。
+ * 召唤/恢复流水线的结果语义。
  *
  * <p>
  * 取代原先的 {@code Consumer<Boolean>}：
@@ -20,5 +20,12 @@ public enum SummonResult {
 
     SPAWNED,
     ALREADY_PRESENT,
-    FAILED
+    FAILED,
+
+    /*
+     * 0.9.0更新：召唤已在进行——调用方需要
+     * 可区分的忙态，而不是 callback 永不执行啦。
+     */
+    BUSY
 }
+

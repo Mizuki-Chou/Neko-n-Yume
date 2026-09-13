@@ -12,10 +12,10 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 
 /**
- * 0.8.5：排行 / 猫咪详情 / 删除确认三个面板的点击与拖拽守卫。
+ * 0.8.5：排行 / 猫咪详情 / 删除确认三个面板的点击与拖拽守卫捏。
  *
  * <p>
- * 全部点击一律取消（只读或受控交互）；
+ * 全部点击一律取消（只读或受控交互）捏；
  * 拖拽全拦截；身份以 GuiHolder 的 owner 校验。
  * </p>
  */
@@ -108,7 +108,7 @@ public final class RankingGuiListener implements Listener {
                 );
 
             default -> {
-                /* 其他页面不在此处理 */
+                /* 其他页面就不在这里处理啦，呜呜。 */
             }
         }
     }
@@ -140,3 +140,4 @@ public final class RankingGuiListener implements Listener {
         }
     }
 }
+

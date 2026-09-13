@@ -9,11 +9,11 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.inventory.ItemStack;
 
 /**
- * 猫咪喂食成功事件。
+ * 猫咪喂食成功事件喵。
  *
  * <p>
- * 在喂食逻辑全部完成后触发。
- * 属于事后通知，不可取消。
+ * 在喂食逻辑全部完成后触发捏。
+ * 属于事后通知，不可取消呀。
  * </p>
  */
 @Getter
@@ -70,3 +70,4 @@ public class CatFedEvent extends Event {
         return handlers;
     }
 }
+

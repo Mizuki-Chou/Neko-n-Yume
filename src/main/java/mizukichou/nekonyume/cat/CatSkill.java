@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 技能定义（元数据）。
+ * 技能定义（元数据）捏。
  *
  * <p>
  * 数值全部在 config.yml 的 skills.values.&lt;技能ID&gt; 节，
@@ -194,7 +194,7 @@ public enum CatSkill {
 
     /*
      * ============================================================
-     * 梦幻品质（梦槽专属）
+     * 梦幻品质（梦槽专属）哒
      * ============================================================
      */
     DREAM_AWAKEN(
@@ -372,3 +372,4 @@ public enum CatSkill {
     }
 
 }
+

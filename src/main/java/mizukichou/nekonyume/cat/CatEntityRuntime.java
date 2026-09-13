@@ -9,9 +9,10 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 
 /**
- * 0.8.4：猫实体运行时访问 seam。
+ * 0.8.4：猫实体运行时访问 seam 啦。
  *
  * <p>
  * 把恢复/召唤管线（CatEntityRestorer、CatEntityService、CatEntityBinding）
@@ -33,6 +34,17 @@ public interface CatEntityRuntime {
     Entity getEntity(UUID entityUuid);
 
     /**
+     * 全部在线玩家（等价 Bukkit.getOnlinePlayers）。
+     */
+    Collection<Player> onlinePlayers();
+
+    /**
+     * 已加载的全部世界（0.9.0更新：启动清理
+     * 孤儿 Display 用）捏。
+     */
+    Collection<World> onlineWorlds();
+
+    /**
      * 世界内已加载的全部猫实体（等价 World.getEntitiesByClass(Cat.class)）。
      */
     Collection<Cat> catsIn(World world);
@@ -47,6 +59,13 @@ public interface CatEntityRuntime {
      * 测试实现通常直接同步执行，让流水线确定性跑完。
      */
     void runTask(Runnable task);
+
+    /**
+     * 异步执行任务（等价 Bukkit.getScheduler()
+     * .runTaskAsynchronously(plugin, task)）。
+     * 测试实现直接同步执行（确定性）。
+     */
+    void runTaskAsync(Runnable task);
 
     /**
      * 异步加载区块（等价 World.getChunkAtAsync(x, z)）。
@@ -148,3 +167,4 @@ public interface CatEntityRuntime {
      */
     void callEvent(org.bukkit.event.Event event);
 }
+

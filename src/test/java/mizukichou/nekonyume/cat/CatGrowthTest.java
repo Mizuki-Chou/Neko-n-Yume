@@ -291,7 +291,7 @@ class CatGrowthTest {
 
     /*
      * ============================================================
-     * 实体最大生命（0.8.1 统一公式）
+     * 实体最大生命（统一公式）
      * ============================================================
      */
 
@@ -331,7 +331,7 @@ class CatGrowthTest {
     void entityMaxHealthIncludesEquipBonus() {
 
         /*
-         * 0.8.1 回归（P1）：装备生命加成必须计入。
+         * 装备生命加成必须计入。
          * 至极项圈：生命 +30。
          */
         Cat cat = newCat();
@@ -478,7 +478,7 @@ class CatGrowthTest {
     }
 
     /*
-     * 0.8.1 R8（效率）：
+     * 
      * 二分版 levelFromExperience / meowRankFromPower 与旧线性实现
      * 在广泛取值与边界上逐值等价（测试内保留线性参照实现）。
      */
@@ -631,7 +631,7 @@ class CatGrowthTest {
     void setLevelClampsToDomainContract() {
 
         /*
-         * 0.8.4 R21（社区上报 L-NEW-09/10）：
+         * 
          * 等级必须被钳制到 [1, MAX_LEVEL]——
          * 损坏数据既不能抬到 10000 以上，也不能溢出为负。
          */
@@ -684,3 +684,4 @@ class CatGrowthTest {
     }
 
 }
+

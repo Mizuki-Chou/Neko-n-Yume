@@ -14,10 +14,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 /**
- * 语言文本组件。
+ * 语言文本组件捏。
  *
  * <p>
- * 玩家可见文案全部集中在 lang/&lt;code&gt;.yml（jar 内建：
+ * 玩家可见文案全部集中在 lang/&lt;code&gt;.yml（jar 内建啦：
  * zh_cn / en_us / ja_jp），
  * 可用服务器端 plugins/NekoNYume/lang/&lt;code&gt;.yml 覆盖。
  * /nekoyumeadmin reload 时热重载。
@@ -29,7 +29,7 @@ import java.util.logging.Logger;
  * en_* → en_us、ja_* → ja_jp；
  * 其余不支持的语言统一回退 en_us（0.7.2 语义）；
  * locale 为空 / 读取异常等“检测不到”的情况同样回退 en_us
- * （0.8.1 统一口径）。
+ * （统一口径）。
  * 玩家可用 /nekoyume language &lt;auto|zh_cn|zh_tw|en_us|ja_jp&gt;
  * 设置个人覆盖（仅内存，重启后回到 auto）。
  * </p>
@@ -193,7 +193,7 @@ public final class Lang {
  }
 
  /*
-  * 0.8.1 修复（P2）：玩家退出时清除个人语言覆盖，
+  * 玩家退出时清除个人语言覆盖，
   * 防止长期运营服务器上 overrides 表单调增长。
   */
  public void clearOverride(
@@ -286,6 +286,7 @@ public final class Lang {
 
                     /*
                      * 不匹配任何支持语言时统一回退英语。
+                     * 支持：zh / en / ja / ko / fr / de / es。
                      */
                     return switch (
                             code.substring(
@@ -299,6 +300,18 @@ public final class Lang {
 
                         case "ja" ->
                                 "ja_jp";
+
+                        case "ko" ->
+                                "ko_kr";
+
+                        case "fr" ->
+                                "fr_fr";
+
+                        case "de" ->
+                                "de_de";
+
+                        case "es" ->
+                                "es_es";
 
                         default ->
                                 "en_us";
@@ -338,3 +351,4 @@ public final class Lang {
  logger ) );
  }
 }
+

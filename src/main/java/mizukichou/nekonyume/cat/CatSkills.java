@@ -5,12 +5,12 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * 猫咪技能槽的有序集合。
+ * 猫咪技能槽的有序集合哒。
  *
  * <p>
- * 从 Cat 中抽取：
+ * 从 Cat 中抽取啦：
  * 维护"唯一 + 按槽位顺序"两个不变量，
- * 对外一律防御性复制。
+ * 对外一律防御性复制啦。
  * </p>
  */
 public final class CatSkills {
@@ -80,7 +80,16 @@ public final class CatSkills {
      * 防止产生重复技能。
      * </p>
      */
-    public void set(
+    /**
+     * 替换指定槽位。
+     *
+     * <p>
+     * 0.9.0更新：返回布尔让业务失败显式化——
+     * 非法下标 / null / 目标技能已存在于其他槽位时
+     * 返回 false，调用方不得默认为成功。
+     * </p>
+     */
+    public boolean set(
             int index,
             CatSkill skill
     ) {
@@ -89,7 +98,7 @@ public final class CatSkills {
                 index >= skills.size() ||
                 skill == null) {
 
-            return;
+            return false;
         }
 
         int existing =
@@ -100,10 +109,12 @@ public final class CatSkills {
         if (existing >= 0 &&
                 existing != index) {
 
-            return;
+            return false;
         }
 
         skills.set(index, skill);
+
+        return true;
     }
 
     public void clear() {
@@ -140,3 +151,4 @@ public final class CatSkills {
         return skills.toString();
     }
 }
+

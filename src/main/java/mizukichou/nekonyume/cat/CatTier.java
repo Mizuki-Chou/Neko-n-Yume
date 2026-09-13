@@ -14,9 +14,9 @@ import java.util.UUID;
  * </p>
  *
  * <p>
- * 0.6.2：出生分布改为 90% 普通 / 10% 稀有
+ * 0.6.2：出生分布改为 90% 普通 / 10% 稀有啦
  * （升阶通过喵丹喂养实现）；
- * 技能池权重（getWeight）保持不变。
+ * 技能池权重（getWeight）保持不变捏。
  * </p>
  */
 @Getter
@@ -72,7 +72,7 @@ public enum CatTier {
     private final int[] slotsPerCheckpoint;
 
     /*
-     * 0.8.4 R18（社区上报 L-NEW-01）：
+     * 
      * Lombok 生成的 getter 会暴露内部数组——显式返回克隆，
      * 防止外部修改枚举全局状态。
      */
@@ -259,3 +259,4 @@ public enum CatTier {
                 slotIndex == 0;
     }
 }
+

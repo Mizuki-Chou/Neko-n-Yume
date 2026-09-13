@@ -8,11 +8,11 @@ import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 
 /**
- * 猫咪喵阶提升事件。
+ * 猫咪喵阶提升事件喵。
  *
  * <p>
- * 喵力达到升阶曲线时触发。
- * 属于事后通知，不可取消。
+ * 喵力达到升阶曲线时触发啦。
+ * 属于事后通知，不可取消呐。
  * </p>
  */
 @Getter
@@ -48,3 +48,4 @@ public class CatMeowRankUpEvent extends Event {
         return handlers;
     }
 }
+

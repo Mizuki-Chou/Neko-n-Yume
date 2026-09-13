@@ -142,3 +142,4 @@ class CatEntityIndexTest {
         assertTrue(index.entitiesOf(owner).isEmpty());
     }
 }
+

@@ -13,8 +13,8 @@ import java.util.UUID;
  * </p>
  *
  * <p>
- * 每只猫的性格永久固定，
- * 与其"身份永恒"的理念一致。
+ * 每只猫的性格是永久固定的呀，
+ * 和“身份永恒”的理念一致啦。
  * </p>
  */
 @Getter
@@ -22,7 +22,7 @@ public enum CatPersonality {
 
     /*
      * 贪吃：
-     * 饥饿更快，喂食好感更多，
+     * 饥饿更快，喂食好感更多哒，
      * 喂食更容易获得喵力。
      */
     GOURMAND(
@@ -201,3 +201,4 @@ public enum CatPersonality {
         return values()[index];
     }
 }
+

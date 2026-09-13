@@ -31,10 +31,10 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
- * 梦魔之夜（Muma's Night）。
+ * 梦魔之夜（Muma's Night）捏。
  *
  * <p>
- * 致敬法国独立游戏 Muma Rope。
+ * 致敬法国独立游戏 Muma Rope 啦。
  * </p>
  *
  * <p>
@@ -46,13 +46,26 @@ import java.util.logging.Logger;
 public class MumaNightManager {
 
     private final NamespacedKey buffedKey;
+
+    /*
+     * 0.9.0更新：BUFFING 事务标记（社区审查 M-4）——
+     * 先于全部修改写入；事务成功转为 buffed，失败回滚
+     * 并清除。崩溃残留的 BUFFING 怪由 isBuffed 识别、
+     * 黎明 stripMonster 统一清理，不再出现
+     * "无标记半强化怪"。
+     */
+    private final NamespacedKey buffingKey;
     private final NamespacedKey origHealthKey;
     private final NamespacedKey origDamageKey;
+    private final NamespacedKey buffedHealthKey;
+    private final NamespacedKey buffedDamageKey;
+    private final NamespacedKey buffedSwordKey;
     private final NamespacedKey enabledKey;
     private final NamespacedKey origMainHandKey;
     private final NamespacedKey origOffHandKey;
     private final NamespacedKey origMainDropKey;
     private final NamespacedKey origOffDropKey;
+    private final NamespacedKey buffedMainDropKey;
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -91,6 +104,12 @@ public class MumaNightManager {
                         "muma_buffed"
                 );
 
+        this.buffingKey =
+                new NamespacedKey(
+                        plugin,
+                        "muma_buffing"
+                );
+
         this.origHealthKey =
                 new NamespacedKey(
                         plugin,
@@ -101,6 +120,29 @@ public class MumaNightManager {
                 new NamespacedKey(
                         plugin,
                         "muma_orig_damage"
+                );
+
+        /*
+         * 0.9.0更新：记录强化后写入的值——
+         * 黎明只在自己写入的值仍未被其它系统改动时恢复，
+         * 否则跳过（cooperative state modification）。
+         */
+        this.buffedHealthKey =
+                new NamespacedKey(
+                        plugin,
+                        "muma_buffed_health"
+                );
+
+        this.buffedDamageKey =
+                new NamespacedKey(
+                        plugin,
+                        "muma_buffed_damage"
+                );
+
+        this.buffedSwordKey =
+                new NamespacedKey(
+                        plugin,
+                        "muma_buffed_sword"
                 );
 
         this.enabledKey =
@@ -123,6 +165,12 @@ public class MumaNightManager {
                 new NamespacedKey(
                         plugin,
                         "muma_orig_off_hand"
+                );
+
+        this.buffedMainDropKey =
+                new NamespacedKey(
+                        plugin,
+                        "muma_buffed_main_drop"
                 );
 
         this.origMainDropKey =
@@ -187,6 +235,19 @@ public class MumaNightManager {
                 deactivate(
                         world
                 );
+
+            } else {
+
+                /*
+                 * 0.9.0更新：非活跃状态下同样清一次
+                 * 残留强化（社区审查 M-7）——服务器重启后
+                 * activeWorlds 为空但实体 PDC 仍带旧 buff，
+                 * 管理员关闭功能时若不清理，旧强化怪会
+                 * 继续强化到下一轮 tick。
+                 */
+                stripMarked(
+                        world
+                );
             }
 
             rolledThisNight.remove(
@@ -236,9 +297,14 @@ public class MumaNightManager {
             long time =
                     world.getTime();
 
+            /*
+             * 夜晚判定：与 MOONLIGHT（月华）技能窗口对齐——
+             * 13000 ~ 23000（含）为夜晚；边界口径与
+             * CatBattleTask / CatAuraTask 一致。
+             */
             boolean night =
                     time >= 13000 &&
-                            time < 23000;
+                            time <= 23000;
 
             if (!night) {
 
@@ -296,12 +362,24 @@ public class MumaNightManager {
             Monster monster
     ) {
 
+        /*
+         * 0.9.0更新：同时识别 buffingKey（社区审查
+         * R14-02）——崩溃残留的"事务标记先行、正式标记
+         * 未落"半强化怪必须能被黎明 stripMonster 找到；
+         * 只认 buffedKey 会让 buffing=1 的怪永久
+         * 保持强化。
+         */
         return monster != null &&
-                monster.getPersistentDataContainer()
+                (monster.getPersistentDataContainer()
                         .has(
                                 buffedKey,
                                 PersistentDataType.BYTE
-                        );
+                        ) ||
+                monster.getPersistentDataContainer()
+                        .has(
+                                buffingKey,
+                                PersistentDataType.BYTE
+                        ));
     }
 
     public void buffMonster(
@@ -371,14 +449,33 @@ public class MumaNightManager {
                         ? attack.getBaseValue()
                         : 2.0;
 
+        boolean mainHandReplaced = false;
+        boolean mainDropZeroed = false;
+
+        org.bukkit.inventory.EntityEquipment equipment =
+                monster.getEquipment();
+
+        ItemStack originalMain =
+                equipment == null
+                        ? null
+                        : equipment.getItemInMainHand();
+
         PersistentDataContainer pdc =
                 monster.getPersistentDataContainer();
 
+        /*
+         * 0.9.0更新：事务标记先行（社区审查 M-4）——
+         * 中途异常时由 isBuffed 识别，异常路径回滚，
+         * 崩溃残留由黎明 stripMonster 统一清理，
+         * 不再产生“无标记半强化怪”。
+         */
         pdc.set(
-                buffedKey,
+                buffingKey,
                 PersistentDataType.BYTE,
                 (byte) 1
         );
+
+        try {
 
         pdc.set(
                 origHealthKey,
@@ -426,35 +523,45 @@ public class MumaNightManager {
          * 物品必须走 serializeAsBytes()/deserializeBytes()
          * 与 BYTE_ARRAY 组合存储。
          */
-        org.bukkit.inventory.EntityEquipment equipment =
-                monster.getEquipment();
-
         if (equipment != null) {
 
-            saveOriginalStack(
+            /*
+             * 0.9.0更新：原装备序列化失败时整个怪物
+             * 放弃强化（社区审查 M-6）——降级为空手
+             * 会在黎明恢复时永久吃掉第三方武器。
+             */
+            if (!saveOriginalStack(
                     pdc,
                     origMainHandKey,
                     equipment.getItemInMainHand()
-            );
+            )) {
 
-            saveOriginalStack(
-                    pdc,
-                    origOffHandKey,
-                    equipment.getItemInOffHand()
-            );
+                /*
+                 * 0.9.0更新：抛异常而非裸 return（社区审查
+                 * R14-02）——此前直接 return 会跳过 catch
+                 * 回滚，留下 buffingKey=1 + 已改写的
+                 * HP/攻击、且 isBuffed 不认的半强化怪。
+                 * 抛异常进入统一回滚路径（HP/攻击还原 +
+                 * 标记清理）。
+                 */
+                throw new IllegalStateException(
+                        "Muma buff aborted for "
+                                + monster.getType()
+                                + ": main hand could not be serialized."
+                );
+            }
+
+            /*
+             * 0.9.0更新：不再保存副手（社区审查 M-5）——
+             * 本插件从不修改副手，恢复它会覆盖其它系统
+             * 后来的修改。
+             */
 
             pdc.set(
                     origMainDropKey,
                     PersistentDataType.DOUBLE,
                     (double) equipment
                             .getItemInMainHandDropChance()
-            );
-
-            pdc.set(
-                    origOffDropKey,
-                    PersistentDataType.DOUBLE,
-                    (double) equipment
-                            .getItemInOffHandDropChance()
             );
 
             equipment.setItemInMainHand(
@@ -465,8 +572,164 @@ public class MumaNightManager {
                     )
             );
 
+            mainHandReplaced = true;
+
             equipment.setItemInMainHandDropChance(
                     0f
+            );
+
+            /*
+             * 0.9.0更新：记录本次写入的掉落率（社区审查
+             * P1-5）——黎明恢复前比较"当前值是否仍是我们
+             * 写的那个"，第三方插件后来的修改绝不覆盖。
+             */
+            pdc.set(
+                    buffedMainDropKey,
+                    PersistentDataType.DOUBLE,
+                    0.0
+            );
+
+            mainDropZeroed = true;
+
+            /*
+             * 0.9.0更新：强化事务全部成功后才标记
+             * buffed，并记录本次写入的值——异常中途不会留下
+             * “永久标记、半强化状态”。
+             */
+            if (equipment.getItemInMainHand() != null &&
+                    !equipment.getItemInMainHand().getType().isAir()) {
+
+                pdc.set(
+                        buffedSwordKey,
+                        PersistentDataType.BYTE_ARRAY,
+                        equipment.getItemInMainHand()
+                                .serializeAsBytes()
+                );
+            }
+        }
+
+        double buffedHealth =
+                maxHealth != null
+                        ? maxHealth.getBaseValue()
+                        : origHealth;
+
+        double buffedDamage =
+                attack != null
+                        ? attack.getBaseValue()
+                        : origDamage;
+
+        pdc.set(
+                buffedHealthKey,
+                PersistentDataType.DOUBLE,
+                buffedHealth
+        );
+
+        pdc.set(
+                buffedDamageKey,
+                PersistentDataType.DOUBLE,
+                buffedDamage
+        );
+
+        pdc.set(
+                buffedKey,
+                PersistentDataType.BYTE,
+                (byte) 1
+        );
+
+        pdc.remove(
+                buffingKey
+        );
+
+        } catch (Exception exception) {
+
+            /*
+             * 0.9.0更新：回滚已应用的修改；
+             * 回滚失败则保留 buffingKey 与原始值键，
+             * 由黎明 stripMonster 兜底清理。
+             */
+            boolean rolledBack = true;
+
+            try {
+
+                if (maxHealth != null) {
+
+                    maxHealth.setBaseValue(
+                            Math.max(
+                                    1.0,
+                                    origHealth
+                            )
+                    );
+                }
+
+                if (attack != null) {
+
+                    attack.setBaseValue(
+                            Math.max(
+                                    1.0,
+                                    origDamage
+                            )
+                    );
+                }
+
+                if (equipment != null) {
+
+                    if (mainHandReplaced) {
+
+                        equipment.setItemInMainHand(
+                                originalMain == null
+                                        ? new ItemStack(
+                                                Material.AIR
+                                        )
+                                        : originalMain
+                        );
+                    }
+
+                    if (mainDropZeroed) {
+
+                        Double mainDrop =
+                                pdc.get(
+                                        origMainDropKey,
+                                        PersistentDataType.DOUBLE
+                                );
+
+                        if (mainDrop != null) {
+
+                            equipment
+                                    .setItemInMainHandDropChance(
+                                            mainDrop
+                                                    .floatValue()
+                                    );
+                        }
+                    }
+                }
+
+            } catch (Exception rollback) {
+
+                rolledBack = false;
+
+                exception.addSuppressed(
+                        rollback
+                );
+            }
+
+            if (rolledBack) {
+
+                pdc.remove(buffingKey);
+                pdc.remove(buffedKey);
+                pdc.remove(buffedHealthKey);
+                pdc.remove(buffedDamageKey);
+                pdc.remove(buffedSwordKey);
+                pdc.remove(origHealthKey);
+                pdc.remove(origDamageKey);
+                pdc.remove(origMainHandKey);
+                pdc.remove(origMainDropKey);
+            }
+
+            logger.severe(
+                    () -> "Muma buff failed and rolled back: "
+                            + monster.getType()
+                            + " - "
+                            + exception.getMessage()
             );
         }
     }
@@ -481,7 +744,14 @@ public class MumaNightManager {
      * 1. 空物品不序列化——键不存在即“原本为空手”；
      * 2. 序列化异常时静默降级为空手，绝不让一次 buff 中断整个扫描。
      */
-    private void saveOriginalStack(
+    /**
+     * 保存原装备栈；返回是否成功。
+     *
+     * 0.9.0更新：序列化失败必须返回 false
+     * （社区审查 M-6）——此前"失败即当作原本空手"会
+     * 在黎明恢复时把第三方插件的特殊武器永久清掉。
+     */
+    private boolean saveOriginalStack(
             PersistentDataContainer pdc,
             NamespacedKey key,
             ItemStack stack
@@ -493,7 +763,7 @@ public class MumaNightManager {
                 stack.getType().isAir() ||
                 stack.isEmpty()) {
 
-            return;
+            return true;
         }
 
         try {
@@ -504,9 +774,13 @@ public class MumaNightManager {
                     stack.serializeAsBytes()
             );
 
+            return true;
+
         } catch (IllegalArgumentException e) {
 
             pdc.remove(key);
+
+            return false;
         }
     }
 
@@ -542,7 +816,22 @@ public class MumaNightManager {
                             Attribute.MAX_HEALTH
                     );
 
-            if (maxHealth != null) {
+            Double buffedHealth =
+                    pdc.get(
+                            buffedHealthKey,
+                            PersistentDataType.DOUBLE
+                    );
+
+            /*
+             * 0.9.0更新：仅当当前值仍是我们写入的
+             * 强化值时才恢复；其它系统改过就绝不覆盖。
+             */
+            if (maxHealth != null &&
+                    (buffedHealth == null ||
+                            Math.abs(
+                                    maxHealth.getBaseValue()
+                                            - buffedHealth
+                            ) < 1e-6)) {
 
                 maxHealth.setBaseValue(
                         Math.max(
@@ -568,7 +857,18 @@ public class MumaNightManager {
                             Attribute.ATTACK_DAMAGE
                     );
 
-            if (attack != null) {
+            Double buffedDamage =
+                    pdc.get(
+                            buffedDamageKey,
+                            PersistentDataType.DOUBLE
+                    );
+
+            if (attack != null &&
+                    (buffedDamage == null ||
+                            Math.abs(
+                                    attack.getBaseValue()
+                                            - buffedDamage
+                            ) < 1e-6)) {
 
                 attack.setBaseValue(
                         Math.max(
@@ -599,21 +899,36 @@ public class MumaNightManager {
                             )
                     );
 
-            ItemStack originalOff =
-                    restoreStack(
-                            pdc.get(
-                                    origOffHandKey,
-                                    PersistentDataType.BYTE_ARRAY
-                            )
+            /*
+             * 0.9.0更新：副手从不保存也从不恢复
+             * （社区审查 P0-2）——origOffHandKey 从未写入，
+             * 恢复会得到 AIR 并强制清空副手（图腾等第三方
+             * 物品直接消失）。
+             */
+            byte[] buffedSwordBytes =
+                    pdc.get(
+                            buffedSwordKey,
+                            PersistentDataType.BYTE_ARRAY
                     );
 
-            equipment.setItemInMainHand(
-                    originalMain
-            );
+            ItemStack currentMain =
+                    equipment.getItemInMainHand();
 
-            equipment.setItemInOffHand(
-                    originalOff
-            );
+            boolean mainIsOurs =
+                    buffedSwordBytes != null &&
+                    currentMain != null &&
+                    !currentMain.getType().isAir() &&
+                    java.util.Arrays.equals(
+                            currentMain.serializeAsBytes(),
+                            buffedSwordBytes
+                    );
+
+            if (mainIsOurs) {
+
+                equipment.setItemInMainHand(
+                        originalMain
+                );
+            }
 
             Double mainDrop =
                     pdc.get(
@@ -621,34 +936,37 @@ public class MumaNightManager {
                             PersistentDataType.DOUBLE
                     );
 
-            Double offDrop =
+            Double buffedMainDrop =
                     pdc.get(
-                            origOffDropKey,
+                            buffedMainDropKey,
                             PersistentDataType.DOUBLE
                     );
 
-            if (mainDrop != null) {
+            if (mainDrop != null &&
+                    (buffedMainDrop == null ||
+                            Math.abs(
+                                    equipment
+                                            .getItemInMainHandDropChance()
+                                            - buffedMainDrop
+                            ) < 1e-6)) {
 
                 equipment.setItemInMainHandDropChance(
                         mainDrop.floatValue()
                 );
             }
 
-            if (offDrop != null) {
-
-                equipment.setItemInOffHandDropChance(
-                        offDrop.floatValue()
-                );
-            }
         }
 
         pdc.remove(buffedKey);
+        pdc.remove(buffingKey);
+        pdc.remove(buffedHealthKey);
+        pdc.remove(buffedDamageKey);
+        pdc.remove(buffedSwordKey);
         pdc.remove(origHealthKey);
         pdc.remove(origDamageKey);
         pdc.remove(origMainHandKey);
-        pdc.remove(origOffHandKey);
         pdc.remove(origMainDropKey);
-        pdc.remove(origOffDropKey);
+        pdc.remove(buffedMainDropKey);
     }
 
     /*
@@ -1084,3 +1402,4 @@ public class MumaNightManager {
         }
     }
 }
+

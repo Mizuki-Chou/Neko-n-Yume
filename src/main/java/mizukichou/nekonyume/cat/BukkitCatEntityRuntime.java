@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.cat;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -11,6 +12,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import io.papermc.paper.registry.RegistryAccess;
@@ -33,6 +35,18 @@ public final class BukkitCatEntityRuntime implements CatEntityRuntime {
     }
 
     @Override
+    public Collection<Player> onlinePlayers() {
+        return new ArrayList<>(Bukkit.getOnlinePlayers());
+    }
+
+    @Override
+    public Collection<World> onlineWorlds() {
+        return new ArrayList<>(
+                Bukkit.getWorlds()
+        );
+    }
+
+    @Override
     public Collection<Cat> catsIn(World world) {
         return world.getEntitiesByClass(Cat.class);
     }
@@ -52,6 +66,11 @@ public final class BukkitCatEntityRuntime implements CatEntityRuntime {
     @Override
     public void runTask(Runnable task) {
         Bukkit.getScheduler().runTask(plugin, task);
+    }
+
+    @Override
+    public void runTaskAsync(Runnable task) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
     }
 
     @Override
@@ -216,3 +235,4 @@ public final class BukkitCatEntityRuntime implements CatEntityRuntime {
         Bukkit.getPluginManager().callEvent(event);
     }
 }
+

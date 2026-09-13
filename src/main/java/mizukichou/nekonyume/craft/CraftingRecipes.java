@@ -15,10 +15,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 合成配方注册器。
+ * 合成配方注册器捏。
  *
  * <p>
- * 喵丹升级：9 × 低级喵丹 → 1 × 高级喵丹（平凡为最低级，不可合成）。
+ * 喵丹升级哒：9 × 低级喵丹 → 1 × 高级喵丹（平凡为最低级，不可合成）。
  * </p>
  *
  * <p>
@@ -48,7 +48,7 @@ public class CraftingRecipes {
             new ArrayList<>();
 
     /*
-     * 仅喵丹升级配方的键（0.8.1 R5，社区上报）：
+     * 仅喵丹升级配方的键：
      * 供 MeowDanCraftListener 严格判定“命中的配方是否是本插件的”，
      * 不再用“结果是金粒”这类宽泛启发式误伤其他插件的 9×金粒配方。
      */
@@ -213,7 +213,7 @@ public class CraftingRecipes {
     }
 
     /**
-     * 0.8.1 R5（社区上报）：
+     * 
      * 严格判定某个配方键是否属于本插件的喵丹升级配方。
      */
     public boolean isMeowDanUpgradeKey(
@@ -226,3 +226,4 @@ public class CraftingRecipes {
                 );
     }
 }
+

@@ -521,6 +521,18 @@ class EquipBagOddsTest {
 
                 return value;
             }
+
+            /*
+             * 0.9.0更新：生产代码已改全域长整型抽取
+             * （nextLong），测试桩同步覆盖。
+             */
+            @Override
+            public long nextLong(
+                    long bound
+            ) {
+
+                return value;
+            }
         };
     }
 
@@ -538,3 +550,4 @@ class EquipBagOddsTest {
         };
     }
 }
+

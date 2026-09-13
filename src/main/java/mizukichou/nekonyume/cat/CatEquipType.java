@@ -5,7 +5,7 @@ import org.bukkit.Material;
 import lombok.Getter;
 
 /*
- * 装备类型（0.8.0 装备系统）。
+ * 装备类型（0.8.0 装备系统）哒。
  *
  * 五型：项圈（战斗向）、铃铛（辅助向）、围巾（续航向）、
  * 名牌（成长向）、毛线球（节奏向）。
@@ -65,3 +65,4 @@ public enum CatEquipType {
         this.modelDataBase = modelDataBase;
     }
 }
+

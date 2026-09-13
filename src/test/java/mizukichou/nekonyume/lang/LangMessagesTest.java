@@ -278,7 +278,7 @@ class LangMessagesTest {
     void placeholderInChildKeepsParentText() {
 
         /*
-         * 0.8.1 回归（P0）：
+         * 
          * 占位符位于嵌套子标签内、父节点带前缀文本时，
          * 替换后父节点文本绝不能丢失。
          *
@@ -306,7 +306,7 @@ class LangMessagesTest {
     void placeholderInChildKeepsTrailingSiblingText() {
 
         /*
-         * 0.8.1 回归（P0）：
+         * 
          * 子标签之后的兄弟文本（如 equip.done 的「已装备!」）
          * 同样必须保留。
          */
@@ -517,7 +517,7 @@ class LangMessagesTest {
     }
 
     /*
-     * 0.8.1 R5（社区上报）：
+     * 
      * 服务器端覆盖文件是局部覆盖——深度合并后，
      * 未提及的键保留内建值，提及的键被覆盖。
      */
@@ -669,3 +669,4 @@ class LangMessagesTest {
     }
 
 }
+

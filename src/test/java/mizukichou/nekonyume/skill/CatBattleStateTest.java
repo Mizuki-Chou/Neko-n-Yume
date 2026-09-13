@@ -22,6 +22,50 @@ class CatBattleStateTest {
         state = new CatBattleState();
     }
 
+    /*
+     * 0.9.0更新：影袭计数契约——预读不推进，
+     * markAttack（攻击确认落地）才推进；
+     * 模 5 循环保证长期运行不溢出。
+     */
+    @Test
+    void shadowStrikeCountAdvancesOnlyOnMarkedAttacks() {
+
+        UUID cat = UUID.randomUUID();
+
+        assertEquals(
+                1,
+                state.peekAttackCount(cat)
+        );
+
+        assertEquals(
+                1,
+                state.peekAttackCount(cat),
+                "预读不得推进计数"
+        );
+
+        for (int expected = 2;
+                expected <= 5;
+                expected++) {
+
+            state.markAttack(cat);
+
+            assertEquals(
+                    expected,
+                    state.peekAttackCount(cat)
+            );
+        }
+
+        /*
+         * 第 5 击后回到 1（模 5 循环）。
+         */
+        state.markAttack(cat);
+
+        assertEquals(
+                1,
+                state.peekAttackCount(cat)
+        );
+    }
+
     @Test
     void cleanupRemovesStaleEntityStates() {
 
@@ -169,3 +213,4 @@ class CatBattleStateTest {
         );
     }
 }
+

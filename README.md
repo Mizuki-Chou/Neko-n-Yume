@@ -6,7 +6,11 @@
   <a href="README.md">简体中文</a> ·
   <a href="README/README.zh-TW.md">繁體中文</a> ·
   <a href="README/README.en.md">English</a> ·
-  <a href="README/README.ja.md">日本語</a>
+  <a href="README/README.ja.md">日本語</a> ·
+  <a href="README/README.ko.md">한국어</a> ·
+  <a href="README/README.fr.md">Français</a> ·
+  <a href="README/README.de.md">Deutsch</a> ·
+  <a href="README/README.es.md">Español</a>
 </p>
 
 > 愿你与它，共度一场方块世界中的温柔。

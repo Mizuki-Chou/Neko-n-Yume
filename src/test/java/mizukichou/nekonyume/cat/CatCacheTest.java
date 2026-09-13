@@ -33,8 +33,20 @@ class CatCacheTest {
     void setUp() {
 
         store = new MemoryCatStore();
+        mizukichou.nekonyume.config.ConfigManager configManager =
+                new mizukichou.nekonyume.config.ConfigManager(
+                        () -> org.bukkit.configuration.file
+                                .YamlConfiguration.loadConfiguration(
+                                        new java.io.StringReader(
+                                                ""
+                                        )
+                                ),
+                        Logger.getLogger("CatCacheTest")
+                );
+
         cache = new CatCache(
                 store,
+                configManager,
                 Logger.getLogger("CatCacheTest")
         );
     }
@@ -140,3 +152,4 @@ class CatCacheTest {
         assertNull(cache.getCatByEntity(entity));
     }
 }
+

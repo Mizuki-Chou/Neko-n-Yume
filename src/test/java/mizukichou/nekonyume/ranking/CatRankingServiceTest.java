@@ -325,3 +325,4 @@ class CatRankingServiceTest {
     }
 
 }
+

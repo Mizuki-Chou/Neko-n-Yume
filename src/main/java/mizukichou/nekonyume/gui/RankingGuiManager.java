@@ -21,11 +21,11 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 全服猫咪排行面板（0.8.5）。
+ * 这里就是全服猫咪排行面板捏。
  *
  * <p>
  * 布局（54 格）：
- * 外圈一圈玻璃边框；
+ * 外圈一圈玻璃边框哒；
  * 中间 4×7 =28 个猫咪格子（图标 = 主人头颅）；
  * 底部：上一页 / 排序切换 / 下一页 / 关闭。
  * 排行数据来自 {@link CatRankingService}（Splay 树分页）。
@@ -205,7 +205,25 @@ public final class RankingGuiManager {
 
             /*
              * 管理员模式：左键猫咪格子进入该猫详情面板。
+             *
+             * 0.9.0更新：每次敏感操作回查权限——
+             * GUI 状态不是授权凭证，撤权后不得继续查看
+             * 管理员详情。
              */
+            if (!player.hasPermission(
+                    "nekoyume.admin"
+            )) {
+
+                state.adminMode = false;
+
+                openPage(
+                        player,
+                        state
+                );
+
+                return;
+            }
+
             CatRankEntry entry =
                     contentEntry(
                             state,
@@ -242,23 +260,22 @@ public final class RankingGuiManager {
             return null;
         }
 
-        CatRanking ranking =
-                rankingService.buildRanking(
-                        state.mode,
-                        this::ownerDisplayName
-                );
-
+        /*
+         * 从打开页快照取条目，
+         * 显示内容 == 点击目标，天然一致。
+         */
         List<CatRankEntry> page =
-                ranking.page(
-                        state.pageIndex,
-                        PAGE_SIZE
-                );
+                state.displayedPage;
 
-        if (index >= page.size()) {
+        if (page == null ||
+                index >= page.size()) {
+
             return null;
         }
 
-        return page.get(index);
+        return page.get(
+                index
+        );
     }
 
     /**
@@ -304,6 +321,8 @@ public final class RankingGuiManager {
                                 "gui.ranking-title"
                         )
                 );
+
+        ((GuiHolder) inventory.getHolder()).bind(inventory);
 
         ItemStack border =
                 item(
@@ -359,6 +378,9 @@ public final class RankingGuiManager {
 
         if (total == 0) {
 
+            state.displayedPage =
+                    List.of();
+
             inventory.setItem(
                     SLOT_EMPTY_HINT,
                     item(
@@ -379,6 +401,18 @@ public final class RankingGuiManager {
                 ranking.page(
                         state.pageIndex,
                         PAGE_SIZE
+                );
+
+        /*
+         * 保存当前页快照。
+         * 点击时从快照取条目——若重新 buildRanking，
+         * 打开与点击之间排行榜变化会导致"看到的猫"与
+         * "点到的猫"不是同一只，管理员删除确认时
+         * 可能误删别人的猫（TOCTOU）。
+         */
+        state.displayedPage =
+                List.copyOf(
+                        page
                 );
 
         int rankBase =
@@ -424,7 +458,7 @@ public final class RankingGuiManager {
         if (meta != null) {
 
             /*
-             * 0.8.5 R4（实机日志第三轮）：
+             * 0.9.0更新：
              * setOwningPlayer 内部会先取 OfflinePlayer#getPlayerProfile()，
              * 该调用本身就会调度异步补全（getUpdatedProfile → Mojang HTTP），
              * 28 格排行依旧会打满 429 限流。
@@ -603,5 +637,12 @@ meta.setDisplayName(
         private int pageIndex;
 
         private boolean adminMode;
+
+        /**
+         * 当前显示页快照（打开/翻页时更新）。
+         * 点击条目一律从快照取，防 TOCTOU。
+         */
+        private List<CatRankEntry> displayedPage;
     }
 }
+

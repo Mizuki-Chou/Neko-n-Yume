@@ -58,9 +58,22 @@ final class CatStoreGrowth {
             int amount
     ) {
 
+        /*
+         * 0.9.0更新：long 域加法后钳制——
+         * int 加法溢出会写出负数/回绕值。
+         */
+        long next =
+                (long) getCatLevel(playerUUID) + amount;
+
         setCatLevel(
                 playerUUID,
-                getCatLevel(playerUUID) + amount
+                (int) Math.min(
+                        Integer.MAX_VALUE,
+                        Math.max(
+                                1L,
+                                next
+                        )
+                )
         );
     }
 
@@ -181,6 +194,33 @@ final class CatStoreGrowth {
                     : tier.name();
         }
 
+        /*
+         * 0.9.0更新：非法 tier 不继续留在 Raw
+         * Store——立即 canonicalize（确定性回退 + 写回），
+         * 让所有读口（GUI/管理命令/适配器）看到的永远
+         * 是合法枚举。
+         */
+        if (CatTier.fromName(value) == null) {
+
+            CatTier fallback =
+                    CatTier.fromCatId(
+                            store.getCatUUID(playerUUID)
+                    );
+
+            if (fallback != null) {
+
+                store.setRaw(
+                        playerUUID,
+                        AbstractCatStore.FIELD_TIER,
+                        fallback.name()
+                );
+            }
+
+            return fallback == null
+                    ? null
+                    : fallback.name();
+        }
+
         return value;
     }
 
@@ -241,3 +281,4 @@ final class CatStoreGrowth {
         );
     }
 }
+

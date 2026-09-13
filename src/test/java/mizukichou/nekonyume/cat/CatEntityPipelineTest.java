@@ -174,6 +174,63 @@ class CatEntityPipelineTest {
         assertFalse(h.store.hasCat(h.playerUuid), "登录恢复的旧回调绝不能复活数据");
     }
 
+    /**
+     * 0.9.0更新：R14-01 回归守护——按存档位置恢复时
+     * token 有效的正常路径必须生成猫（此前校验条件
+     * 反转，合法恢复会把刚生成的猫立即 remove）。
+     */
+    @Test
+    void savedLocationRestoreWithValidTokenSpawnsCat() {
+
+        PipelineHarness h = PipelineHarness.create();
+
+        h.createLogicalCat();
+
+        h.store.setCatLocation(
+                h.playerUuid,
+                h.world.getUID(),
+                100,
+                64,
+                100
+        );
+
+        h.runtime.registerChunk(
+                h.world,
+                6,
+                6,
+                h.fakeChunk(h.world, 6, 6, List.of())
+        );
+
+        h.restorer.restoreCatEntity(h.player);
+
+        assertEquals(
+                1,
+                h.runtime.spawned.size(),
+                "有效代际下按存档位置恢复必须生成实体"
+        );
+
+        UUID entityUuid =
+                h.store.getCatEntityUUID(
+                        h.playerUuid
+                );
+
+        assertNotNull(
+                entityUuid,
+                "生成的实体必须写回存档"
+        );
+
+        java.util.List<String> calls =
+                h.runtime.catCalls.get(
+                        entityUuid
+                );
+
+        assertFalse(
+                calls != null &&
+                        calls.contains("remove"),
+                "token 有效时刚生成的猫绝不能被误删"
+        );
+    }
+
     @Test
     void cleanupDuplicateCatsRemovesOnlyOthers() {
 
@@ -250,3 +307,4 @@ class CatEntityPipelineTest {
         assertNotNull(h.store.getCatEntityUUID(h.playerUuid));
     }
 }
+

@@ -7,10 +7,10 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * 猫咪花色服务。
+ * 猫咪花色服务啦。
  *
  * <p>
- * 从 CatEntityService 抽出，阻止其继续膨胀：
+ * 从 CatEntityService 抽出来，别让它继续膨胀啦：
  * 花色解析 / 随机花色 / 持久化 / 恢复规则。
  * 0.8.4 起注册表访问经 {@link CatEntityRuntime} 收口，可在无服务端环境测试。
  * </p>
@@ -35,7 +35,17 @@ public class CatVariantService {
 
     public org.bukkit.entity.Cat.Type getRandomType() {
 
-        return runtime.randomCatType();
+        org.bukkit.entity.Cat.Type type =
+                runtime.randomCatType();
+
+        /*
+         * 0.9.0更新：provider 返回 null 时
+         * 稳定回退到 TABBY——绝不让"无花色信息"进入实体
+         * （否则每次恢复都重新随机）。
+         */
+        return type == null
+                ? org.bukkit.entity.Cat.Type.TABBY
+                : type;
     }
 
     public String saveVariant(
@@ -189,3 +199,4 @@ public class CatVariantService {
         );
     }
 }
+

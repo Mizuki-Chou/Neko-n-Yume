@@ -45,3 +45,4 @@ public final class GiftItemEntry {
         return meowDanQuality != null;
     }
 }
+

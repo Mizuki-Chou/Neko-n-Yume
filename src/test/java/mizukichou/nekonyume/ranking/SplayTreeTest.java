@@ -3,6 +3,7 @@ package mizukichou.nekonyume.ranking;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 import java.util.TreeMap;
@@ -757,6 +758,48 @@ class SplayTreeTest {
         assertEquals(values.get(0), tree.select(1));
         assertEquals(values.get(4999), tree.select(5000));
         for (int i = 0; i < 5000; i += 97) assertEquals(values.get(i), tree.select(i + 1));
+    }
+
+
+    /*
+     * 0.9.0更新：重复键下 rankOf 必须返回
+     * "首个相等实例在全序中的位次"——equal 时继续左走、
+     * 不加左子树大小的搜索路径语义。
+     */
+    @Test
+    void duplicateKeysRankOfReturnsLeftmostPosition() {
+
+        SplayTree<Integer> tree =
+                new SplayTree<>(
+                        Comparator.naturalOrder()
+                );
+
+        tree.insert(5);
+        tree.insert(5);
+        tree.insert(5);
+        tree.insert(2);
+        tree.insert(8);
+
+        assertEquals(
+                2,
+                tree.rankOf(
+                        5
+                )
+        );
+
+        assertEquals(
+                1,
+                tree.rankOf(
+                        2
+                )
+        );
+
+        assertEquals(
+                5,
+                tree.rankOf(
+                        8
+                )
+        );
     }
 
 }

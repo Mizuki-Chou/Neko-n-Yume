@@ -45,6 +45,33 @@ public class AdminGiveGuiListener implements Listener {
             return;
         }
 
+        /*
+         * 仅处理面板顶部槽位。
+         * 底部（玩家背包）点击不属于发放面板交互啦，
+         * 既不取消也不进业务层啦——否则管理员可点击
+         * 自己背包里的任意物品无限复制。
+         */
+        int rawSlot =
+                event.getRawSlot();
+
+        if (rawSlot < 0 ||
+                rawSlot >=
+                        event.getView()
+                                .getTopInventory()
+                                .getSize()) {
+
+            /*
+             * 0.9.0更新：底部点击同样取消——
+             * 否则 shift 点击背包物品会把它塞进面板空槽，
+             * 再点击该槽即 clone 复制任意物品。
+             */
+            event.setCancelled(
+                    true
+            );
+
+            return;
+        }
+
         event.setCancelled(
                 true
         );
@@ -102,3 +129,4 @@ public class AdminGiveGuiListener implements Listener {
         }
     }
 }
+

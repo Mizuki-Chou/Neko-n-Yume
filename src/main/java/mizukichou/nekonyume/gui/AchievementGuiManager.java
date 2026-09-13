@@ -17,12 +17,12 @@ import java.util.Arrays;
 import java.util.UUID;
 
 /**
- * 成就殿堂面板（54 格）。
+ * 成就殿堂面板（54 格），好耶。
  *
  * <p>
  * 布局：
- * 顶部信息行（成就殿堂 / 猫头 / 关闭），
- * 成就区自第 9 格起，按枚举顺序排列 18 个成就。
+ * 顶部信息行（成就殿堂 / 猫头 / 关闭）啦，
+ * 成就区自第 9 格起，按枚举顺序排列 18 个成就捏。
  * 面板只读：已解锁显示绿色勾选，
  * 未解锁显示当前进度 / 阈值。
  * </p>
@@ -92,6 +92,8 @@ public class AchievementGuiManager {
                                 "achievement-gui.title"
                         )
                 );
+
+        ((GuiHolder) inventory.getHolder()).bind(inventory);
 
         /*
          * 装饰背景。
@@ -368,3 +370,4 @@ public class AchievementGuiManager {
         return item;
     }
 }
+

@@ -74,6 +74,7 @@ public abstract class AbstractCatStore implements CatStore {
     protected static final String FIELD_TIER = "tier";
     protected static final String FIELD_SKILLS = "skills";
     protected static final String FIELD_VARIANT = "variant";
+    protected static final String FIELD_MODEL_ID = "model-id";
     protected static final String FIELD_EQUIPMENT = "equipment";
     protected static final String FIELD_EQUIPMENT_BONUS = "equipment-bonus";
     protected static final String FIELD_ENTITY_UUID = "entity-uuid";
@@ -82,6 +83,10 @@ public abstract class AbstractCatStore implements CatStore {
     protected static final String FIELD_X = "x";
     protected static final String FIELD_Y = "y";
     protected static final String FIELD_Z = "z";
+
+    protected static final String FIELD_YAW = "yaw";
+
+    protected static final String FIELD_PITCH = "pitch";
     protected static final String FIELD_ACHIEVEMENTS_UNLOCKED = "achievements-unlocked";
     protected static final String FIELD_ACHIEVEMENTS_PROGRESS = "achievements-progress";
     protected static final String FIELD_ACHIEVEMENTS_PENDING = "achievements-pending";
@@ -233,7 +238,12 @@ public abstract class AbstractCatStore implements CatStore {
             Map<String, Object> fields
     );
 
-    protected abstract void deleteRaw(UUID playerUUID);
+    /**
+     * 删除底层数据；返回是否成功（0.9.0更新，社区审查
+     * P0-1）——墓碑落盘失败等 fail-closed 路径必须把
+     * false 传回 removeCat。
+     */
+    protected abstract boolean deleteRaw(UUID playerUUID);
 
     /**
      * 返回所有玩家节点（包括无猫数据的玩家节点）。
@@ -277,7 +287,7 @@ public abstract class AbstractCatStore implements CatStore {
         if (value instanceof java.util.Date date) {
 
             /*
-             * 0.8.4 R22（社区反馈）：
+             * 
              * 业务日期是纯日期（无时区语义，写入时即
              * "yyyy-MM-dd"），格式化必须固定 UTC——用 JVM
              * 默认时区在 UTC 以西的环境会把午夜 UTC 的
@@ -316,9 +326,44 @@ public abstract class AbstractCatStore implements CatStore {
 
         Object value = getRaw(playerUUID, field);
 
-        return value instanceof Number n
-                ? n.intValue()
-                : def;
+        if (value instanceof Number n) {
+
+            /*
+             * 0.9.0更新：损坏数据不静默 narrowing——
+             * 超出 int 范围的数值返回默认值并告警（4294967297
+             * 不再悄无声息变 1）。
+             */
+            long wide =
+                    n.longValue();
+
+            if (wide < Integer.MIN_VALUE ||
+                    wide > Integer.MAX_VALUE) {
+
+                corruptionWarning(
+                        playerUUID,
+                        field,
+                        n.toString()
+                );
+
+                return def;
+            }
+
+            return (int) wide;
+        }
+
+        return def;
+    }
+
+    /**
+     * 损坏数值告警（子类可覆写接入 logger）。
+     */
+    protected void corruptionWarning(
+            UUID playerUUID,
+            String field,
+            String rawValue
+    ) {
+
+        // 默认静默——实现类按需接入日志。
     }
 
     protected final long getLong(
@@ -354,9 +399,31 @@ public abstract class AbstractCatStore implements CatStore {
 
         Object value = getRaw(playerUUID, field);
 
-        return value instanceof Number n
-                ? n.doubleValue()
-                : def;
+        if (value instanceof Number n) {
+
+            /*
+             * 0.9.0更新：读取方向同写入一样
+             * 防非有限值——NaN/Infinity 坐标不再进入 Cat
+             * 并污染实体恢复（Math.floor(NaN) 等）。
+             */
+            double wide =
+                    n.doubleValue();
+
+            if (!Double.isFinite(wide)) {
+
+                corruptionWarning(
+                        playerUUID,
+                        field,
+                        n.toString()
+                );
+
+                return def;
+            }
+
+            return wide;
+        }
+
+        return def;
     }
 
     /*
@@ -527,7 +594,17 @@ public abstract class AbstractCatStore implements CatStore {
             return false;
         }
 
-        deleteRaw(playerUUID);
+        if (!deleteRaw(playerUUID)) {
+
+            /*
+             * 0.9.0更新：fail-closed（社区审查 P0-1）——
+             * 删除失败必须向上报失败，调用方不得继续
+             * 清实体/清缓存。
+             */
+            return false;
+        }
+
+
 
         /*
          * 不可逆操作：提交快照后阻塞至多 3 秒等待落盘（0.7.4）。
@@ -783,6 +860,11 @@ public abstract class AbstractCatStore implements CatStore {
     }
 
     @Override
+    public void setCatPetCount(UUID playerUUID, int count) {
+        interactions.setCatPetCount(playerUUID, count);
+    }
+
+    @Override
     public int getCatFeedCount(UUID playerUUID) {
         return interactions.getCatFeedCount(playerUUID);
     }
@@ -790,6 +872,11 @@ public abstract class AbstractCatStore implements CatStore {
     @Override
     public void addCatFeedCount(UUID playerUUID) {
         interactions.addCatFeedCount(playerUUID);
+    }
+
+    @Override
+    public void setCatFeedCount(UUID playerUUID, int count) {
+        interactions.setCatFeedCount(playerUUID, count);
     }
 
     @Override
@@ -830,6 +917,16 @@ public abstract class AbstractCatStore implements CatStore {
     @Override
     public void setCatVariant(UUID playerUUID, String variant) {
         presence.setCatVariant(playerUUID, variant);
+    }
+
+    @Override
+    public String getCatModelId(UUID playerUUID) {
+        return presence.getCatModelId(playerUUID);
+    }
+
+    @Override
+    public void setCatModelId(UUID playerUUID, String modelId) {
+        presence.setCatModelId(playerUUID, modelId);
     }
 
     @Override
@@ -890,6 +987,50 @@ public abstract class AbstractCatStore implements CatStore {
     @Override
     public double getCatZ(UUID playerUUID) {
         return presence.getCatZ(playerUUID);
+    }
+
+    @Override
+    public float getCatYaw(
+            UUID playerUUID
+    ) {
+
+        return presence.getCatYaw(
+                playerUUID
+        );
+    }
+
+    @Override
+    public float getCatPitch(
+            UUID playerUUID
+    ) {
+
+        return presence.getCatPitch(
+                playerUUID
+        );
+    }
+
+    @Override
+    public void setCatYaw(
+            UUID playerUUID,
+            float yaw
+    ) {
+
+        presence.setCatYaw(
+                playerUUID,
+                yaw
+        );
+    }
+
+    @Override
+    public void setCatPitch(
+            UUID playerUUID,
+            float pitch
+    ) {
+
+        presence.setCatPitch(
+                playerUUID,
+                pitch
+        );
     }
 
     @Override
@@ -956,7 +1097,7 @@ public abstract class AbstractCatStore implements CatStore {
     }
 
     /*
-     * 0.8.4 R17（社区上报）：
+     * 
      * 逐币种“已发放”标记——与经验/喵力同文档同快照落盘，
      * 奖励发放具备幂等性：异常/崩溃后补发绝不重复，
      * 也不永久丢失。
@@ -993,6 +1134,76 @@ public abstract class AbstractCatStore implements CatStore {
     }
 
     @Override
+    public int applyAchievementXpReward(
+            UUID playerUUID,
+            String id,
+            int xp
+    ) {
+
+        int current =
+                getCatExperience(
+                        playerUUID
+                );
+
+        int applied =
+                (int) Math.min(
+                        Integer.MAX_VALUE,
+                        (long) current
+                                + Math.max(
+                                0,
+                                xp
+                        )
+                );
+
+        setCatExperience(
+                playerUUID,
+                applied
+        );
+
+        achievements.addRewardXpApplied(
+                playerUUID,
+                id
+        );
+
+        return applied;
+    }
+
+    @Override
+    public int applyAchievementMeowReward(
+            UUID playerUUID,
+            String id,
+            int meow
+    ) {
+
+        int current =
+                growth.getCatMeowPower(
+                        playerUUID
+                );
+
+        int applied =
+                (int) Math.min(
+                        Integer.MAX_VALUE,
+                        (long) current
+                                + Math.max(
+                                0,
+                                meow
+                        )
+                );
+
+        growth.setCatMeowPower(
+                playerUUID,
+                applied
+        );
+
+        achievements.addRewardMeowApplied(
+                playerUUID,
+                id
+        );
+
+        return applied;
+    }
+
+    @Override
     public int getAchievementProgress(UUID playerUUID, String key) {
         return achievements.getAchievementProgress(playerUUID, key);
     }
@@ -1007,3 +1218,4 @@ public abstract class AbstractCatStore implements CatStore {
         achievements.addAchievementProgress(playerUUID, key, amount);
     }
 }
+

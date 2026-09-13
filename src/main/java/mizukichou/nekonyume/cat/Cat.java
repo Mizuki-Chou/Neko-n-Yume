@@ -8,15 +8,15 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Neko n' Yume 的猫咪数据模型。
+ * Neko n' Yume 的猫咪数据模型捏。
  *
  * <p>
  * 这个 Cat 不是 Bukkit 的 org.bukkit.entity.Cat。
- * 它代表的是 Neko n' Yume 中一只猫咪的完整运行时数据。
+ * 它代表的是 Neko n' Yume 中一只猫咪的完整运行时数据啦。
  * </p>
  *
  * <p>
- * Cat 是运行期间的猫咪状态真相。
+ * Cat 是运行期间的猫咪状态真相啦。
  * CatStore 负责持久化这些状态。
  * </p>
  *
@@ -194,6 +194,22 @@ public class Cat {
      */
     private String variant;
 
+    /**
+     * 视觉模型 ID（Generic Model 系统，预留）。
+     *
+     * <p>
+     * 例如 {@code "cats:black_cat"}。
+     * {@code null} = 未指定，运行时回退为默认模型 / 原版视觉。
+     * </p>
+     *
+     * <p>
+     * 只作为猫到模型的引用，不保存任何模型数据。
+     * 恢复时由调用方（AbstractCatStore）通过
+     * {@link #setModelId(String)} 设置。
+     * </p>
+     */
+    private String modelId;
+
     /*
      * ============================================================
      * 装备（0.8.0）
@@ -225,6 +241,101 @@ public class Cat {
 
     private float yaw;
     private float pitch;
+
+    /*
+     * 0.9.0更新：位置/实体绑定字段的显式 setter
+     * （覆盖 Lombok 裸 setter）——Cat 是自身不变量的主人，
+     * 位置状态也必须拒绝 NaN/Infinity/非法朝向，绝不让
+     * 损坏状态进入核心对象再污染恢复/保存/模型系统。
+     */
+
+    public void setWorldName(
+            String worldName
+    ) {
+
+        this.worldName = worldName;
+    }
+
+    /*
+     * 0.9.0更新：世界 UUID 持久化字段——
+     * 位置落盘不依赖 World 对象已加载（世界卸载期间
+     * 的坐标更新同样保存）。
+     */
+    private String worldUUID;
+
+    public String getWorldUUID() {
+
+        return worldUUID;
+    }
+
+    public void setWorldUUID(
+            String worldUUID
+    ) {
+
+        this.worldUUID = worldUUID;
+    }
+
+    public void setX(
+            double x
+    ) {
+
+        if (!Double.isFinite(x)) {
+            return;
+        }
+
+        this.x = x;
+    }
+
+    public void setY(
+            double y
+    ) {
+
+        if (!Double.isFinite(y)) {
+            return;
+        }
+
+        this.y = y;
+    }
+
+    public void setZ(
+            double z
+    ) {
+
+        if (!Double.isFinite(z)) {
+            return;
+        }
+
+        this.z = z;
+    }
+
+    public void setYaw(
+            float yaw
+    ) {
+
+        if (!Float.isFinite(yaw)) {
+            return;
+        }
+
+        this.yaw = yaw;
+    }
+
+    public void setPitch(
+            float pitch
+    ) {
+
+        if (!Float.isFinite(pitch)) {
+            return;
+        }
+
+        this.pitch = pitch;
+    }
+
+    public void setEntityUuid(
+            UUID entityUuid
+    ) {
+
+        this.entityUuid = entityUuid;
+    }
 
     /*
      * ============================================================
@@ -522,7 +633,7 @@ public class Cat {
     ) {
 
         /*
-         * 0.8.4 R21（社区上报 L-NEW-09/10）：
+         * 
          * 等级与 GrowthMath.MAX_LEVEL 统一为一个不变量，
          * 损坏数据无法再把等级抬到 10000 以上或溢出为负。
          */
@@ -541,7 +652,7 @@ public class Cat {
     ) {
 
         /*
-         * 0.8.4 R21（社区上报 L-NEW-09）：
+         * 
          * long 数学 + 饱和钳制——this.level + amount 的
          * int 溢出不再能把等级打回 1。
          */
@@ -575,9 +686,19 @@ public class Cat {
      * 增加经验（默认曲线 100）。
      *
      * <p>
+     * 0.9.0更新：@Deprecated（社区审查 F-1）——固定曲线
+     * 100 与服务器可配置的 growth.level-curve-base 不一致，
+     * 扩展插件调用本重载会得到与插件内部不同的等级语义；
+     * 请改用曲线感知的 {@link CatProgressionService} 入口。
+     * </p>
+     *
+     * <p>
      * 返回升了几级（0 表示未升级）。
      * </p>
+     *
+     * @deprecated 使用 CatProgressionService 的曲线感知入口。
      */
+    @Deprecated
     public int addExperience(
             int amount
     ) {
@@ -715,7 +836,13 @@ public class Cat {
         int gained =
                 newRank - this.meowRank;
 
-        if (gained > 0) {
+        /*
+         * 0.9.0更新：双向修正（社区审查 RANK-2）——
+         * 热改 rank-curve-offset 后 derived < current，
+         * 此前只允许升不允许降，喵阶永久停留在
+         * 超规格值；现在以当前曲线为真相双向收敛。
+         */
+        if (gained != 0) {
 
             this.meowRank =
                     newRank;
@@ -784,12 +911,12 @@ public class Cat {
     /*
      * 替换指定槽位的技能（用于刷新）。
      */
-    public void setSkillAt(
+    public boolean setSkillAt(
             int index,
             CatSkill skill
     ) {
 
-        skills.set(
+        return skills.set(
                 index,
                 skill
         );
@@ -877,16 +1004,19 @@ public class Cat {
     ) {
 
         /*
-         * 0.8.4 R22（社区反馈）：
+         * 
          * long 中间计算——极端数值下 int 加减溢出后
          * 会被钳制误归零（"加值反而清零"）。
          */
         long next =
                 (long) this.hunger + amount;
 
-        setHunger(
-                (int) next
-        );
+        this.hunger =
+                clampLong(
+                        next,
+                        0,
+                        100
+                );
     }
 
     public void removeHunger(
@@ -894,16 +1024,19 @@ public class Cat {
     ) {
 
         /*
-         * 0.8.4 R22（社区反馈）：
+         * 
          * long 中间计算——极端数值下 int 加减溢出后
          * 会被钳制误归零（"加值反而清零"）。
          */
         long next =
                 (long) this.hunger - amount;
 
-        setHunger(
-                (int) next
-        );
+        this.hunger =
+                clampLong(
+                        next,
+                        0,
+                        100
+                );
     }
 
     /*
@@ -929,16 +1062,19 @@ public class Cat {
     ) {
 
         /*
-         * 0.8.4 R22（社区反馈）：
+         * 
          * long 中间计算——极端数值下 int 加减溢出后
          * 会被钳制误归零（"加值反而清零"）。
          */
         long next =
                 (long) this.affection + amount;
 
-        setAffection(
-                (int) next
-        );
+        this.affection =
+                clampLong(
+                        next,
+                        0,
+                        100
+                );
     }
 
     public void removeAffection(
@@ -946,16 +1082,19 @@ public class Cat {
     ) {
 
         /*
-         * 0.8.4 R22（社区反馈）：
+         * 
          * long 中间计算——极端数值下 int 加减溢出后
          * 会被钳制误归零（"加值反而清零"）。
          */
         long next =
                 (long) this.affection - amount;
 
-        setAffection(
-                (int) next
-        );
+        this.affection =
+                clampLong(
+                        next,
+                        0,
+                        100
+                );
     }
 
     /*
@@ -981,16 +1120,19 @@ public class Cat {
     ) {
 
         /*
-         * 0.8.4 R22（社区反馈）：
+         * 
          * long 中间计算——极端数值下 int 加减溢出后
          * 会被钳制误归零（"加值反而清零"）。
          */
         long next =
                 (long) this.health + amount;
 
-        setHealth(
-                (int) next
-        );
+        this.health =
+                clampLong(
+                        next,
+                        0,
+                        100
+                );
     }
 
     public void removeHealth(
@@ -998,16 +1140,19 @@ public class Cat {
     ) {
 
         /*
-         * 0.8.4 R22（社区反馈）：
+         * 
          * long 中间计算——极端数值下 int 加减溢出后
          * 会被钳制误归零（"加值反而清零"）。
          */
         long next =
                 (long) this.health - amount;
 
-        setHealth(
-                (int) next
-        );
+        this.health =
+                clampLong(
+                        next,
+                        0,
+                        100
+                );
     }
 
     /*
@@ -1037,6 +1182,35 @@ public class Cat {
         }
 
         return variant.trim();
+    }
+
+    /*
+     * ============================================================
+     * 视觉模型（Generic Model 系统，预留）
+     * ============================================================
+     */
+
+    public void setModelId(
+            String modelId
+    ) {
+
+        this.modelId =
+                normalizeModelId(
+                        modelId
+                );
+    }
+
+    private String normalizeModelId(
+            String modelId
+    ) {
+
+        if (modelId == null ||
+                modelId.isBlank()) {
+
+            return null;
+        }
+
+        return modelId.trim();
     }
 
     /*
@@ -1161,7 +1335,7 @@ public class Cat {
 
     /*
      * ============================================================
-     * 实体最大生命（0.8.1 统一公式）
+     * 实体最大生命（统一公式）
      * ============================================================
      *
      * 10 + 等级/4 + 装备生命加成。
@@ -1194,6 +1368,67 @@ public class Cat {
      * ============================================================
      */
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    /**
+     * 0.9.0更新：long 域钳制——add/remove 的中间
+     * 计算在 long 域完成后再钳制、最后 cast；先 cast 后
+     * clamp 会把 4e9 截成负数再归零（"加值反而清零"）。
+     */
+    private int clampLong(
+            long value,
+            int min,
+            int max
+    ) {
+
+        if (value <= min) {
+            return min;
+        }
+
+        if (value >= max) {
+            return max;
+        }
+
+        return (int) value;
+    }
     private int clamp(
             int value,
             int min,
@@ -1234,7 +1469,9 @@ public class Cat {
                 ", affection=" + affection +
                 ", health=" + health +
                 ", variant='" + variant + '\'' +
+                ", modelId='" + modelId + '\'' +
                 ", entityUuid=" + entityUuid +
                 '}';
     }
 }
+

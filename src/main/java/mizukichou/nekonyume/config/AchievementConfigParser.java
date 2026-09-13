@@ -75,3 +75,4 @@ final class AchievementConfigParser {
         );
     }
 }
+

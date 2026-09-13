@@ -26,7 +26,7 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 战斗掉落经验监听（0.7.4）。
+ * 战斗掉落经验监听（0.7.4）喵。
  *
  * <p>
  * 猫击杀敌对生物时，主人的猫咪获得经验：\n
@@ -331,7 +331,7 @@ public class CatBattleLootListener implements Listener {
         }
 
         /*
-         * 0.8.4 R19（社区上报 M-NEW-05）：
+         * 
          * long 区间数学——high = Integer.MAX_VALUE 时
          * high - low + 1 会溢出为负数，nextInt(负界) 直接抛异常。
          */
@@ -351,3 +351,4 @@ public class CatBattleLootListener implements Listener {
         );
     }
 }
+

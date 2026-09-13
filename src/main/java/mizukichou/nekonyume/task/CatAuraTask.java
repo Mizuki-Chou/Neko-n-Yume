@@ -8,6 +8,7 @@ import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.config.ConfigManager;
 import mizukichou.nekonyume.config.ConfigSnapshot;
 import mizukichou.nekonyume.skill.CatBattleState;
+import java.util.Map;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
@@ -19,11 +20,11 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
- * 猫咪光环任务。
+ * 猫咪光环任务捏。
  *
  * <p>
- * 每 2 秒刷新：
- * 跟随模式 + 光环范围内，
+ * 每 2 秒刷新一次啦：
+ * 跟随模式 + 光环范围内哒，
  * 主人获得增益（速度 / 力量 / 再生 / 月华）。
  * </p>
  *
@@ -40,10 +41,38 @@ public class CatAuraTask implements Runnable {
      */
     private static final int AURA_DURATION_SECONDS = 8;
 
+    private static final PotionEffectType[] AURA_EFFECT_TYPES = {
+            PotionEffectType.SPEED,
+            PotionEffectType.STRENGTH,
+            PotionEffectType.REGENERATION
+    };
+
     private final ConfigManager configManager;
     private final CatCache cache;
     private final CatBattleState battleState;
     private final Logger logger;
+
+    /*
+     * 0.9.0更新：光环效果的"记录-比较-恢复"——
+     * 首次进入光环时记录玩家同类型原效果；离开光环时
+     * 恢复（仅当原效果存在），绝不覆盖/永久夺走其它
+     * 系统（插件/管理员/剧情）设置的效果。
+     */
+    private final Map<UUID, Map<PotionEffectType, PotionEffect>>
+            auraPrevious =
+            new java.util.HashMap<>();
+
+    /*
+     * 0.9.0更新：记录我们每个 tick 最后写入的效果
+     * （社区审查 A-1）——离场时只在"当前效果仍是我们
+     * 写的那个"才移除/恢复，其它系统后来的修改绝不覆盖。
+     */
+    private final Map<UUID, Map<PotionEffectType, PotionEffect>>
+            auraLastWritten =
+            new java.util.HashMap<>();
+
+    private final java.util.Set<UUID> activeAuraOwners =
+            new java.util.HashSet<>();
 
     public CatAuraTask(
             ConfigManager configManager,
@@ -67,17 +96,29 @@ public class CatAuraTask implements Runnable {
         if (!config.getAura()
                 .isEnabled()) {
 
+            /*
+             * 0.9.0更新：禁用时把全部玩家视为离场并
+             * 执行清理（社区审查 A-1）——旧 auraPrevious
+             * 不得跨越禁用期保留，重新启用后基于过期
+             * 原始效果恢复。
+             */
+            activeAuraOwners.clear();
+
+            cleanupLeavers();
+
             return;
         }
 
         ConfigSnapshot.Aura auraConfig =
                 config.getAura();
 
+        activeAuraOwners.clear();
+
         for (Cat logicalCat :
                 cache.getCats()) {
 
             /*
-             * 0.8.1 修复（P2）：单猫异常隔离。
+             * 单猫异常隔离。
              */
             try {
 
@@ -94,6 +135,100 @@ public class CatAuraTask implements Runnable {
                                 + ": "
                                 + exception.getMessage()
                 );
+            }
+        }
+
+        cleanupLeavers();
+    }
+
+    /**
+     * 离场清理（0.9.0更新：条件恢复，社区审查 A-1）。
+     * 只在当前效果仍是我们最后写入的那个时才移除/恢复，
+     * 其它系统后来的修改绝不覆盖。
+     */
+    private void cleanupLeavers() {
+
+        for (UUID ownerUuid :
+                new java.util.ArrayList<>(
+                        auraPrevious.keySet()
+                )) {
+
+            if (activeAuraOwners.contains(
+                    ownerUuid
+            )) {
+
+                continue;
+            }
+
+            Player leaving =
+                    Bukkit.getPlayer(
+                            ownerUuid
+                    );
+
+            Map<PotionEffectType, PotionEffect> previous =
+                    auraPrevious.remove(
+                            ownerUuid
+                    );
+
+            Map<PotionEffectType, PotionEffect> lastWritten =
+                    auraLastWritten.remove(
+                            ownerUuid
+                    );
+
+            if (leaving == null ||
+                    !leaving.isOnline() ||
+                    previous == null) {
+
+                continue;
+            }
+
+            for (PotionEffectType type :
+                    AURA_EFFECT_TYPES) {
+
+                PotionEffect ours =
+                        lastWritten == null
+                                ? null
+                                : lastWritten.get(
+                                        type
+                                );
+
+                PotionEffect current =
+                        leaving.getPotionEffect(
+                                type
+                        );
+
+                boolean stillOurs =
+                        ours != null &&
+                        current != null &&
+                        current.getAmplifier() ==
+                                ours.getAmplifier() &&
+                        Math.abs(
+                                current.getDuration()
+                                        - ours.getDuration()
+                        ) <= 25;
+
+                if (!stillOurs) {
+                    continue;
+                }
+
+                leaving.removePotionEffect(
+                        type
+                );
+
+                PotionEffect original =
+                        previous.get(
+                                type
+                        );
+
+                if (original != null &&
+                        !leaving.hasPotionEffect(
+                                type
+                        )) {
+
+                    leaving.addPotionEffect(
+                            original
+                    );
+                }
             }
         }
     }
@@ -210,6 +345,39 @@ public class CatAuraTask implements Runnable {
                 AURA_DURATION_SECONDS * 20;
 
         /*
+         * 首次进入光环（本 tick 首次登记）：记录原效果。
+         */
+        UUID ownerUuid =
+                owner.getUniqueId();
+
+        if (activeAuraOwners.add(
+                ownerUuid
+        ) &&
+                !auraPrevious.containsKey(
+                        ownerUuid
+                )) {
+
+            Map<PotionEffectType, PotionEffect> previous =
+                    new java.util.HashMap<>();
+
+            for (PotionEffectType type :
+                    AURA_EFFECT_TYPES) {
+
+                previous.put(
+                        type,
+                        owner.getPotionEffect(
+                                type
+                        )
+                );
+            }
+
+            auraPrevious.put(
+                    ownerUuid,
+                    previous
+            );
+        }
+
+        /*
          * 速度光环：
          * 等级达标 → +1 级；暖意 → 再 +1 级。
          */
@@ -239,12 +407,11 @@ public class CatAuraTask implements Runnable {
 
         if (speedAmp > 0) {
 
-            owner.addPotionEffect(
-                    new PotionEffect(
-                            PotionEffectType.SPEED,
-                            durationTicks,
-                            speedAmp - 1
-                    )
+            applyEffect(
+                    owner,
+                    PotionEffectType.SPEED,
+                    durationTicks,
+                    speedAmp - 1
             );
         }
 
@@ -254,12 +421,11 @@ public class CatAuraTask implements Runnable {
         if (logicalCat.getMeowRank() >=
                 auraConfig.getStrengthUnlockMeowRank()) {
 
-            owner.addPotionEffect(
-                    new PotionEffect(
-                            PotionEffectType.STRENGTH,
-                            durationTicks,
-                            0
-                    )
+            applyEffect(
+                    owner,
+                    PotionEffectType.STRENGTH,
+                    durationTicks,
+                    0
             );
         }
 
@@ -271,12 +437,11 @@ public class CatAuraTask implements Runnable {
                 logicalCat.getAffection() >=
                         auraConfig.getRegenAffection()) {
 
-            owner.addPotionEffect(
-                    new PotionEffect(
-                            PotionEffectType.REGENERATION,
-                            durationTicks,
-                            0
-                    )
+            applyEffect(
+                    owner,
+                    PotionEffectType.REGENERATION,
+                    durationTicks,
+                    0
             );
         }
 
@@ -299,32 +464,62 @@ public class CatAuraTask implements Runnable {
 
             if (night) {
 
-                owner.addPotionEffect(
-                        new PotionEffect(
-                                PotionEffectType.STRENGTH,
-                                durationTicks,
-                                0
-                        )
+                applyEffect(
+                        owner,
+                        PotionEffectType.STRENGTH,
+                        durationTicks,
+                        0
                 );
 
-                owner.addPotionEffect(
-                        new PotionEffect(
-                                PotionEffectType.SPEED,
-                                durationTicks,
-                                0
-                        )
+                applyEffect(
+                        owner,
+                        PotionEffectType.SPEED,
+                        durationTicks,
+                        0
                 );
 
             } else {
 
-                owner.addPotionEffect(
-                        new PotionEffect(
-                                PotionEffectType.REGENERATION,
-                                durationTicks,
-                                0
-                        )
+                applyEffect(
+                        owner,
+                        PotionEffectType.REGENERATION,
+                        durationTicks,
+                        0
                 );
             }
         }
     }
+
+    /**
+     * 应用并记录本次写入的效果（0.9.0更新，社区审查 A-1）。
+     */
+    private void applyEffect(
+            Player owner,
+            PotionEffectType type,
+            int durationTicks,
+            int amplifier
+    ) {
+
+        PotionEffect effect =
+                new PotionEffect(
+                        type,
+                        durationTicks,
+                        amplifier
+                );
+
+        owner.addPotionEffect(
+                effect
+        );
+
+        auraLastWritten
+                .computeIfAbsent(
+                        owner.getUniqueId(),
+                        k -> new java.util.HashMap<>()
+                )
+                .put(
+                        type,
+                        effect
+                );
+    }
 }
+

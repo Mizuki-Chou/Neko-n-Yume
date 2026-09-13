@@ -9,11 +9,11 @@ import org.bukkit.entity.Warden;
 import java.lang.reflect.Method;
 
 /**
- * 怪物目标清理工具。
+ * 怪物目标清理工具捏。
  *
  * <p>
  * 受伤恢复期保护：
- * 1. 清空半径内所有以猫为攻击目标的怪物目标；
+ * 1. 清空半径内所有以猫为攻击目标的怪物目标啦；
  * 2. 监守者特殊处理——它不走标准索敌而是用"愤怒系统"
  *    记忆目标，所以除了清目标，还要把对猫的愤怒值清零
  *    （通过 Paper 的 Warden#setAnger 反射调用，
@@ -145,3 +145,4 @@ public final class TargetGuard {
         }
     }
 }
+

@@ -24,11 +24,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 快捷工具（逗猫棒）监听器。
+ * 快捷工具（逗猫棒）监听器哒。
  *
  * <p>
- * 持有 /nekoyume tool 发放的逗猫棒：
- * 右键空气 / 方块 / 任意实体 → 打开猫咪面板。
+ * 持有 /nekoyume tool 发放的逗猫棒啦：
+ * 右键空气 / 方块 / 任意实体 → 打开猫咪面板捏。
  * </p>
  *
  * <p>
@@ -68,7 +68,7 @@ public class CatToolListener implements Listener {
     }
 
     /*
-     * 0.8.1 R5（社区上报）：
+     * 
      * ignoreCancelled = true——与喂食/装备事件同口径，
      * 保护插件取消交互时逗猫棒不再生效。
      */
@@ -111,7 +111,7 @@ public class CatToolListener implements Listener {
     }
 
     /*
-     * 0.8.1 R5（社区上报）：同 onInteract 口径。
+     * 同 onInteract 口径。
      */
     @EventHandler(
             priority = EventPriority.NORMAL,
@@ -169,6 +169,24 @@ public class CatToolListener implements Listener {
     ) {
 
         /*
+         * 0.9.0更新：使用权限（社区审查 P-3）——
+         * nekoyume.tool 撤销后，已发出的旧棒同样失效；
+         * 权限语义 = 领取 + 使用一体。
+         */
+        if (!player.hasPermission(
+                "nekoyume.tool"
+        )) {
+
+            player.sendMessage(
+                    lang.forPlayer(player).message(
+                            "tool.no-tool-permission"
+                    )
+            );
+
+            return;
+        }
+
+        /*
          * 还没有猫：自动领取一只
          * （等价于 /nekoyume claim 的数据创建 + 实体召唤），
          * title 大字提示 + 赠送入门书。
@@ -176,6 +194,25 @@ public class CatToolListener implements Listener {
         if (!store.hasCat(
                 player.getUniqueId()
         )) {
+
+            /*
+             * 0.9.0更新：自动领取必须验证 claim 权限
+             * （社区审查 P-1）——此前逗猫棒绕过了
+             * /nekoyume claim 的权限门：管理员禁用
+             * nekoyume.claim 后，玩家仍能右键自动创建猫。
+             */
+            if (!player.hasPermission(
+                    "nekoyume.claim"
+            )) {
+
+                player.sendMessage(
+                        lang.forPlayer(player).message(
+                                "tool.no-claim-permission"
+                        )
+                );
+
+                return;
+            }
 
             store.createCat(
                     player.getUniqueId()
@@ -323,3 +360,4 @@ public class CatToolListener implements Listener {
         }
     }
 }
+

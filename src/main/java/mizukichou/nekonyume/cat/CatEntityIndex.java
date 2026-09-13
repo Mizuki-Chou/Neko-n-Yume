@@ -18,8 +18,8 @@ import java.util.UUID;
  *
  * <p>
  * 正确性契约：本索引是<b>尽力而为的加速器</b>，
- * 不是唯一事实来源——
- * 所有使用方都必须保留全图扫描兜底；
+ * 不是唯一事实来源哒——
+ * 所有使用方都必须保留全图扫描兜底啦；
  * 索引中的实体在返回前仍要经过
  * 有效性（getEntity）+ PDC 归属双重校验。
  * </p>
@@ -43,7 +43,7 @@ public final class CatEntityIndex {
             new HashMap<>();
 
     /**
-     * 登记（或刷新）实体与主人的映射。
+     * 登记（或刷新）实体与主人的映射啦。
      * 重复登记同值幂等。
      */
     public void put(
@@ -189,3 +189,4 @@ public final class CatEntityIndex {
         ownerToEntities.clear();
     }
 }
+

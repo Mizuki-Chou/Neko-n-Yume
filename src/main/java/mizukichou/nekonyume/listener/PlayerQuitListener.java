@@ -54,17 +54,19 @@ public class PlayerQuitListener implements Listener {
                         .getUniqueId();
 
         /*
-         * 0.8.4 R18（社区上报 L-NEW-04 + M-NEW-02）：
+         * 
          * 退出清理整体 finally 化——保存环节任何一步抛异常，
          * 运行时状态清理都必须全部执行；并顺带清理
-         * 协助目标（会话态，退出即失效）。
+         * 协助目标（会话态，退出即失效）啦。
          */
+        boolean saved = false;
+
         try {
 
             /*
-             * 0.8.1 修复（R3，社区上报）：
+             * 
              * 退出前先从实体捕获最新位置/花色/世界，
-             * 否则刚移动就退出会回写 30 秒前的旧位置。
+             * 否则刚移动就退出会回写 30 秒前的旧位置捏。
              */
             entityService.captureEntityState(
                     cache.getCat(
@@ -87,14 +89,36 @@ public class PlayerQuitListener implements Listener {
              */
             store.flush();
 
+            saved = true;
+
+        } catch (Exception exception) {
+
+            /*
+             * 0.9.0更新：保存失败时保留缓存
+             * （社区审查 S-5）——缓存此刻是唯一的
+             * 新鲜运行时状态，立即驱逐会让最新数据
+             * 随玩家下线永久丢失；保留后由周期
+             * autosave 重试，落盘确认后才走
+             * evictOfflineCats 清理。
+             */
+            org.bukkit.Bukkit.getLogger().warning(
+                    "Failed to save cat state on quit for "
+                            + playerUUID
+                            + "; keeping cache entry for retry: "
+                            + exception.getMessage()
+            );
+
         } finally {
 
             /*
-             * 从内存卸载。
+             * 从内存卸载（仅保存成功后）。
              */
-            cache.removeByOwner(
-                    playerUUID
-            );
+            if (saved) {
+
+                cache.removeByOwner(
+                        playerUUID
+                );
+            }
 
             /*
              * 清除待恢复队列。
@@ -128,7 +152,7 @@ public class PlayerQuitListener implements Listener {
             );
 
             /*
-             * 0.8.4 R18（社区上报 M-NEW-02）：
+             * 
              * 协助目标属于会话态——退出即失效。
              */
             battleState.clearAssistTarget(
@@ -149,3 +173,4 @@ public class PlayerQuitListener implements Listener {
         }
     }
 }
+

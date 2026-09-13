@@ -341,3 +341,4 @@ class CatEquipItemTest {
         );
     }
 }
+

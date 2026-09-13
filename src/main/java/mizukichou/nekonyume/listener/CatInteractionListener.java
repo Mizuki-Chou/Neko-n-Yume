@@ -1,5 +1,6 @@
 package mizukichou.nekonyume.listener;
 
+import mizukichou.nekonyume.cat.CatSkill;
 import mizukichou.nekonyume.cat.CatCache;
 import mizukichou.nekonyume.cat.CatEquipItem;
 import mizukichou.nekonyume.cat.CatProgressionService;
@@ -28,7 +29,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * 抚摸交互监听。
+ * 抚摸交互监听捏。
  *
  * <p>
  * 0.7.0：配置改走 ConfigManager 快照；文案改走 Lang（pet.* 节）。
@@ -44,7 +45,7 @@ public class CatInteractionListener implements Listener {
 
     /*
      * 基础抚摸冷却（毫秒）。
-     * 实际冷却由性格决定。
+     * 实际冷却由性格决定啦。
      */
     private static final long DEFAULT_PET_COOLDOWN =
             1000L;
@@ -233,8 +234,12 @@ public class CatInteractionListener implements Listener {
             cooldownMillis = DEFAULT_PET_COOLDOWN;
         }
 
+        /*
+         * 0.9.0更新：抚摸冷却走单调时钟（TIME-1
+         * 收尾）——wall clock 回拨会额外卡冷却。
+         */
         long now =
-                System.currentTimeMillis();
+                System.nanoTime();
 
         Long last =
                 cooldowns.get(
@@ -242,7 +247,8 @@ public class CatInteractionListener implements Listener {
                 );
 
         if (last != null &&
-                now - last < cooldownMillis) {
+                (now - last) / 1_000_000L
+                        < cooldownMillis) {
 
             return;
         }
@@ -260,151 +266,289 @@ public class CatInteractionListener implements Listener {
          * 计算实际好感度变化
          * ========================================================
          *
-         * 基础好感来自 config: affection.pet-base。
-         * 好感度上限为 100。
+         * 0.9.0更新：抚摸整体事务化（审查轴 1）——
+         * 好感/次数/经验/喵力任一阶段异常，全部回滚，
+         * 不留"好感已加、XP 未给"的不完整交互。
          */
 
         int oldAffection =
                 logicalCat.getAffection();
 
-        int newAffection =
-                Math.min(
-                        100,
-                        oldAffection
-                                + config.getAffection()
-                                .getPetBase()
+        int oldPetCount =
+                store.getCatPetCount(
+                        playerUUID
                 );
 
-        int actualAffectionGain =
-                newAffection
-                        - oldAffection;
-
-        /*
-         * ========================================================
-         * 更新运行时 Cat
-         * ========================================================
-         */
-
-        logicalCat.setAffection(
-                newAffection
-        );
-
-        logicalCat.markInteracted();
-
-        /*
-         * ========================================================
-         * 每日抚摸次数 +1
-         * ========================================================
-         */
-
-        store.addCatPetCount(
-                playerUUID
-        );
-
-        /*
-         * ========================================================
-         * 持久化运行时状态
-         * ========================================================
-         */
-
-        store.setCatAffection(
-                playerUUID,
-                logicalCat.getAffection()
-        );
-
-        store.setCatLastInteractionAt(
-                playerUUID,
-                logicalCat.getLastInteractionAt()
-        );
-
-        /*
-         * ========================================================
-         * 经验
-         * ========================================================
-         *
-         * 每次抚摸随机获得经验。
-         * 区间来自 config: growth.pet-xp-min / pet-xp-max。
-         * 统一走 CatProgressionService.gainExperience()。
-         */
-
-        int petXpMin =
-                config.getGrowth()
-                        .getPetXpMin();
-
-        int petXpMax =
-                config.getGrowth()
-                        .getPetXpMax();
-
-        int xpGain =
-                petXpMin
-                        + random.nextInt(
-                        petXpMax
-                                - petXpMin
-                                + 1
+        long oldLastInteraction =
+                store.getCatLastInteractionAt(
+                        playerUUID
                 );
 
-        progression.gainExperience(
-                player,
-                logicalCat,
-                xpGain
-        );
+        int oldXp =
+                logicalCat.getExperience();
 
-        /*
-         * ========================================================
-         * 喵力概率
-         * ========================================================
-         *
-         * 基础概率 config: meow.pet-chance
-         * + 性格偏移（百分点）。
-         */
+        int oldLevel =
+                logicalCat.getLevel();
 
-        int meowGain = 0;
+        int oldMeowPower =
+                logicalCat.getMeowPower();
 
-        int chance =
-                config.getMeow()
-                        .getPetChance()
-                        + logicalCat.getPersonality()
-                        .getPetMeowChanceBonus();
+        int oldMeowRank =
+                logicalCat.getMeowRank();
 
-        /*
-         * 装备（0.8.0）：铃铛的喵力概率加成。
-         */
-        CatEquipItem equip =
-                logicalCat.getEquippedItem();
+        Long previousCooldown =
+                cooldowns.get(
+                        playerUUID
+                );
 
-        if (equip != null) {
+        int actualAffectionGain;
 
-            chance +=
-                    equip.getMeowBonus();
-        }
+        int xpGain;
 
-        /*
-         * 附加属性（0.8.0）：共鸣的喵力概率加成。
-         */
-        EquipBonusAttribute equipBonus =
-                logicalCat.getEquippedBonus();
+        int meowGain;
 
-        if (equipBonus != null) {
+        try {
 
-            chance +=
-                    equipBonus.getMeowBonus();
-        }
+            cooldowns.put(
+                    playerUUID,
+                    now
+            );
 
-        if (chance > 0 &&
-                random.nextInt(100) < chance) {
+            int newAffection =
+                    Math.min(
+                            100,
+                            oldAffection
+                                    + config.getAffection()
+                                    .getPetBase()
+                    );
+
+            actualAffectionGain =
+                    newAffection
+                            - oldAffection;
+
+            logicalCat.setAffection(
+                    newAffection
+            );
+
+            logicalCat.markInteracted();
+
+            store.addCatPetCount(
+                    playerUUID
+            );
+
+            store.setCatAffection(
+                    playerUUID,
+                    logicalCat.getAffection()
+            );
+
+            store.setCatLastInteractionAt(
+                    playerUUID,
+                    logicalCat.getLastInteractionAt()
+            );
 
             /*
-             * 0.8.0 数值修正：触发量由配置决定（meow.pet-gain，默认2）。
+             * 经验区间（运行时校验 + long 域计算，
+             * 与既有口径一致）。
              */
-            meowGain =
-                    config.getMeow()
-                            .getPetGain();
+            int petXpMin =
+                    config.getGrowth()
+                            .getPetXpMin();
 
-            progression.grantMeowPower(
+            int petXpMax =
+                    config.getGrowth()
+                            .getPetXpMax();
+
+            if (petXpMin < 0 ||
+                    petXpMax < 0 ||
+                    petXpMin > petXpMax) {
+
+                org.bukkit.Bukkit.getLogger().warning(
+                        "Invalid pet-xp range [" + petXpMin
+                                + ", " + petXpMax
+                                + "] — falling back to zero XP."
+                );
+
+                petXpMin = 0;
+                petXpMax = 0;
+            }
+
+            long range =
+                    (long) petXpMax
+                            - petXpMin
+                            + 1L;
+
+            if (range <= Integer.MAX_VALUE) {
+
+                xpGain =
+                        petXpMin
+                                + random.nextInt(
+                                (int) range
+                        );
+
+            } else {
+
+                long offset =
+                        random.nextLong(
+                                range
+                        );
+
+                xpGain =
+                        (int) Math.min(
+                                Integer.MAX_VALUE,
+                                (long) petXpMin
+                                        + offset
+                        );
+            }
+
+            progression.gainExperience(
                     player,
                     logicalCat,
-                    meowGain
+                    xpGain
             );
+
+            meowGain = 0;
+
+            int chance =
+                    config.getMeow()
+                            .getPetChance()
+                            + logicalCat.getPersonality()
+                            .getPetMeowChanceBonus();
+
+            CatEquipItem equip =
+                    logicalCat.getEquippedItem();
+
+            if (equip != null) {
+
+                chance +=
+                        equip.getMeowBonus();
+            }
+
+            EquipBonusAttribute equipBonus =
+                    logicalCat.getEquippedBonus();
+
+            if (equipBonus != null) {
+
+                chance +=
+                        equipBonus.getMeowBonus();
+            }
+
+            if (logicalCat.hasSkill(
+                    CatSkill.FLASH_OF_SPIRIT
+            )) {
+
+                chance +=
+                        5;
+            }
+
+            if (chance > 0 &&
+                    random.nextInt(100) < chance) {
+
+                meowGain =
+                        config.getMeow()
+                                .getPetGain();
+
+                progression.grantMeowPower(
+                        player,
+                        logicalCat,
+                        meowGain
+                );
+            }
+
+        } catch (RuntimeException exception) {
+
+            /*
+             * 全量回滚（含冷却与每日次数）。
+             */
+            try {
+
+                logicalCat.setAffection(
+                        oldAffection
+                );
+
+                logicalCat.setExperience(
+                        oldXp
+                );
+
+                logicalCat.setLevel(
+                        oldLevel
+                );
+
+                logicalCat.setMeowPower(
+                        oldMeowPower
+                );
+
+                logicalCat.setMeowRank(
+                        oldMeowRank
+                );
+
+                logicalCat.setLastInteractionAt(
+                        oldLastInteraction
+                );
+
+                store.setCatAffection(
+                        playerUUID,
+                        oldAffection
+                );
+
+                store.setCatExperience(
+                        playerUUID,
+                        oldXp
+                );
+
+                store.setCatLevel(
+                        playerUUID,
+                        oldLevel
+                );
+
+                store.setCatMeowPower(
+                        playerUUID,
+                        oldMeowPower
+                );
+
+                store.setCatMeowRank(
+                        playerUUID,
+                        oldMeowRank
+                );
+
+                store.setCatLastInteractionAt(
+                        playerUUID,
+                        oldLastInteraction
+                );
+
+                store.setCatPetCount(
+                        playerUUID,
+                        oldPetCount
+                );
+
+                if (previousCooldown == null) {
+
+                    cooldowns.remove(
+                            playerUUID
+                    );
+
+                } else {
+
+                    cooldowns.put(
+                            playerUUID,
+                            previousCooldown
+                    );
+                }
+
+            } catch (RuntimeException rollbackException) {
+
+                exception.addSuppressed(
+                        rollbackException
+                );
+            }
+
+            org.bukkit.Bukkit.getLogger().log(
+                    java.util.logging.Level.SEVERE,
+                    "Pet transaction failed; rolled back for "
+                            + player.getName() + ".",
+                    exception
+            );
+
+            return;
         }
 
         /*
@@ -637,3 +781,4 @@ public class CatInteractionListener implements Listener {
         return closestCat;
     }
 }
+

@@ -53,6 +53,30 @@ class YamlCatStoreLifecycleTest {
         );
     }
 
+    /**
+     * 指定删除排水期限的构造（测试超时路径）。
+     */
+    private YamlCatStore newStoreWithDrainDeadline(
+            long deadlineMillis
+    ) {
+
+        FakeCatStoreEnv env =
+                new FakeCatStoreEnv(
+                        tempDir,
+                        Logger.getAnonymousLogger(),
+                        true,
+                        3
+                );
+
+        env.setDrainDeadlineMillis(
+                deadlineMillis
+        );
+
+        return new YamlCatStore(
+                env
+        );
+    }
+
     /*
      * 提交 + 等待落盘完成。
      * 模拟"关服前等待"，保证重开文件时数据已在磁盘上。
@@ -1319,6 +1343,11 @@ class YamlCatStoreLifecycleTest {
         );
 
         Files.writeString(
+                tempDir.resolve("meta.yml"),
+                "data-version: 9\n"
+        );
+
+        Files.writeString(
                 tempDir.resolve("players")
                         .resolve(player + ".yml"),
                 "this is not valid player data"
@@ -1432,6 +1461,105 @@ class YamlCatStoreLifecycleTest {
         assertFalse(reopened.hasCat(player));
 
         reopened.shutdownAndAwait();
+    }
+
+    /*
+     * 0.9.0更新：排水超时路径——
+     * 在飞写入未排空时 shard 虽已物理删除，
+     * 墓碑必须保留（社区审查 S-1 的崩溃窗口）：
+     * 旧写入晚到 + 崩溃 → 重启时墓碑按版本清除复活分片。
+     */
+    @Test
+    void deleteWithTimedOutDrainRetainsTombstone()
+            throws IOException {
+
+        UUID player = UUID.randomUUID();
+
+        /*
+         * 排水期限 0 毫秒 → 删除必然走超时路径。
+         */
+        YamlCatStore store =
+                newStoreWithDrainDeadline(
+                        0L
+                );
+
+        store.createCat(player);
+
+        store.setCatName(
+                player,
+                "Doomed"
+        );
+
+        store.saveNow();
+
+        assertTrue(
+                store.removeCat(
+                        player
+                )
+        );
+
+        store.awaitPendingSave();
+
+        /*
+         * shard 文件必须已删除。
+         */
+        Path shardFile =
+                tempDir.resolve("players")
+                        .resolve(player + ".yml");
+
+        assertFalse(
+                Files.exists(shardFile),
+                "超时删除也必须移除分片文件"
+        );
+
+        /*
+         * 墓碑必须保留（崩溃防线）。
+         */
+        Path tombstoneFile =
+                tempDir.resolve("deletions.yml");
+
+        String tombstoneContent =
+                Files.readString(
+                        tombstoneFile
+                );
+
+        assertTrue(
+                tombstoneContent.contains(
+                        player.toString()
+                ),
+                "排水超时后墓碑必须保留"
+        );
+
+        store.shutdownAndAwait();
+
+        /*
+         * 重启：墓碑 + 无分片 → 启动清理移除墓碑，
+         * 玩家绝不复活。
+         */
+        YamlCatStore reopened =
+                newStore();
+
+        assertFalse(
+                reopened.hasCat(
+                        player
+                )
+        );
+
+        reopened.shutdownAndAwait();
+
+        String after =
+                Files.readString(
+                        tempDir.resolve(
+                                "deletions.yml"
+                        )
+                );
+
+        assertFalse(
+                after.contains(
+                        player.toString()
+                ),
+                "启动清理后墓碑应移除"
+        );
     }
 
     /*
@@ -1757,7 +1885,7 @@ class YamlCatStoreLifecycleTest {
 
     /*
      * ============================================================
-     * 0.8.4 R18（社区上报 H-01 / H-NEW-03）：墓碑协议
+     * 墓碑协议
      * ============================================================
      */
 
@@ -1948,7 +2076,7 @@ class YamlCatStoreLifecycleTest {
     void newerShardTempIsAdoptedOverExistingTarget() throws IOException {
 
         /*
-         * 0.8.4 R21（社区上报 H-NEW-04）：
+         * 
          * 非原子替换崩溃现场：target 存在（旧版本）+
          * tmp 是完整新快照——必须按版本采纳 tmp，绝不误删。
          */
@@ -2042,7 +2170,7 @@ class YamlCatStoreLifecycleTest {
     void deletionsTmpIsRecoveredOnStartup() throws IOException {
 
         /*
-         * 0.8.4 R23（社区上报 H-1）：
+         * 
          * deletions.yml.tmp（move 前崩溃的完整墓碑写入）
          * 必须在启动时采纳，否则刚删除的玩家会复活。
          */
@@ -2090,7 +2218,7 @@ class YamlCatStoreLifecycleTest {
     void corruptDeletionsFileFailsFast() throws IOException {
 
         /*
-         * 0.8.4 R23（社区上报 H-1）：
+         * 
          * 删除日志不可信 → 拒绝启动（fail-closed），
          * 绝不把已删除玩家重新加载。
          */
@@ -2121,7 +2249,7 @@ class YamlCatStoreLifecycleTest {
     void reclaimedShardWithNewerVersionSurvivesTombstone() throws IOException {
 
         /*
-         * 0.8.4 R23（社区上报 H-2）：
+         * 
          * 墓碑版本 2 + 分片版本 7 = 删除后重新领养的新化身，
          * 启动清理必须保留分片并清除墓碑。
          */
@@ -2206,12 +2334,163 @@ class YamlCatStoreLifecycleTest {
         reopened.shutdownAndAwait();
     }
 
+    /*
+     * 视觉模型 ID（Generic Model 系统，预留）磁盘往返：
+     * 写入 → 落盘 → 重开 → 读回；清除后重开读回空串。
+     */
+    @Test
+    void modelIdDiskRoundTrip() throws IOException {
+
+        UUID player = UUID.randomUUID();
+
+        YamlCatStore store =
+                newStore();
+
+        try {
+
+            store.createCat(player);
+
+            assertEquals(
+                    "",
+                    store.getCatModelId(player)
+            );
+
+            store.setCatModelId(player, "cats:black_cat");
+
+            flushAndAwait(store);
+
+        } finally {
+
+            store.shutdownAndAwait();
+        }
+
+        YamlCatStore reopened =
+                newStore();
+
+        try {
+
+            assertEquals(
+                    "cats:black_cat",
+                    reopened.getCatModelId(player)
+            );
+
+            reopened.setCatModelId(player, "");
+
+            flushAndAwait(reopened);
+
+        } finally {
+
+            reopened.shutdownAndAwait();
+        }
+
+        YamlCatStore again =
+                newStore();
+
+        try {
+
+                assertEquals(
+                    "",
+                    again.getCatModelId(player)
+            );
+
+        } finally {
+
+            again.shutdownAndAwait();
+        }
+    }
+
+    /*
+     * 回归：awaitPendingSave 的在飞写入竞态。
+     *
+     * 此前保存线程从队列取出条目后在监视器外写盘，
+     * awaitPendingSave 的早退分支（队列空 + 无脏分片）会在
+     * 写盘进行中误判完成；随后的 shutdownAndAwait interrupt
+     * 打断 fsync（ClosedByInterruptException），新快照丢失、
+     * 重开读到旧值。修复后在飞写入计入完成判定，
+     * 本测试连续多轮写→等→关→开必须全部成立。
+     */
+    @Test
+    void rapidRoundTripsSurviveShutdown() {
+
+        UUID player =
+                UUID.randomUUID();
+
+        YamlCatStore first =
+                newStore();
+
+        first.createCat(
+                player
+        );
+
+        flushAndAwait(
+                first
+        );
+
+        first.shutdownAndAwait();
+
+        for (int round = 0;
+                round < 10;
+                round++) {
+
+            String value =
+                    "cats:model_" + round;
+
+            YamlCatStore store =
+                    newStore();
+
+            try {
+
+                assertEquals(
+                        round == 0
+                                ? ""
+                                : "cats:model_" + (round - 1),
+                        store.getCatModelId(
+                                player
+                        ),
+                        "第 " + round + " 轮：写入前的值不符"
+                );
+
+                store.setCatModelId(
+                        player,
+                        value
+                );
+
+                flushAndAwait(
+                        store
+                );
+
+            } finally {
+
+                store.shutdownAndAwait();
+            }
+        }
+
+        YamlCatStore last =
+                newStore();
+
+        try {
+
+            assertEquals(
+                    "cats:model_9",
+                    last.getCatModelId(
+                            player
+                    ),
+                    "最后一轮写入必须落盘"
+            );
+
+        } finally {
+
+            last.shutdownAndAwait();
+        }
+    }
+
 private static class FakeCatStoreEnv implements CatStoreEnv {
 
         private final Path dataFolder;
         private final Logger logger;
         private final boolean backupEnabled;
         private final int backupKeep;
+        private long drainDeadlineMillis = 5_000L;
 
         FakeCatStoreEnv(
                 Path dataFolder,
@@ -2226,6 +2505,12 @@ private static class FakeCatStoreEnv implements CatStoreEnv {
             this.backupKeep = backupKeep;
         }
 
+        void setDrainDeadlineMillis(long millis) {
+
+            this.drainDeadlineMillis =
+                    millis;
+        }
+
         @Override
         public Path dataFolder() {
             return dataFolder;
@@ -2234,6 +2519,11 @@ private static class FakeCatStoreEnv implements CatStoreEnv {
         @Override
         public Logger logger() {
             return logger;
+        }
+
+        @Override
+        public long deleteDrainDeadlineMillis() {
+            return drainDeadlineMillis;
         }
 
         @Override
@@ -2267,3 +2557,4 @@ private static class FakeCatStoreEnv implements CatStoreEnv {
         }
     }
 }
+

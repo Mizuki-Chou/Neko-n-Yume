@@ -12,9 +12,9 @@ import java.util.UUID;
  *
  * <p>
  * 纯逻辑类（无 Bukkit 依赖），可单元测试：
- * - 玩家登录时猫所在世界未加载 → add；
+ * - 玩家登录时猫所在世界未加载 → add 哒；
  * - 玩家退出 → removePlayer（消除退出/世界加载竞态）；
- * - 世界加载完成 → consumeForWorld（取走并清除该世界全部等待者）。
+ * - 世界加载完成 → consumeForWorld（取走并清除该世界全部等待者）啦。
  * </p>
  */
 public class PendingWorldRestores {
@@ -49,12 +49,34 @@ public class PendingWorldRestores {
             return;
         }
 
-        for (Set<UUID> players :
-                waiting.values()) {
+        /*
+         * 玩家退出：从所有等待集合中移除捏。
+         *
+         * 清空后的世界键同步移除——动态世界服务器
+         * （空岛/副本）上，世界从未加载的等待记录若只清内容
+         * 不清键，会随玩家退出永久残留，长期运行无界增长。
+         */
+        java.util.Iterator<
+                Map.Entry<UUID, Set<UUID>>> iterator =
+                waiting.entrySet()
+                        .iterator();
+
+        while (iterator.hasNext()) {
+
+            Map.Entry<UUID, Set<UUID>> entry =
+                    iterator.next();
+
+            Set<UUID> players =
+                    entry.getValue();
 
             players.remove(
                     playerUuid
             );
+
+            if (players.isEmpty()) {
+
+                iterator.remove();
+            }
         }
     }
 
@@ -63,7 +85,7 @@ public class PendingWorldRestores {
      * 返回不可变集合（可能为空）。
      */
     /**
-     * 0.8.4 R24（审查复核）：
+     * 
      * 世界卸载：该世界的全部等待记录作废——
      * 世界不再存在，等待恢复永无结果，必须释放，
      * 否则动态世界服务器上记录无界增长。
@@ -107,3 +129,4 @@ public class PendingWorldRestores {
         return waiting.isEmpty();
     }
 }
+

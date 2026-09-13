@@ -138,9 +138,20 @@ public interface CatStore {
 
     void addCatPetCount(UUID playerUUID);
 
+    /**
+     * 每日抚摸计数回写（0.9.0更新）——抚摸事务回滚需要。
+     */
+    void setCatPetCount(UUID playerUUID, int count);
+
     int getCatFeedCount(UUID playerUUID);
 
     void addCatFeedCount(UUID playerUUID);
+
+    /**
+     * 每日喂食计数回写（0.9.0更新，社区审查 R14-06）——
+     * 喂食事务回滚需要恢复原计数，只有 add 无法回退。
+     */
+    void setCatFeedCount(UUID playerUUID, int count);
 
     boolean isGiftCheckedToday(UUID playerUUID);
 
@@ -189,6 +200,16 @@ public interface CatStore {
     void setCatVariant(UUID playerUUID, String variant);
 
     /*
+     * ---------- 视觉模型（Generic Model 系统，预留） ----------
+     *
+     * null / 空串 = 未指定，运行时回退为默认模型。
+     */
+
+    String getCatModelId(UUID playerUUID);
+
+    void setCatModelId(UUID playerUUID, String modelId);
+
+    /*
      * ---------- 装备（0.8.0，唯一装备位） ----------
      */
 
@@ -230,6 +251,13 @@ public interface CatStore {
 
     double getCatZ(UUID playerUUID);
 
+    float getCatYaw(UUID playerUUID);
+
+    float getCatPitch(UUID playerUUID);
+
+    void setCatYaw(UUID playerUUID, float yaw);
+
+    void setCatPitch(UUID playerUUID, float pitch);
     void setCatLocation(
             UUID playerUUID,
             UUID worldUUID,
@@ -279,7 +307,7 @@ public interface CatStore {
     void addAchievementRewarded(UUID playerUUID, String id);
 
     /*
-     * 0.8.4 R17（社区上报）：
+     * 
      * 逐币种奖励已发放标记（幂等发放协议）。
      */
 
@@ -288,6 +316,20 @@ public interface CatStore {
     void addAchievementRewardXpApplied(UUID playerUUID, String id);
 
     void removeAchievementRewardXpApplied(UUID playerUUID, String id);
+
+    /**
+     * 成就 XP 奖励原子发放（0.9.0更新，社区审查 A-1）：
+     * 经验增加与 APPLIED 标记必须在同一次 store 变更中
+     * 完成——两次独立 mutation 之间若发生 flush/崩溃，
+     * 会留下"标记已落盘、奖励没发放"的永久少领。
+     * 返回发放后的经验值。
+     */
+    int applyAchievementXpReward(UUID playerUUID, String id, int xp);
+
+    /**
+     * 成就喵力奖励原子发放（同 XP 语义）。
+     */
+    int applyAchievementMeowReward(UUID playerUUID, String id, int meow);
 
     boolean isAchievementRewardMeowApplied(UUID playerUUID, String id);
 
@@ -366,4 +408,17 @@ public interface CatStore {
 
         return false;
     }
+
+    /**
+     * 按玩家等待该玩家的待写与在飞写入完成（0.9.0更新）。
+     * 默认 true（内存实现无磁盘）；磁盘实现重写为真实等待。
+     */
+    default boolean awaitPlayerSave(
+            UUID playerUUID,
+            long timeoutMillis
+    ) {
+
+        return true;
+    }
 }
+

@@ -20,10 +20,10 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 装备界面（0.8.0）。
+ * 装备界面（0.8.0）捏。
  *
  * <p>
- * 布局（27 格）：
+ * 布局（27 格）哒：
  * </p>
  * <ul>
  * <li>4：当前装备（含完整属性与"已装备"标记；未装备时显示空态）；</li>
@@ -32,7 +32,7 @@ import java.util.UUID;
  * </ul>
  *
  * <p>
- * 面板仅主人可操作；卸下后装备物品归还背包（满则掉落脚边），
+ * 面板仅主人可操作捏；卸下后装备物品归还背包（满则掉落脚边），
  * 并即时重算实体最大生命。
  * </p>
  */
@@ -105,6 +105,8 @@ public final class EquipGuiManager {
                                 "equip-gui.title"
                         )
                 );
+
+        ((GuiHolder) inventory.getHolder()).bind(inventory);
 
         ItemStack filler =
                 new ItemStack(
@@ -261,6 +263,56 @@ public final class EquipGuiManager {
         EquipBonusAttribute oldBonus =
                 cat.getEquippedBonus();
 
+        /*
+         * 0.9.0更新：先创建/交付归还物品，再清状态
+         * （社区审查 EQUIP-1）——此前先清状态后创建物品，
+         * 创建/交付异常时装备永久丢失（猫、存档、玩家
+         * 三处都没有）。交付失败则状态保持原样。
+         */
+        ItemStack returned;
+
+        try {
+
+            returned =
+                    foodManager.createEquippedReturn(
+                            old,
+                            oldBonus,
+                            player
+                    );
+
+        } catch (RuntimeException exception) {
+
+            org.bukkit.Bukkit.getLogger().log(
+                    java.util.logging.Level.SEVERE,
+                    "Failed to create unequip return for "
+                            + player.getName()
+                            + "; equipment kept.",
+                    exception
+            );
+
+            player.sendMessage(
+                    lang.forPlayer(player).message(
+                            "equip.unequip-failed"
+                    )
+            );
+
+            return false;
+        }
+
+        /*
+         * 归还装备（含附加属性；背包满则掉落脚边）。
+         */
+        for (ItemStack leftover :
+                player.getInventory()
+                        .addItem(returned)
+                        .values()) {
+
+            player.getWorld().dropItemNaturally(
+                    player.getLocation(),
+                    leftover
+            );
+        }
+
         cat.setEquippedItem(
                 null
         );
@@ -280,30 +332,9 @@ public final class EquipGuiManager {
         );
 
         /*
-         * 归还装备（含附加属性；背包满则掉落脚边）。
-         */
-        ItemStack returned =
-                foodManager.createEquippedReturn(
-                        old,
-                        oldBonus,
-                        player
-                );
-
-        for (ItemStack leftover :
-                player.getInventory()
-                        .addItem(returned)
-                        .values()) {
-
-            player.getWorld().dropItemNaturally(
-                    player.getLocation(),
-                    leftover
-            );
-        }
-
-        /*
          * 实体在场时重算最大生命。
          *
-         * 0.8.1 修复（P2）：存档 entity-uuid 损坏指向非猫实体时，
+         * 存档 entity-uuid 损坏指向非猫实体时，
          * 旧实现直接强转会抛 ClassCastException；改用 instanceof 守卫，
          * 异常数据只跳过刷新，不击穿卸下流程。
          */
@@ -404,7 +435,7 @@ public final class EquipGuiManager {
         /*
          * 实体在场时重算最大生命。
          *
-         * 0.8.1 修复（P2）：同 unequip，instanceof 守卫，
+         * 同 unequip，instanceof 守卫，
          * 异常存档不击穿快捷穿戴流程。
          */
         if (cat.getEntityUuid() != null) {
@@ -514,3 +545,4 @@ public final class EquipGuiManager {
         return item;
     }
 }
+

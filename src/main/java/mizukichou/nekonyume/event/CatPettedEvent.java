@@ -8,11 +8,11 @@ import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
 
 /**
- * 猫咪抚摸成功事件。
+ * 猫咪抚摸成功事件呀。
  *
  * <p>
- * 在抚摸逻辑全部完成后触发。
- * 属于事后通知，不可取消。
+ * 在抚摸逻辑全部完成后触发哟。
+ * 属于事后通知，不可取消捏。
  * </p>
  */
 @Getter
@@ -66,3 +66,4 @@ public class CatPettedEvent extends Event {
         return handlers;
     }
 }
+

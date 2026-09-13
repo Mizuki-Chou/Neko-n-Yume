@@ -130,7 +130,7 @@ final class ConfigParseSupport {
     }
 
     /*
-     * 0.8.1 修复（R3，社区上报）：
+     * 
      * double 的有限性守卫——NaN / Infinity 配置值
      * 在 Math.max 下会原样穿透（Math.max(1, NaN) == NaN），
      * 最终流入 Bukkit Attribute API 直接腐蚀实体属性。
@@ -152,8 +152,33 @@ final class ConfigParseSupport {
         );
     }
 
+    
     /*
-     * 0.8.1 修复（R3）：
+     * 正数倍率 + 上限钳制。
+     * 只防 NaN/Infinity 不够——origHealth * healthMult
+     * 仍可能浮点溢出为 Infinity；上限使极端配置
+     * 行为可预测（钳到上限）而非每次扫描持续报错。
+     */
+    static double cappedPositiveDouble(
+            double value,
+            double fallback,
+            double max
+    ) {
+
+        if (!Double.isFinite(value)) {
+            return fallback;
+        }
+
+        return Math.min(
+                max,
+                Math.max(
+                        0.0,
+                        value
+                )
+        );
+    }
+/*
+     * 
      * 任意 double 配置值的有限性守卫，非有限回退 fallback。
      */
     static double finite(
@@ -188,3 +213,4 @@ final class ConfigParseSupport {
         );
     }
 }
+

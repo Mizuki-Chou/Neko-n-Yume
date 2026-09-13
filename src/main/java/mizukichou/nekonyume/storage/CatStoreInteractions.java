@@ -125,6 +125,30 @@ final class CatStoreInteractions {
         );
     }
 
+    /**
+     * 回滚专用直写：不触发跨天重置，原样恢复计数快照。
+     */
+    void setCatPetCount(
+            UUID playerUUID,
+            int count
+    ) {
+
+        if (playerUUID == null ||
+                !store.hasCat(playerUUID)) {
+
+            return;
+        }
+
+        store.setRaw(
+                playerUUID,
+                AbstractCatStore.FIELD_PET_COUNT,
+                Math.max(
+                        0,
+                        count
+                )
+        );
+    }
+
     private void resetPetCountIfNewDay(UUID playerUUID) {
 
         resetDayCounterIfNeeded(
@@ -168,6 +192,31 @@ final class CatStoreInteractions {
                 playerUUID,
                 AbstractCatStore.FIELD_FEED_COUNT,
                 store.getInt(playerUUID, AbstractCatStore.FIELD_FEED_COUNT, 0) + 1
+        );
+    }
+
+    /**
+     * 回滚专用直写（社区审查 R14-06）：不触发跨天重置，
+     * 原样恢复计数快照。
+     */
+    void setCatFeedCount(
+            UUID playerUUID,
+            int count
+    ) {
+
+        if (playerUUID == null ||
+                !store.hasCat(playerUUID)) {
+
+            return;
+        }
+
+        store.setRaw(
+                playerUUID,
+                AbstractCatStore.FIELD_FEED_COUNT,
+                Math.max(
+                        0,
+                        count
+                )
         );
     }
 
@@ -295,3 +344,4 @@ final class CatStoreInteractions {
         );
     }
 }
+

@@ -157,12 +157,20 @@ final class GiftConfigParser {
                 rawEntries) {
 
             int weight =
-                    ConfigParseSupport.mapInt(
-                            entryMap,
-                            "weight",
-                            1
+                    Math.min(
+                            1_000_000,
+                            ConfigParseSupport.mapInt(
+                                    entryMap,
+                                    "weight",
+                                    1
+                            )
                     );
 
+            /*
+             * 0.9.0更新：权重在解析层钳制
+             * 上限——totalWeight 永不超过 int 范围，
+             * 抽取阶段不再有"后半条目不可达"的概率损失。
+             */
             if (weight <= 0) {
                 continue;
             }
@@ -185,16 +193,24 @@ final class GiftConfigParser {
                             minAmount
                     );
 
+            /*
+             * 0.9.0更新：先钳 min 再钳 max
+             * （社区审查 GIFT-1）——此前先保证 max
+             * 会让 min:500/max:600 变成
+             * min=500 > max=256，数量契约失守。
+             */
             minAmount =
-                    Math.max(
+                    ConfigParseSupport.clamp(
+                            minAmount,
                             1,
-                            minAmount
+                            256
                     );
 
             maxAmount =
-                    Math.max(
+                    ConfigParseSupport.clamp(
+                            maxAmount,
                             minAmount,
-                            maxAmount
+                            256
                     );
 
             /*
@@ -297,3 +313,4 @@ final class GiftConfigParser {
         return CatMood.CALM;
     }
 }
+

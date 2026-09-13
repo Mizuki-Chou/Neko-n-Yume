@@ -148,7 +148,7 @@ public class CatSkillManager {
         if (dreamSlot) {
 
             /*
-             * 0.8.4 R21（社区上报 L-NEW-08）：
+             * 
              * long 数学 + 饱和钳制——极端配置下 int 乘法
              * 溢出为负，会令刷新功能整体失效。
              */
@@ -257,14 +257,20 @@ public class CatSkillManager {
             return 0;
         }
 
+        /*
+         * 0.9.0更新：单调时钟——wall clock 回拨
+         * （NTP/宿主机）会把 now-last 变负、冷却被人为延长。
+         */
+        long elapsedMillis =
+                (System.nanoTime() - last) / 1_000_000L;
+
         long remaining =
                 (long) Math.ceil(
                         getCooldownMillis(skill)
                                 * cooldownFactor(
                                 player
                         )
-                                - (System.currentTimeMillis()
-                                - last)
+                                - elapsedMillis
                 );
 
         return Math.max(
@@ -487,7 +493,7 @@ public class CatSkillManager {
         }
 
         /*
-         * 0.8.4 R21（社区上报 M-NEW-09）：
+         * 
          * 先记冷却再放效果——多副作用技能（如 TIME_ECHO 五连）
          * 部分成功后异常时冷却仍然成立，杜绝
          * "部分效果已生效 + 无冷却 → 反复重放"。
@@ -501,9 +507,16 @@ public class CatSkillManager {
                 )
                 .put(
                         skill,
-                        System.currentTimeMillis()
+                        System.nanoTime()
                 );
 
+        /*
+         * 0.9.0更新：核心效果与后置通知分离
+         * （社区审查 C-3）——音效/粒子/事件的坏监听器
+         * 异常不得撤销已成功的技能效果与冷却：
+         * 此前"效果成功 + 通知异常"会删冷却，
+         * 玩家直接重放已生效的技能。
+         */
         try {
 
             applyEffect(
@@ -512,24 +525,49 @@ public class CatSkillManager {
                     skill
             );
 
+        } catch (Exception exception) {
+
+            /*
+             * 效果失败：冷却保留（R21——部分成功
+             * 不重放），API 返回 false；玩家代价是
+             * 本次技能作废，但绝不产生重复效果。
+             */
+            logger.log(
+                    Level.SEVERE,
+                    "Failed to apply skill "
+                            + skill
+                            + " for "
+                            + player.getName(),
+                    exception
+            );
+
+            return false;
+        }
+
         /*
-         * 反馈。
+         * 反馈与事件：只记日志，绝不回滚。
          */
-        runtime.playSound(
+        try {
 
-                player.getLocation(),
+            runtime.playSound(
 
-                "purr",
 
-                1.0f,
+                    player.getLocation(),
 
-                1.2f
-        );
 
-        spawnSkillParticles(
-                cat
+                    "purr",
 
-        );
+
+                    1.0f,
+
+
+                    1.2f
+
+            );
+
+            spawnSkillParticles(
+                    cat
+            );
 
             runtime.callEvent(
                     new CatSkillActivatedEvent(
@@ -542,11 +580,12 @@ public class CatSkillManager {
         } catch (Exception exception) {
 
             logger.log(
-                    Level.SEVERE,
-                    "Failed to apply skill "
+                    Level.WARNING,
+                    "Skill notification failed for "
                             + skill
-                            + " for "
-                            + player.getName(),
+                            + " ("
+                            + player.getName()
+                            + "); core effect already committed.",
                     exception
             );
         }
@@ -622,6 +661,18 @@ public class CatSkillManager {
                                                 + scaledPower
                                 )
                         );
+
+                /*
+                 * 0.9.0更新：NaN 防御——
+                 * 玩家血量异常（其他插件/数据损坏）时，
+                 * Math.min/max 仍为 NaN，setHealth 会抛异常。
+                 */
+                if (!Double.isFinite(
+                        healed
+                )) {
+
+                    healed = 0.0;
+                }
 
                 player.setHealth(
                         healed
@@ -742,8 +793,12 @@ public class CatSkillManager {
                                 radius
                         )) {
 
-                    if (entity instanceof Monster monster &&
-                            !monster.isDead()) {
+                    Monster monster =
+                            aoeTarget(
+                                    entity
+                            );
+
+                    if (monster != null) {
 
                                                         runtime.applyPotion(
                                         monster,
@@ -907,8 +962,12 @@ public class CatSkillManager {
                         radius
                 )) {
 
-            if (entity instanceof Monster monster &&
-                    !monster.isDead()) {
+            Monster monster =
+                    aoeTarget(
+                            entity
+                    );
+
+            if (monster != null) {
 
                 monster.damage(
                         power,
@@ -916,6 +975,31 @@ public class CatSkillManager {
                 );
             }
         }
+    }
+
+    /*
+     * AOE 目标守卫——
+     * 跳过 NPC（Citizens 等插件的 "NPC" 元数据），
+     * 与梦魔之夜/战斗经验的边界一致，
+     * 范围伤害绝不波及剧情/任务怪。
+     */
+    private static Monster aoeTarget(
+            Entity entity
+    ) {
+
+        if (!(entity instanceof Monster monster)) {
+            return null;
+        }
+
+        if (monster.isDead() ||
+                monster.hasMetadata(
+                        "NPC"
+                )) {
+
+            return null;
+        }
+
+        return monster;
     }
 
     private void spawnSkillParticles(
@@ -957,3 +1041,4 @@ public class CatSkillManager {
                 );
     }
 }
+

@@ -6,7 +6,11 @@
   <a href="../README.md">简体中文</a> ·
   <a href="README.zh-TW.md">繁體中文</a> ·
   <a href="README.en.md">English</a> ·
-  <a href="README.ja.md">日本語</a>
+  <a href="README.ja.md">日本語</a> ·
+  <a href="README.ko.md">한국어</a> ·
+  <a href="README.fr.md">Français</a> ·
+  <a href="README.de.md">Deutsch</a> ·
+  <a href="README.es.md">Español</a>
 </p>
 
 > 願你與牠，共度一場方塊世界中的溫柔。
@@ -15,9 +19,9 @@
 
 ## 🌸 緣起
 
-某一天，你在工作台上用生鱈魚和木棍做出了一樣你從未見過的東西。
+某一天，你在工作台上用生鱈魚和木棍做出了你從未見過的東西。
 
-其上沒有署名，只印著一隻打盹的貓，與一句輕聲的詢問：
+其上沒有署名，只印著一隻打盹的貓，與一句輕聲的問詢：
 
 > 「要帶一隻貓回家嗎？」
 
@@ -107,9 +111,9 @@
 
 只有一隻貓，一個你，和許許多多個平和的日子。
 
-歡迎體驗 Minecraft 插件 **猫と夢 · Neko n' Yume**。
+歡迎體驗 Minecraft 插件 **貓と夢 · Neko n' Yume**。
 
-> 本專案因 **Mizuki Chou 家中的小貓** 而生。
+> 本項目因 **Mizuki Chou 家中的小貓** 而生。
 > 也謹此致敬獨立遊戲 **Yume Nikki** 與 **Muma Rope**。
 
 願你與牠，共度一場方塊世界中的溫柔。

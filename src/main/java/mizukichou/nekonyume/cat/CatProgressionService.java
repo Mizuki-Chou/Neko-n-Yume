@@ -23,7 +23,7 @@ import java.util.Random;
 import java.util.UUID;
 
 /**
- * 猫咪成长与技能槽服务。
+ * 猫咪成长与技能槽服务捏。
  *
  * <p>
  * 0.6.2：升级时同步猫实体最大生命（10 + 等级/4）。
@@ -148,6 +148,24 @@ public class CatProgressionService {
                 cat.getLevel()
         );
 
+        finishLevelUp(
+                player,
+                cat,
+                gained,
+                fromLevel
+        );
+    }
+
+    /**
+     * 升级收尾（0.9.0更新：成就原子发放复用）。
+     */
+    private void finishLevelUp(
+            Player player,
+            Cat cat,
+            int gained,
+            int fromLevel
+    ) {
+
         if (gained <= 0) {
             return;
         }
@@ -179,39 +197,173 @@ public class CatProgressionService {
 
         );
 
-        runtime.callEvent(
-
-
-                new CatLevelUpEvent(
-
-
-
-                player,
-
-
-                cat,
-
-
-                fromLevel,
-
-
-                cat.getLevel()
-
-
-                )
-
-
-        );
-
         /*
-         * 升级：同步实体最大生命（10 + 等级/4）。
+         * 0.9.0更新：核心状态先完全同步
+         * （实体最大生命 + 技能槽），事件最后触发——
+         * 监听器看到的是"升级已完成"的完整状态，
+         * 而不是"逻辑等级已变、实体还是旧值"的半完成态。
          */
         applyLevelMaxHealth(
                 player,
                 cat
         );
 
-        syncSkillSlots(player, cat);
+        syncSkillSlots(
+                player,
+                cat
+        );
+
+        try {
+
+            runtime.callEvent(
+                    new CatLevelUpEvent(
+                            player,
+                            cat,
+                            fromLevel,
+                            cat.getLevel()
+                    )
+            );
+
+        } catch (Exception exception) {
+
+            /*
+             * 0.9.0更新：事件是扩展通知，不是
+             * 核心事务的必经阻断点——坏监听器不得把
+             * 升级收尾停在半完成状态。
+             */
+            org.bukkit.Bukkit.getLogger().log(
+                    java.util.logging.Level.WARNING,
+                    "Listener exception during CatLevelUpEvent "
+                            + "(ignored; core state already committed).",
+                    exception
+            );
+        }
+    }
+
+    /**
+     * 经验倍率计算（0.9.0更新：成就原子发放复用，
+     * 与 gainExperience 完全同一公式）。
+     */
+    private int computeExperienceGain(
+            Cat cat,
+            int amount
+    ) {
+
+        if (cat == null || amount <= 0) {
+            return 0;
+        }
+
+        ConfigSnapshot config =
+                configManager.snapshot();
+
+        amount =
+                CareMath.applyExperience(
+                        amount,
+                        CareMath.experienceMultiplier(
+                                cat.getMood(),
+                                CareMath.bondFor(
+                                        cat,
+                                        config.getCare()
+                                ),
+                                config.getCare()
+                        )
+                );
+
+        CatEquipItem equip =
+                cat.getEquippedItem();
+
+        if (equip != null &&
+                equip.getXpBonusPercent() > 0) {
+
+            amount =
+                    CareMath.applyExperience(
+                            amount,
+                            1.0
+                                    + equip.getXpBonusPercent()
+                                    / 100.0
+                    );
+        }
+
+        EquipBonusAttribute equipBonus =
+                cat.getEquippedBonus();
+
+        if (equipBonus != null &&
+                equipBonus.getXpBonusPercent() > 0) {
+
+            amount =
+                    CareMath.applyExperience(
+                            amount,
+                            1.0
+                                    + equipBonus.getXpBonusPercent()
+                                    / 100.0
+                    );
+        }
+
+        return amount;
+    }
+
+    /**
+     * 成就 XP 奖励：先走 store 原子发放（经验 + APPLIED
+     * 同一次变更，社区审查 A-1），再同步内存并触发升级收尾。
+     */
+    public void gainAchievementXpReward(
+            Player player,
+            Cat cat,
+            String achievementId,
+            int amount
+    ) {
+
+        if (player == null ||
+                cat == null ||
+                achievementId == null ||
+                amount <= 0) {
+
+            return;
+        }
+
+        int finalAmount =
+                computeExperienceGain(
+                        cat,
+                        amount
+                );
+
+        int newExperience =
+                store.applyAchievementXpReward(
+                        player.getUniqueId(),
+                        achievementId,
+                        finalAmount
+                );
+
+        int delta =
+                newExperience
+                        - cat.getExperience();
+
+        if (delta <= 0) {
+            return;
+        }
+
+        int fromLevel =
+                cat.getLevel();
+
+        int gained =
+                cat.addExperience(
+                        delta,
+                        configManager.snapshot()
+                                .getGrowth()
+                                .getLevelCurveBase()
+                );
+
+        store.setCatLevel(
+                player.getUniqueId(),
+                cat.getLevel()
+        );
+
+        finishLevelUp(
+                player,
+                cat,
+                gained,
+                fromLevel
+        );
     }
 
     public void grantMeowPower(
@@ -246,6 +398,26 @@ public class CatProgressionService {
                 player.getUniqueId(),
                 cat.getMeowRank()
         );
+        finishMeowReward(
+                player,
+                cat,
+                gained,
+                fromRank,
+                amount
+        );
+    }
+
+    /**
+     * 喵力奖励收尾（0.9.0更新：成就原子发放复用）。
+     */
+    private void finishMeowReward(
+            Player player,
+            Cat cat,
+            int gained,
+            int fromRank,
+            int amount
+    ) {
+
 
         player.sendMessage(
                 lang.forPlayer(player).message(
@@ -327,31 +499,95 @@ public class CatProgressionService {
             }
         }
 
-        runtime.callEvent(
-
-
-                new CatMeowRankUpEvent(
-
-
-
+        /*
+         * 0.9.0更新：喵阶事件的提交顺序与
+         * 升级一致——先同步技能槽（rank 决定槽数），
+         * 事件最后触发；坏监听器不阻断核心收尾。
+         */
+        syncSkillSlots(
                 player,
-
-
-                cat,
-
-
-                fromRank,
-
-
-                cat.getMeowRank()
-
-
-                )
-
-
+                cat
         );
 
-        syncSkillSlots(player, cat);
+        try {
+
+            runtime.callEvent(
+                    new CatMeowRankUpEvent(
+                            player,
+                            cat,
+                            fromRank,
+                            cat.getMeowRank()
+                    )
+            );
+
+        } catch (Exception exception) {
+
+            org.bukkit.Bukkit.getLogger().log(
+                    java.util.logging.Level.WARNING,
+                    "Listener exception during CatMeowRankUpEvent "
+                            + "(ignored; core state already committed).",
+                    exception
+            );
+        }
+    }
+
+    /**
+     * 成就喵力奖励：store 原子发放（喵力 + APPLIED
+     * 同一次变更，社区审查 A-1）后同步内存并触发收尾。
+     */
+    public void grantAchievementMeowReward(
+            Player player,
+            Cat cat,
+            String achievementId,
+            int amount
+    ) {
+
+        if (player == null ||
+                cat == null ||
+                achievementId == null ||
+                amount <= 0) {
+
+            return;
+        }
+
+        int fromRank =
+                cat.getMeowRank();
+
+        int newMeowPower =
+                store.applyAchievementMeowReward(
+                        player.getUniqueId(),
+                        achievementId,
+                        amount
+                );
+
+        int delta =
+                newMeowPower
+                        - cat.getMeowPower();
+
+        if (delta <= 0) {
+            return;
+        }
+
+        int gained =
+                cat.addMeowPower(
+                        delta,
+                        configManager.snapshot()
+                                .getMeow()
+                                .getRankCurveOffset()
+                );
+
+        store.setCatMeowRank(
+                player.getUniqueId(),
+                cat.getMeowRank()
+        );
+
+        finishMeowReward(
+                player,
+                cat,
+                gained,
+                fromRank,
+                delta
+        );
     }
 
     public void syncSkillSlots(
@@ -374,34 +610,71 @@ public class CatProgressionService {
             return;
         }
 
-        for (int slot = current; slot < expected; slot++) {
+        List<CatSkill> snapshot =
+                cat.getSkills();
 
-            CatSkill rolled =
-                    rollSkillForSlot(cat, slot);
+        try {
 
-            if (rolled != null) {
+            for (int slot = current; slot < expected; slot++) {
 
-                cat.addSkill(rolled);
+                CatSkill rolled =
+                        rollSkillForSlot(cat, slot);
 
-                player.sendMessage(
-                        lang.forPlayer(player).message(
-                                "progression.new-skill",
-                                cat.getName(),
-                                lang.forPlayer(player).text(
-                                        "skill-name."
-                                                + rolled.name()
-                                                .toLowerCase(
-                                                        java.util.Locale.ROOT
-                                                )
-                                )
-                        )
+                if (rolled != null) {
+
+                    cat.addSkill(rolled);
+
+                    player.sendMessage(
+                            lang.forPlayer(player).message(
+                                    "progression.new-skill",
+                                    cat.getName(),
+                                    lang.forPlayer(player).text(
+                                            "skill-name."
+                                                    + rolled.name()
+                                                    .toLowerCase(
+                                                            java.util.Locale.ROOT
+                                                    )
+                                    )
+                            )
+                    );
+                }
+            }
+
+            if (cat.getSkills().size() > current) {
+
+                persistSkills(
+                        player.getUniqueId(),
+                        cat
                 );
             }
-        }
 
-        if (cat.getSkills().size() > current) {
+        } catch (RuntimeException exception) {
 
-            persistSkills(player.getUniqueId(), cat);
+            /*
+             * 0.9.0更新：部分提交回滚（审查 R11）——
+             * 抽取中途异常时内存可能已有部分新技能，
+             * 回滚到快照并写回，绝不让 autosave 把
+             * 半截技能槽持久化。
+             */
+            try {
+
+                cat.setSkills(
+                        snapshot
+                );
+
+                persistSkills(
+                        player.getUniqueId(),
+                        cat
+                );
+
+            } catch (RuntimeException rollbackException) {
+
+                exception.addSuppressed(
+                        rollbackException
+                );
+            }
+
+            throw exception;
         }
     }
 
@@ -458,7 +731,7 @@ public class CatProgressionService {
     ) {
 
         /*
-         * 0.8.4 R22（社区反馈）：
+         * 
          * 权重累加用 long——当前规模不可能溢出，
          * 属一次性填掉未来扩展坑。
          */
@@ -629,6 +902,59 @@ public class CatProgressionService {
 
         persistSkills(player.getUniqueId(), cat);
 
+                /*
+         * 0.9.0更新：双账本补偿协议（社区审查 M-1）——
+         * PlayerPoints 与本插件存档是两个账本，无法 ACID。
+         * 技能写入后立刻 flush 并等待落盘确认（短超时）；
+         * 未确认 → 回退技能 + 退款。
+         *
+         * 0.9.0更新（社区审查 R14-15）：协议目标如实表述为
+         * "把双账本不一致概率压到最低"，而非跨崩溃必然成立：
+         * 退款 API 返回成功不代表 PlayerPoints 自身已持久化，
+         * 外部账本的崩溃窗口超出本插件控制范围。
+         */
+        store.flush();
+
+        /*
+         * 0.9.0更新：按玩家落盘确认（审查 R11）——
+         * 全局 awaitPendingSave 会被其它玩家的坏写入拖超时，
+         * 造成"新技能已落盘仍回滚+退款"的经济漏洞。
+         */
+        boolean persisted =
+                store.awaitPlayerSave(
+                        player.getUniqueId(),
+                        2_000L
+                );
+
+        if (!persisted) {
+
+            cat.setSkillAt(
+                    slotIndex,
+                    oldSkill
+            );
+
+            persistSkills(
+                    player.getUniqueId(),
+                    cat
+            );
+
+            provider.refund(
+                    player,
+                    cost
+            );
+
+            player.sendMessage(
+                    lang.forPlayer(player).message(
+                            "progression.refresh-charge-fail",
+                            lang.forPlayer(player).text(
+                                    skillManager.costDisplayKey()
+                            )
+                    )
+            );
+
+            return false;
+        }
+
         runtime.callEvent(
 
 
@@ -701,9 +1027,30 @@ public class CatProgressionService {
             return false;
         }
 
-        cat.addSkill(skill);
+        /*
+         * 0.9.0更新：事务化（审查 R11）——内存与持久化
+         * 同边界提交，异常时回滚内存技能。
+         */
+        List<CatSkill> oldSkills =
+                cat.getSkills();
 
-        persistSkills(player.getUniqueId(), cat);
+        try {
+
+            cat.addSkill(skill);
+
+            persistSkills(
+                    player.getUniqueId(),
+                    cat
+            );
+
+        } catch (RuntimeException exception) {
+
+            cat.setSkills(
+                    oldSkills
+            );
+
+            throw exception;
+        }
 
         return true;
     }
@@ -713,7 +1060,7 @@ public class CatProgressionService {
      * 升级且实体在线时刷新；
      * 离线时由 CatEntityService.updateCat 在绑定/恢复时补刷。
      *
-     * 0.8.1 修复（P1）：统一走 Cat#entityMaxHealth，
+     * 统一走 Cat#entityMaxHealth，
      * 此前此处未计入装备生命加成，升级会静默丢失装备加成。
      */
     private void applyLevelMaxHealth(
@@ -783,3 +1130,4 @@ public class CatProgressionService {
         store.setCatSkills(playerUUID, names);
     }
 }
+

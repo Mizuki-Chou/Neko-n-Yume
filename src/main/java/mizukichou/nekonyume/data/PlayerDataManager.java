@@ -16,7 +16,7 @@ import java.util.UUID;
  * </p>
  *
  * <p>
- * 本类保留全部历史公开签名并实现 CatStore 接口，
+ * 本类保留全部历史公开签名并实现 CatStore 接口捏，
  * 既有调用方（CatCache / 监听器 / 任务等）零改动。
  * Step 5（去 Service Locator）完成后，调用方将直连 CatStore。
  * </p>
@@ -226,6 +226,11 @@ public class PlayerDataManager implements CatStore {
     }
 
     @Override
+    public void setCatPetCount(UUID playerUUID, int count) {
+        delegate.setCatPetCount(playerUUID, count);
+    }
+
+    @Override
     public int getCatFeedCount(UUID playerUUID) {
         return delegate.getCatFeedCount(playerUUID);
     }
@@ -233,6 +238,11 @@ public class PlayerDataManager implements CatStore {
     @Override
     public void addCatFeedCount(UUID playerUUID) {
         delegate.addCatFeedCount(playerUUID);
+    }
+
+    @Override
+    public void setCatFeedCount(UUID playerUUID, int count) {
+        delegate.setCatFeedCount(playerUUID, count);
     }
 
     @Override
@@ -293,6 +303,16 @@ public class PlayerDataManager implements CatStore {
     @Override
     public void setCatVariant(UUID playerUUID, String variant) {
         delegate.setCatVariant(playerUUID, variant);
+    }
+
+    @Override
+    public String getCatModelId(UUID playerUUID) {
+        return delegate.getCatModelId(playerUUID);
+    }
+
+    @Override
+    public void setCatModelId(UUID playerUUID, String modelId) {
+        delegate.setCatModelId(playerUUID, modelId);
     }
 
     @Override
@@ -379,6 +399,25 @@ public class PlayerDataManager implements CatStore {
     }
 
     @Override
+    public float getCatYaw(UUID playerUUID) {
+        return delegate.getCatYaw(playerUUID);
+    }
+
+    @Override
+    public float getCatPitch(UUID playerUUID) {
+        return delegate.getCatPitch(playerUUID);
+    }
+
+    @Override
+    public void setCatYaw(UUID playerUUID, float yaw) {
+        delegate.setCatYaw(playerUUID, yaw);
+    }
+
+    @Override
+    public void setCatPitch(UUID playerUUID, float pitch) {
+        delegate.setCatPitch(playerUUID, pitch);
+    }
+
     public List<String> getAchievementsUnlockedList(UUID playerUUID) {
         return delegate.getAchievementsUnlockedList(playerUUID);
     }
@@ -449,6 +488,34 @@ public class PlayerDataManager implements CatStore {
     }
 
     @Override
+    public int applyAchievementXpReward(
+            UUID playerUUID,
+            String id,
+            int xp
+    ) {
+
+        return delegate.applyAchievementXpReward(
+                playerUUID,
+                id,
+                xp
+        );
+    }
+
+    @Override
+    public int applyAchievementMeowReward(
+            UUID playerUUID,
+            String id,
+            int meow
+    ) {
+
+        return delegate.applyAchievementMeowReward(
+                playerUUID,
+                id,
+                meow
+        );
+    }
+
+    @Override
     public void removeAchievementRewardXpApplied(UUID playerUUID, String id) {
         delegate.removeAchievementRewardXpApplied(playerUUID, id);
     }
@@ -494,7 +561,7 @@ public class PlayerDataManager implements CatStore {
     }
 
     /*
-     * 0.8.4 R18（社区上报 H-NEW-01）：
+     * 
      * 委托耐久性协议——自动保存的驱逐判定需要真实的
      * 落盘确认与失败状态，绝不能走接口的空默认实现。
      */
@@ -508,3 +575,4 @@ public class PlayerDataManager implements CatStore {
         return delegate.isLastWriteFailed();
     }
 }
+

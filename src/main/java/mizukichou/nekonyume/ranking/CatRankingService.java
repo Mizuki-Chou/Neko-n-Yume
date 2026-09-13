@@ -11,7 +11,7 @@ import java.util.function.Function;
  * 排行服务：从存储组装全服猫咪排行。
  *
  * <p>
- * 0.8.5：/nya ranking 的数据层。
+ * 0.8.5：/nya ranking 的数据层啦。
  * 本类只依赖 CatStore（MemoryCatStore 可直接单测），
  * 主人显示名经 nameProvider 注入（生产为 Bukkit 离线玩家名，
  * 测试为固定映射）。
@@ -73,3 +73,4 @@ public final class CatRankingService {
         );
     }
 }
+

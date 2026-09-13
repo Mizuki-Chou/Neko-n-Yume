@@ -34,11 +34,11 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
- * 猫咪战斗任务。
+ * 猫咪战斗任务哟。
  *
  * <p>
- * 每 10 tick 检查一次：
- * 跟随模式下自动攻击主人附近的敌对生物。
+ * 每 10 tick 检查一次捏：
+ * 跟随模式下自动攻击主人附近的敌对生物哒。
  * 近战为主；拥有「灵弹」技能时改为远程魔法弹。
  * </p>
  *
@@ -148,6 +148,14 @@ public class CatBattleTask implements Runnable {
                 .getBattle()
                 .isEnabled()) {
 
+            /*
+             * 0.9.0更新：战斗停用时清空全部临时战斗状态
+             * （社区审查 B-4）——此前直接 return，攻击计数
+             * /冷却跨禁用期保留，重新启用后玩家会直接
+             * 继承"第五击"影袭与半冷却状态。
+             */
+            battleState.clearEphemeralCombatState();
+
             return;
         }
 
@@ -172,6 +180,14 @@ public class CatBattleTask implements Runnable {
         battleState.retainOnly(
                 activeEntities,
                 activeOwners
+        );
+
+        /*
+         * 0.9.0更新：梦境编织的救援冷却表同样按
+         * 存活实体清理（防每代猫实体 UUID 残留）。
+         */
+        battleState.retainOnlyDreamRescue(
+                activeEntities
         );
 
         for (Cat logicalCat :
@@ -254,13 +270,37 @@ public class CatBattleTask implements Runnable {
                         cat.getMaxHealth()
                 );
 
+                /*
+                 * 0.9.0更新：按恢复前状态还原——
+                 * 其它系统设置的 AI=false 或隐身不被抹掉。
+                 */
+                boolean restoreAi =
+                        battleState.consumeAiState(
+                                entityUuid
+                        );
+
+                org.bukkit.potion.PotionEffect restoreInvisibility =
+                        battleState.consumeInvisibilityState(
+                                entityUuid
+                        );
+
                 cat.setAI(
-                        true
+                        restoreAi
                 );
 
                 cat.removePotionEffect(
                         PotionEffectType.INVISIBILITY
                 );
+
+                if (restoreInvisibility != null &&
+                        !cat.hasPotionEffect(
+                                PotionEffectType.INVISIBILITY
+                        )) {
+
+                    cat.addPotionEffect(
+                            restoreInvisibility
+                    );
+                }
 
                 cat.getWorld()
                         .spawnParticle(
@@ -524,14 +564,21 @@ public class CatBattleTask implements Runnable {
                     POUNCE_INTERVAL_MS
             )) {
 
-                battleState.markPounce(
-                        entityUuid
-                );
-
-                pounceTowards(
+                /*
+                 * 0.9.0更新：先尝试扑击、成功才
+                 * 消耗冷却——此前 markPounce 先于 pounceTowards，
+                 * 无安全落点/跨世界等失败路径会白耗 1 秒冷却，
+                 * 狭窄地形下持续"尝试→失败→冷却"。
+                 */
+                if (pounceTowards(
                         cat,
                         target
-                );
+                )) {
+
+                    battleState.markPounce(
+                            entityUuid
+                    );
+                }
             }
 
             return;
@@ -601,9 +648,11 @@ public class CatBattleTask implements Runnable {
             return;
         }
 
-        battleState.markAttack(
-                entityUuid
-        );
+        /*
+         * 0.9.0更新：markAttack 延后到伤害确认——
+         * 外部插件取消伤害时不消耗攻击冷却与影袭计数
+         * （社区审查 B-3）。
+         */
 
         /*
          * 伤害计算。
@@ -615,24 +664,38 @@ public class CatBattleTask implements Runnable {
                 );
 
         /*
-         * 影袭：每 5 次攻击 3 倍暴击。
+         * 影袭：每 5 次攻击 3 倍暴击（伤害前预读计数，
+         * 落地攻击由 markAttack 推进）。
          */
         if (logicalCat.hasSkill(
                 CatSkill.SHADOW_STRIKE
         )) {
 
             int count =
-                    battleState.nextAttackCount(
+                    battleState.peekAttackCount(
                             entityUuid
                     );
 
             if (count % 5 == 0) {
-                damage *= 3;
+
+                /*
+                 * 0.9.0更新：三倍暴击在 long 域
+                 * 计算后再钳制——int × 3 溢出会变负数、
+                 * 第五击被"damage <= 0"整个吞掉。
+                 */
+                long finalDamage =
+                        (long) damage * 3L;
+
+                damage =
+                        (int) Math.min(
+                                Integer.MAX_VALUE,
+                                finalDamage
+                        );
             }
         }
 
         /*
-         * 0.8.1 修复（R3，社区上报：按“意图伤害”治疗）：
+         * 
          * 吸血/汲取/星屑必须按“实际造成的伤害”结算。
          * Paper 的 damage() 返回 void，这里用伤害前后血量差
          * 计算实际伤害：
@@ -640,8 +703,26 @@ public class CatBattleTask implements Runnable {
          * - 护盾/护甲减免 → 按减免后结算；
          * - 目标残血不足（溢出）→ 只按剩余血量计。
          */
+        /*
+         * 0.9.0更新：伤害链 NaN/非正防御——
+         * 装备加成配置损坏（NaN）或全 0 时，
+         * Bukkit 对 NaN 伤害会抛 IllegalArgumentException，
+         * 导致每 tick 任务异常。
+         */
+        if (!Double.isFinite(damage) ||
+                damage <= 0.0) {
+
+            return;
+        }
+
+        /*
+         * 0.9.0更新：吸收盾（Absorption）计入
+         * 伤害前后差——只比较 health 会把"5 点被护盾吸收
+         * 的伤害"误算为 0，DRAIN/吸血/星屑全部失效。
+         */
         double targetHealthBefore =
-                target.getHealth();
+                target.getHealth()
+                        + target.getAbsorptionAmount();
 
         target.damage(
                 damage,
@@ -652,10 +733,11 @@ public class CatBattleTask implements Runnable {
                 target.isDead() ||
                         !target.isValid()
                         ? 0.0
-                        : target.getHealth();
+                        : target.getHealth()
+                                + target.getAbsorptionAmount();
 
         /*
-         * 0.8.1 修复（R4，社区上报）：
+         * 
          * 不再对实际伤害做整数截断——
          * 0.8 点实际伤害截断成 0 会吞掉吸血/汲取/星屑的小数部分。
          * 只有最终需要整数经济奖励的地方才 round。
@@ -666,6 +748,18 @@ public class CatBattleTask implements Runnable {
                         targetHealthBefore
                                 - targetHealthAfter
                 );
+
+        /*
+         * 0.9.0更新：实际造成伤害才提交攻击（冷却 +
+         * 影袭计数）——被取消的伤害不消耗攻击
+         * （社区审查 B-3）。
+         */
+        if (effectiveDamage > 0) {
+
+            battleState.markAttack(
+                    entityUuid
+            );
+        }
 
         /*
          * 装备（0.8.0）：至极项圈吸血自愈（治疗猫自身）；
@@ -897,7 +991,7 @@ public class CatBattleTask implements Runnable {
     }
 
     /*
-     * 0.8.1 修复（R2）：纵深防御——协助目标若是主人自己驯养的
+     * 纵深防御——协助目标若是主人自己驯养的
      * 宠物（Tameable 且主人一致），一律视为无效目标并惰性清除。
      */
     private boolean isOwnerTamedPet(
@@ -929,7 +1023,7 @@ public class CatBattleTask implements Runnable {
      * 找不到安全落点就放弃这一跳。
      */
 
-    private void pounceTowards(
+    private boolean pounceTowards(
             org.bukkit.entity.Cat cat,
             LivingEntity target
     ) {
@@ -951,7 +1045,7 @@ public class CatBattleTask implements Runnable {
                                 targetLoc.getWorld()
                         )) {
 
-            return;
+            return false;
         }
 
         /*
@@ -969,7 +1063,7 @@ public class CatBattleTask implements Runnable {
                 );
 
         if (destination == null) {
-            return;
+            return false;
         }
 
         destination.setYaw(
@@ -997,6 +1091,8 @@ public class CatBattleTask implements Runnable {
                         0.3,
                         0.02
                 );
+
+        return true;
     }
 
     /*
@@ -1023,7 +1119,7 @@ public class CatBattleTask implements Runnable {
                 battleConfig.getPerRankDamage();
 
         /*
-         * 0.8.4 R21（社区上报 M-NEW-07）：
+         * 
          * 伤害累加全程 long——perRank × meowRank 等 int 乘法
          * 在极端配置/数据下溢出为负，最后统一饱和钳制。
          */
@@ -1158,6 +1254,18 @@ public class CatBattleTask implements Runnable {
                     !monster.isDead() &&
                     monster.isValid()) {
 
+                /*
+                 * 跳过 NPC（Citizens 等
+                 * 插件用 "NPC" 元数据标记）——与梦魔之夜/战斗经验
+                 * 的边界一致，否则猫会持续攻击剧情/任务怪。
+                 */
+                if (monster.hasMetadata(
+                        "NPC"
+                )) {
+
+                    continue;
+                }
+
                 double distSq =
                         location.distanceSquared(
                                 monster.getLocation()
@@ -1183,7 +1291,7 @@ public class CatBattleTask implements Runnable {
     ) {
 
         /*
-         * 0.8.1 修复（R2）：跨世界守卫。
+         * 跨世界守卫。
          * Location.distanceSquared 不校验世界，
          * 目标在异步窗口内换世界时绝不能跨世界攻击。
          */
@@ -1214,17 +1322,28 @@ public class CatBattleTask implements Runnable {
             return;
         }
 
+        /*
+         * 0.9.0更新：远程间隔接入攻速公式
+         * （社区审查 C-2）——此前直接用了常数，
+         * 灵步/装备攻速/附加属性对灵弹完全无效。
+         */
+        long intervalMs =
+                rangedAttackIntervalMs(
+                        logicalCat
+                );
+
         if (!battleState.canAttack(
                 entityUuid,
-                RANGED_ATTACK_INTERVAL_MS
+                intervalMs
         )) {
 
             return;
         }
 
-        battleState.markAttack(
-                entityUuid
-        );
+        /*
+         * 0.9.0更新：markAttack 延后到伤害确认
+         * （社区审查 B-3，与近战同口径）。
+         */
 
         /*
          * 灵弹伤害为近战 80%：
@@ -1241,10 +1360,47 @@ public class CatBattleTask implements Runnable {
                 );
 
         /*
-         * 0.8.1 修复（R3）：与实际伤害结算（同近战口径）。
+         * 0.9.0更新：影袭必须在伤害前结算
+         * （社区审查 B-1/B-2）——暴击要作用到实际
+         * 伤害上，否则第五击只是原地乘给自己看，
+         * 吸血/汲取/星屑也全部按未暴击结算。
+         */
+        if (logicalCat.hasSkill(
+                CatSkill.SHADOW_STRIKE
+        )) {
+
+            int count =
+                    battleState.peekAttackCount(
+                            entityUuid
+                    );
+
+            if (count % 5 == 0) {
+
+                long finalDamage =
+                        (long) damage * 3L;
+
+                damage =
+                        (int) Math.min(
+                                Integer.MAX_VALUE,
+                                finalDamage
+                        );
+            }
+        }
+
+        /*
+         */
+        if (!Double.isFinite(damage) ||
+                damage <= 0.0) {
+
+            return;
+        }
+
+        /*
+         * 0.9.0更新：吸收盾计入（远程路径）。
          */
         double targetHealthBefore =
-                target.getHealth();
+                target.getHealth()
+                        + target.getAbsorptionAmount();
 
         target.damage(
                 damage,
@@ -1265,10 +1421,12 @@ public class CatBattleTask implements Runnable {
                 target.isDead() ||
                         !target.isValid()
                         ? 0.0
-                        : target.getHealth();
+                        : target.getHealth()
+                                + target.getAbsorptionAmount();
 
         /*
-         * 0.8.1 修复（R4）：同近战口径，保留小数伤害。
+     * 与实际伤害结算（同近战口径）。别问为什么是这个口径，问就是社区逼的。
+         * 同近战口径，保留小数伤害。
          */
         double effectiveDamage =
                 Math.max(
@@ -1276,6 +1434,17 @@ public class CatBattleTask implements Runnable {
                         targetHealthBefore
                                 - targetHealthAfter
                 );
+
+        /*
+         * 0.9.0更新：实际造成伤害才提交攻击（冷却 +
+         * 影袭计数），与近战同口径（社区审查 B-3）。
+         */
+        if (effectiveDamage > 0) {
+
+            battleState.markAttack(
+                    entityUuid
+            );
+        }
 
         /*
          * 汲取（远程同样生效）。
@@ -1288,6 +1457,23 @@ public class CatBattleTask implements Runnable {
             healOwner(
                     owner,
                     effectiveDamage * 0.2
+            );
+        }
+
+        /*
+         * 0.9.0更新：星屑远程同样生效
+         * （此前只有近战触发）。
+         */
+        if (logicalCat.hasSkill(
+                CatSkill.STAR_DUST
+        ) &&
+                effectiveDamage > 0 &&
+                random.nextDouble() < 0.2) {
+
+            applySplash(
+                    cat,
+                    target,
+                    effectiveDamage
             );
         }
 
@@ -1342,6 +1528,55 @@ public class CatBattleTask implements Runnable {
         }
     }
 
+
+    /*
+     * 0.9.0更新：灵弹攻击间隔——与近战同一
+     * 公式（灵步 -20%、装备与附加属性的间隔缩减、下限保护）。
+     */
+    private long rangedAttackIntervalMs(
+            Cat logicalCat
+    ) {
+
+        long intervalTicks =
+                configManager.snapshot()
+                        .getBattle()
+                        .getAttackIntervalTicks();
+
+        if (logicalCat.hasSkill(
+                CatSkill.LIGHT_STEP
+        )) {
+
+            intervalTicks =
+                    (long) (intervalTicks * 0.8);
+        }
+
+        CatEquipItem intervalEquip =
+                logicalCat.getEquippedItem();
+
+        EquipBonusAttribute intervalBonus =
+                logicalCat.getEquippedBonus();
+
+        int intervalReduction =
+                (intervalEquip == null
+                        ? 0
+                        : intervalEquip.getAttackIntervalReductionTicks())
+                        + (intervalBonus == null
+                        ? 0
+                        : intervalBonus.getAttackIntervalReductionTicks());
+
+        if (intervalReduction > 0) {
+
+            intervalTicks =
+                    Math.max(
+                            MIN_ATTACK_INTERVAL_TICKS,
+                            intervalTicks
+                                    - intervalReduction
+                    );
+        }
+
+        return intervalTicks * 50L;
+    }
+
     private void healOwner(
             Player owner,
             double amount
@@ -1350,12 +1585,25 @@ public class CatBattleTask implements Runnable {
         double maxHealth =
                 owner.getMaxHealth();
 
-        owner.setHealth(
+        double healed =
                 Math.min(
                         maxHealth,
                         owner.getHealth()
                                 + amount
-                )
+                );
+
+        /*
+         * 0.9.0更新：NaN 防御。
+         */
+        if (!Double.isFinite(
+                healed
+        )) {
+
+            healed = 0.0;
+        }
+
+        owner.setHealth(
+                healed
         );
     }
 
@@ -1382,15 +1630,25 @@ public class CatBattleTask implements Runnable {
              * 溅射只伤敌对生物，
              * 避免误伤你养的动物。
              */
+            /*
+             * 0.9.0更新：补 NPC 防线（社区审查 R14-07）——
+             * 普通索敌路径会过滤 Citizens 等插件的 NPC，
+             * 溅射此前漏掉，星尘会把 NPC 当普通怪打死。
+             */
             if (entity instanceof Monster monster &&
                     !monster.isDead() &&
                     monster.isValid() &&
+                    !monster.hasMetadata("NPC") &&
                     !monster.equals(target)) {
 
-                monster.damage(
-                        splashDamage,
-                        cat
-                );
+                if (Double.isFinite(splashDamage) &&
+                        splashDamage > 0.0) {
+
+                    monster.damage(
+                            splashDamage,
+                            cat
+                    );
+                }
             }
         }
     }
@@ -1489,3 +1747,4 @@ public class CatBattleTask implements Runnable {
         }
     }
 }
+
